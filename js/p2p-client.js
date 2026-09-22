@@ -75,18 +75,26 @@ export class P2PClient {
 
   connectToDesktop() {
     if (!this.peer || !this.sessionId || this.peer.destroyed) return;
+    if (this.isConnected && this.conn && this.conn.open) return;
 
     const desktopPeerId = `his-desktop-${this.sessionId}`;
     console.log('[P2P] Đang tìm máy tính bàn:', desktopPeerId);
-    this.updateStatus(false, 'Đang tìm máy bàn...');
+    this.updateStatus(false, '🟡 Đang bắt tay P2P...');
 
+    // Đóng kết nối cũ nếu đã ngắt hoàn toàn
     if (this.conn) {
       try { this.conn.close(); } catch (e) {}
+      this.conn = null;
     }
 
-    this.conn = this.peer.connect(desktopPeerId, {
-      reliable: true
-    });
+    try {
+      this.conn = this.peer.connect(desktopPeerId, {
+        reliable: true
+      });
+    } catch (e) {
+      console.warn('[P2P] Lỗi peer.connect:', e);
+      return;
+    }
 
     this.conn.on('open', () => {
       console.log('[P2P] Kết nối WebRTC P2P thành công!');
@@ -115,19 +123,19 @@ export class P2PClient {
     });
 
     this.conn.on('close', () => {
-      console.log('[P2P] Máy tính đã đóng cửa sổ QR');
+      console.log('[P2P] Máy tính đã đóng cửa sổ QR hoặc ngắt kết nối');
       this.isConnected = false;
       this.updateStatus(false, 'Mất kết nối máy bàn');
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.connectToDesktop(), 2500);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 4000);
     });
 
     this.conn.on('error', (err) => {
       console.warn('[P2P] Lỗi DataChannel:', err);
       this.isConnected = false;
-      this.updateStatus(false, 'Chờ máy bàn mở lại...');
+      this.updateStatus(false, 'Chờ kết nối máy bàn...');
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.connectToDesktop(), 2500);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 4000);
     });
   }
 
