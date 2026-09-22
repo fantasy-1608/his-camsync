@@ -232,8 +232,20 @@
       captureScreen.style.display = 'flex';
     });
 
+    statusBadge.addEventListener('click', () => {
+      if (!p2p.isConnected) {
+        statusText.textContent = 'Đang thử lại...';
+        p2p.connectToDesktop();
+      }
+    });
+
     // Send to HIS
     btnSendToHis.addEventListener('click', async () => {
+      if (!p2p.isConnected) {
+        btnSendText.textContent = 'Đang thử kết nối lại...';
+        p2p.connectToDesktop();
+        return;
+      }
       try {
         btnSendToHis.disabled = true;
         btnSendText.textContent = 'Đang nén ảnh...';

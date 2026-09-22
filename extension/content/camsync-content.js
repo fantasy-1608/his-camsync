@@ -298,18 +298,29 @@
         });
 
         currentPeer.on('connection', (conn) => {
-          console.log('[CamSync] Điện thoại đã kết nối P2P thành công!');
-          if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối P2P!';
-          if (statusPill) statusPill.classList.add('connected');
+          console.log('[CamSync] Nhận yêu cầu kết nối từ điện thoại, đang bắt tay WebRTC...');
 
-          // Gửi thông tin bệnh nhân sang điện thoại để bác sĩ đối chiếu
-          const sendPatient = () => {
+          conn.on('open', () => {
+            console.log('[CamSync] Kênh WebRTC DataChannel đã mở thành công!');
+            if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối P2P!';
+            if (statusPill) statusPill.classList.add('connected');
+
+            // Chỉ gửi thông tin bệnh nhân khi DataChannel đã OPEN hoàn toàn
             const patient = getPatientInfoFromDOM();
             if (patient) {
               try { conn.send({ type: 'PATIENT_INFO', patient }); } catch (e) {}
             }
-          };
-          sendPatient();
+          });
+
+          conn.on('close', () => {
+            console.log('[CamSync] Điện thoại đã ngắt kết nối');
+            if (statusText) statusText.textContent = 'Chờ quét mã từ điện thoại...';
+            if (statusPill) statusPill.classList.remove('connected');
+          });
+
+          conn.on('error', (err) => {
+            console.warn('[CamSync] Lỗi DataChannel:', err);
+          });
 
           // Bộ đệm nhận từng mảnh (Chunking)
           const activeTransfers = {};
@@ -318,7 +329,10 @@
             if (!payload) return;
 
             if (payload.type === 'REQ_PATIENT_INFO') {
-              sendPatient();
+              const patient = getPatientInfoFromDOM();
+              if (patient && conn.open) {
+                try { conn.send({ type: 'PATIENT_INFO', patient }); } catch (e) {}
+              }
               return;
             }
 
