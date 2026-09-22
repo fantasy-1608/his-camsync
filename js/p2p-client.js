@@ -113,6 +113,7 @@ export class P2PClient {
 
       if (data.type === 'PATIENT_INFO' && data.patient) {
         console.log('[P2P] Nhận thông tin bệnh nhân:', data.patient);
+        this.patientInfo = data.patient;
         this.onPatientInfo(data.patient);
       } else if (data.type === 'TRANSFER_ACK') {
         console.log('[P2P] Máy tính xác nhận đã nạp ảnh xong!');
