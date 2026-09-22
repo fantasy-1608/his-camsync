@@ -39,6 +39,137 @@
   }
 
   /**
+   * Kiểm tra xem tệp có phải định dạng HEIC/HEIF từ iPhone không
+   */
+  function isHeicFile(file) {
+    if (!file) return false;
+    const name = (file.name || '').toLowerCase();
+    const type = (file.type || '').toLowerCase();
+    return name.endsWith('.heic') || name.endsWith('.heif') || type === 'image/heic' || type === 'image/heif';
+  }
+
+  /**
+   * Kiểm tra định dạng chuẩn mà VNPT HIS chấp nhận (jpg, jpeg, png, bmp)
+   */
+  function isStandardFormat(file) {
+    if (!file) return false;
+    const name = (file.name || '').toLowerCase();
+    return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.bmp');
+  }
+
+  /**
+   * Tự động chuyển đổi ảnh bất kỳ (đặc biệt là HEIC từ iPhone) sang chuẩn JPG tương thích 100% với VNPT HIS
+   */
+  async function convertFileToHISCompatible(file) {
+    if (!file) return null;
+
+    // 1. Nếu là file HEIC / HEIF từ iPhone
+    if (isHeicFile(file)) {
+      if (window.heic2any) {
+        try {
+          const output = await window.heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.92
+          });
+          const blob = Array.isArray(output) ? output[0] : output;
+          const newName = file.name.replace(/\.(heic|heif)$/i, '') + '.jpg';
+          return new File([blob], newName, { type: 'image/jpeg' });
+        } catch (err) {
+          console.warn('[CamSync] heic2any convert error, fallback:', err);
+        }
+      }
+    }
+
+    // 2. Nếu đã là định dạng chuẩn (jpg, jpeg, png, bmp)
+    if (isStandardFormat(file)) {
+      return file;
+    }
+
+    // 3. Nếu là định dạng ảnh khác (webp, tiff, svg, v.v.), chuyển đổi qua Canvas sang JPG
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0);
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+      if (blob) {
+        const baseName = file.name.replace(/\.[^/.]+$/, "") || 'image';
+        return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      }
+    } catch (e) {
+      console.warn('[CamSync] Canvas fallback failed:', e);
+    }
+
+    return file;
+  }
+
+  let isConverting = false;
+
+  /**
+   * Xử lý chuyển đổi danh sách ảnh và nạp lên HIS
+   */
+  async function processAndUploadFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    if (isConverting) {
+      showToast('Đang xử lý loạt ảnh trước, vui lòng chờ trong giây lát...');
+      return;
+    }
+
+    isConverting = true;
+    try {
+      const converted = [];
+      const total = fileList.length;
+
+      for (let i = 0; i < total; i++) {
+        const f = fileList[i];
+        if (isHeicFile(f)) {
+          showToast(`🔄 Đang đổi ảnh ${i + 1}/${total} (HEIC sang JPG)...`);
+        }
+        const validFile = await convertFileToHISCompatible(f);
+        if (validFile) converted.push(validFile);
+      }
+
+      if (converted.length > 0) {
+        injectFilesAndUpload(converted);
+        showToast(`🟢 Đã nạp thành công ${converted.length} ảnh lên HIS!`);
+      }
+    } catch (err) {
+      console.error('[CamSync] Lỗi xử lý ảnh:', err);
+      showToast(`⚠️ Lỗi xử lý ảnh: ${err.message || 'Không thể đọc tệp'}`);
+    } finally {
+      isConverting = false;
+    }
+  }
+
+  /**
+   * Kích hoạt hộp thoại chọn ảnh iPhone (HEIC) để nạp trực tiếp trên máy
+   */
+  function triggerHeicConversion() {
+    const existingInput = document.getElementById('camsyncHeicInput');
+    if (existingInput) existingInput.remove();
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.id = 'camsyncHeicInput';
+    input.accept = '.heic,.heif,.HEIC,.HEIF,image/*';
+    input.multiple = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    input.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      input.remove();
+      if (files.length === 0) return;
+      await processAndUploadFiles(files);
+    });
+
+    input.click();
+  }
+
+  /**
    * Nạp danh sách File vào <input id="fileUpload"> và kích hoạt upload
    */
   function injectFilesAndUpload(fileList) {
@@ -56,7 +187,8 @@
     }
     fileInput.files = dt.files;
 
-    showToast(`Đang nạp ảnh thứ ${photoCount} lên HIS...`);
+    photoCount++;
+    showToast(`Đang nạp ảnh lên HIS...`);
     btnUpload.click();
     return true;
   }
@@ -80,7 +212,7 @@
    * Khởi tạo tính năng Paste từ Clipboard (Ctrl + V / Cmd + V)
    */
   function initClipboardPaste() {
-    window.addEventListener('paste', (e) => {
+    window.addEventListener('paste', async (e) => {
       const fileInput = document.getElementById('fileUpload');
       if (!fileInput) return;
 
@@ -101,8 +233,7 @@
 
       if (imageFiles.length > 0) {
         e.preventDefault();
-        photoCount++;
-        injectFilesAndUpload(imageFiles);
+        await processAndUploadFiles(imageFiles);
       }
     });
   }
@@ -128,7 +259,7 @@
       });
     });
 
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
       const fileInput = document.getElementById('fileUpload');
       if (!fileInput) return;
 
@@ -136,42 +267,109 @@
       if (dt && dt.files && dt.files.length > 0) {
         const validImages = [];
         for (let i = 0; i < dt.files.length; i++) {
-          if (dt.files[i].type.startsWith('image/')) {
-            validImages.push(dt.files[i]);
+          const f = dt.files[i];
+          if (f.type.startsWith('image/') || isHeicFile(f)) {
+            validImages.push(f);
           }
         }
         if (validImages.length > 0) {
           e.preventDefault();
-          photoCount++;
-          injectFilesAndUpload(validImages);
+          await processAndUploadFiles(validImages);
         }
       }
     });
   }
 
   /**
-   * Khởi tạo Nút "Quét từ ĐT" trên Toolbar
+   * Bắt chặn và tự động chuyển đổi file khi người dùng nhấn "Chọn tệp" nguyên bản
+   */
+  function initNativeUploadInterceptor() {
+    const fileInput = document.getElementById('fileUpload');
+    const btnUpload = document.getElementById('btnUpload');
+    if (!fileInput || fileInput.dataset.camsyncIntercepted) return;
+
+    fileInput.dataset.camsyncIntercepted = 'true';
+
+    // Cho phép người dùng chọn cả file HEIC từ iPhone trên hộp thoại
+    const currentAccept = fileInput.getAttribute('accept') || '';
+    if (!currentAccept.includes('.heic')) {
+      fileInput.setAttribute('accept', currentAccept ? `${currentAccept},.heic,.heif,.HEIC,.HEIF` : 'image/*,.heic,.heif,.HEIC,.HEIF');
+    }
+
+    fileInput.addEventListener('change', async () => {
+      const files = Array.from(fileInput.files || []);
+      if (files.length === 0) return;
+
+      const hasHeicOrNonStandard = files.some(f => isHeicFile(f) || !isStandardFormat(f));
+      if (hasHeicOrNonStandard) {
+        showToast('🔄 Phát hiện ảnh iPhone (HEIC), đang tự động đổi sang JPG...');
+        const converted = [];
+        for (let i = 0; i < files.length; i++) {
+          converted.push(await convertFileToHISCompatible(files[i]));
+        }
+        const dt = new DataTransfer();
+        converted.forEach(f => dt.items.add(f));
+        fileInput.files = dt.files;
+        showToast('🟢 Đã chuyển đổi sang JPG chuẩn! Bấm Upload để tải lên.');
+      }
+    });
+
+    // Chặn popup cảnh báo khó hiểu khi bấm Upload mà chưa chọn tệp
+    if (btnUpload && !btnUpload.dataset.camsyncProtected) {
+      btnUpload.dataset.camsyncProtected = 'true';
+      btnUpload.addEventListener('click', (e) => {
+        if (!fileInput.files || fileInput.files.length === 0) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          showToast('⚠️ Vui lòng chọn tệp hoặc nhấn "Đổi ảnh iPhone" trước khi bấm Upload!');
+        }
+      }, true); // Bắt ở capture phase để chặn trước handler của VNPT HIS
+    }
+  }
+
+  /**
+   * Khởi tạo Nút "Quét từ ĐT" và "Đổi ảnh iPhone (HEIC)" trên Toolbar
    */
   function injectSyncButton() {
     const btnUpload = document.getElementById('btnUpload');
     if (!btnUpload || document.getElementById('btnCamSync')) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'camsync-tooltip-wrapper';
-    wrapper.setAttribute('data-tooltip', 'Chụp ECG từ điện thoại & đồng bộ tức thì');
+    // 1. Nút "Quét từ ĐT" (P2P CamSync)
+    const wrapperCam = document.createElement('div');
+    wrapperCam.className = 'camsync-tooltip-wrapper';
+    wrapperCam.setAttribute('data-tooltip', 'Chụp ECG từ điện thoại & đồng bộ tức thì');
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'btnCamSync';
-    btn.className = 'btn btn-success btn-camsync-trigger';
-    btn.innerHTML = `
+    const btnCam = document.createElement('button');
+    btnCam.type = 'button';
+    btnCam.id = 'btnCamSync';
+    btnCam.className = 'btn btn-success btn-camsync-trigger';
+    btnCam.innerHTML = `
       <span class="glyphicon glyphicon-phone" aria-hidden="true"></span> Quét từ ĐT
     `;
+    btnCam.addEventListener('click', () => openQrModal());
+    wrapperCam.appendChild(btnCam);
 
-    btn.addEventListener('click', () => openQrModal());
+    // 2. Nút "Đổi ảnh iPhone (HEIC)" (Chuyển đổi trực tiếp trên máy)
+    const wrapperHeic = document.createElement('div');
+    wrapperHeic.className = 'camsync-tooltip-wrapper';
+    wrapperHeic.setAttribute('data-tooltip', 'Tự động đổi ảnh HEIC/iPhone sang JPG và nạp lên HIS');
 
-    wrapper.appendChild(btn);
-    btnUpload.parentNode.insertBefore(wrapper, btnUpload.nextSibling);
+    const btnHeic = document.createElement('button');
+    btnHeic.type = 'button';
+    btnHeic.id = 'btnHeicConvert';
+    btnHeic.className = 'btn btn-info btn-heic-trigger';
+    btnHeic.innerHTML = `
+      <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span> Đổi ảnh iPhone (HEIC)
+    `;
+    btnHeic.addEventListener('click', () => triggerHeicConversion());
+    wrapperHeic.appendChild(btnHeic);
+
+    // Chèn cả 2 nút vào sau nút Upload
+    const parent = btnUpload.parentNode;
+    parent.insertBefore(wrapperHeic, btnUpload.nextSibling);
+    parent.insertBefore(wrapperCam, btnUpload.nextSibling);
+
+    initNativeUploadInterceptor();
   }
 
   /**

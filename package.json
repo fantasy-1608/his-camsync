@@ -20,6 +20,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "heic2any": "^0.0.4",
     "peer": "^1.0.2"
   }
 }

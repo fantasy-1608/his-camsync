@@ -16,6 +16,7 @@
       ],
       "all_frames": true,
       "js": [
+        "vendor/heic2any.min.js",
         "vendor/peerjs.min.js",
         "vendor/qrcode.min.js",
         "content/camsync-content.js"
