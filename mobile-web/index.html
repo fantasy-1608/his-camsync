@@ -162,8 +162,12 @@
         statusText.textContent = text;
         if (connected) {
           statusBadge.classList.remove('disconnected');
+          btnSendToHis.disabled = false;
+          btnSendText.textContent = 'Gửi Lên HIS';
         } else {
           statusBadge.classList.add('disconnected');
+          btnSendToHis.disabled = true;
+          btnSendText.textContent = 'Chờ kết nối máy tính...';
         }
       }
     });

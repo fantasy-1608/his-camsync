@@ -1,10 +1,6 @@
 /**
  * HIS CamSync - Content Script (WebRTC P2P NAT Traversal)
- * Tự động tích hợp vào VNPT HIS:
- * 1. Nút "Quét từ ĐT" + Mã QR WebRTC P2P (Hoạt động cả khi khác mạng / 4G)
- * 2. Phím tắt Dán ảnh từ Clipboard (Ctrl + V)
- * 3. Kéo - Thả ảnh (Drag & Drop Zone)
- * 4. Tự động Upload khi chọn file
+ * Hỗ trợ nhận nhiều ảnh liên tục trong 1 phiên mà không bị ngắt kết nối.
  */
 
 (function () {
@@ -12,6 +8,7 @@
 
   let currentPeer = null;
   let activeSessionId = null;
+  let photoCount = 0;
 
   // URL Mobile Web Scanner cố định trên GitHub Pages (HTTPS, hoạt động 100% trên mọi mạng)
   const MOBILE_APP_URL = 'https://fantasy-1608.github.io/his-camsync';
@@ -59,7 +56,7 @@
     }
     fileInput.files = dt.files;
 
-    showToast(`Đang tải ${fileList.length} ảnh lên HIS...`);
+    showToast(`Đang nạp ảnh thứ ${photoCount} lên HIS...`);
     btnUpload.click();
     return true;
   }
@@ -104,6 +101,7 @@
 
       if (imageFiles.length > 0) {
         e.preventDefault();
+        photoCount++;
         injectFilesAndUpload(imageFiles);
       }
     });
@@ -144,6 +142,7 @@
         }
         if (validImages.length > 0) {
           e.preventDefault();
+          photoCount++;
           injectFilesAndUpload(validImages);
         }
       }
@@ -180,8 +179,9 @@
    */
   function openQrModal() {
     closeQrModal();
+    photoCount = 0;
 
-    // Tạo Session ID độc nhất cho ca bệnh
+    // Tạo Session ID cố định cho ca bệnh này
     activeSessionId = 'his-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
     const mobileUrl = `${MOBILE_APP_URL}/?session=${activeSessionId}`;
 
@@ -206,9 +206,13 @@
             <span id="camsyncStatusText">Đang khởi tạo P2P...</span>
           </div>
 
-          <p class="camsync-instruction">
+          <p class="camsync-instruction" id="camsyncInstruction">
             Dùng Camera điện thoại (4G hoặc Wi-Fi bất kỳ) quét mã QR để chụp ảnh dải ECG.
           </p>
+
+          <button type="button" class="btn btn-default btn-sm" id="camsyncDoneBtn" style="margin-top: 8px; width: 100%;">
+            Đóng cửa sổ này khi xong
+          </button>
         </div>
       </div>
     `;
@@ -216,6 +220,7 @@
     document.body.appendChild(backdrop);
 
     document.getElementById('camsyncCloseBtn').addEventListener('click', closeQrModal);
+    document.getElementById('camsyncDoneBtn').addEventListener('click', closeQrModal);
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) closeQrModal();
     });
@@ -297,17 +302,21 @@
 
   function handleIncomingImageData(base64Image, meta = {}) {
     const statusText = document.getElementById('camsyncStatusText');
-    if (statusText) statusText.textContent = 'Đang nạp ảnh vào HIS...';
+    const statusPill = document.getElementById('camsyncStatusPill');
+    const instruction = document.getElementById('camsyncInstruction');
+
+    photoCount++;
+    if (statusText) statusText.textContent = `Đang nạp ảnh thứ ${photoCount} vào HIS...`;
 
     const filename = meta.name || `ECG_${Date.now()}.jpg`;
     const file = dataURLtoFile(base64Image, filename);
 
     const success = injectFilesAndUpload([file]);
     if (success) {
-      if (statusText) statusText.textContent = '✅ Đã tải ảnh lên HIS thành công!';
-      setTimeout(() => {
-        closeQrModal();
-      }, 1200);
+      // Giữ kết nối mở, KHÔNG đóng modal ngay để người dùng chụp liên tục nhiều ảnh
+      if (statusText) statusText.textContent = `✅ Đã nạp thành công ảnh thứ ${photoCount}!`;
+      if (statusPill) statusPill.classList.add('connected');
+      if (instruction) instruction.textContent = 'Bạn có thể chụp tiếp ảnh khác trên điện thoại hoặc bấm "Đóng" bên dưới.';
     }
   }
 
