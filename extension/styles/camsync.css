@@ -8,11 +8,13 @@
   font-weight: 600 !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  padding: 4px 10px !important;
-  border-radius: 3px !important;
-  margin-left: 6px !important;
+  gap: 5px !important;
+  padding: 4px 9px !important;
+  border-radius: 4px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
   cursor: pointer !important;
+  white-space: nowrap !important;
   transition: background-color 0.15s ease !important;
 }
 
@@ -28,11 +30,13 @@
   font-weight: 600 !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 6px !important;
-  padding: 4px 10px !important;
-  border-radius: 3px !important;
-  margin-left: 6px !important;
+  gap: 5px !important;
+  padding: 4px 9px !important;
+  border-radius: 4px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
   cursor: pointer !important;
+  white-space: nowrap !important;
   transition: background-color 0.15s ease !important;
 }
 

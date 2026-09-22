@@ -334,6 +334,10 @@
     const btnUpload = document.getElementById('btnUpload');
     if (!btnUpload || document.getElementById('btnCamSync')) return;
 
+    const group = document.createElement('div');
+    group.className = 'camsync-btn-group';
+    group.style.cssText = 'display: flex; gap: 6px; margin-top: 6px; width: max-content; align-items: center;';
+
     // 1. Nút "Quét từ ĐT" (P2P CamSync)
     const wrapperCam = document.createElement('div');
     wrapperCam.className = 'camsync-tooltip-wrapper';
@@ -364,10 +368,10 @@
     btnHeic.addEventListener('click', () => triggerHeicConversion());
     wrapperHeic.appendChild(btnHeic);
 
-    // Chèn cả 2 nút vào sau nút Upload
-    const parent = btnUpload.parentNode;
-    parent.insertBefore(wrapperHeic, btnUpload.nextSibling);
-    parent.insertBefore(wrapperCam, btnUpload.nextSibling);
+    group.appendChild(wrapperCam);
+    group.appendChild(wrapperHeic);
+
+    btnUpload.parentNode.appendChild(group);
 
     initNativeUploadInterceptor();
   }
