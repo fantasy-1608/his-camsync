@@ -160,7 +160,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px 16px;
+  padding: 20px 16px max(76px, calc(env(safe-area-inset-bottom) + 42px));
   overflow-y: auto;
 }
 
@@ -377,8 +377,8 @@ body {
 #previewCanvas {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 220px);
-  max-height: calc(100dvh - 220px);
+  max-height: calc(100vh - 290px);
+  max-height: calc(100dvh - 290px);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -519,7 +519,7 @@ body {
 .editor-controls {
   background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
-  padding: 10px 14px max(14px, env(safe-area-inset-bottom));
+  padding: 10px 14px max(86px, calc(env(safe-area-inset-bottom) + 52px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -624,7 +624,7 @@ body {
    ========================================================================== */
 .notification-toast {
   position: fixed;
-  bottom: 28px;
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 68px));
   left: 50%;
   transform: translateX(-50%) translateY(120px);
   background: #0f231c;
