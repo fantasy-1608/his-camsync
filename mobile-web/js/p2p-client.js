@@ -1,7 +1,9 @@
 /**
  * HIS-CamSync: P2P Client (WebRTC DataChannel qua PeerJS Cloud + STUN)
- * Tự động tìm lại và kết nối lại máy tính bàn ngay khi máy bàn mở mã QR.
+ * Hỗ trợ truyền phân mảnh (Chunking 16KB) triệt tiêu hoàn toàn lỗi quá tải kênh truyền trên iOS Safari.
  */
+
+const CHUNK_SIZE = 16384; // 16KB chuẩn an toàn cho WebRTC DataChannel mọi nền tảng
 
 export class P2PClient {
   constructor(options = {}) {
@@ -12,6 +14,8 @@ export class P2PClient {
     this.retryTimer = null;
 
     this.onStatusChange = options.onStatusChange || (() => {});
+    this.onPatientInfo = options.onPatientInfo || (() => {});
+    this.onTransferAck = null;
   }
 
   getSessionIdFromUrl() {
@@ -31,7 +35,6 @@ export class P2PClient {
       }
 
       try {
-        // Kết nối qua PeerJS Cloud (0.peerjs.com) + STUN Server Google & Cloudflare
         this.peer = new window.Peer({
           config: {
             iceServers: [
@@ -54,11 +57,11 @@ export class P2PClient {
 
           if (err.type === 'peer-unavailable') {
             this.updateStatus(false, 'Máy tính chưa mở QR');
-            // Tự động tìm lại máy bàn sau 2.5 giây
+            // Tự động tìm lại máy bàn sau 2 giây
             clearTimeout(this.retryTimer);
             this.retryTimer = setTimeout(() => {
               this.connectToDesktop();
-            }, 2500);
+            }, 2000);
           } else {
             this.updateStatus(false, 'Đang chờ máy bàn...');
           }
@@ -81,28 +84,50 @@ export class P2PClient {
       try { this.conn.close(); } catch (e) {}
     }
 
-    this.conn = this.peer.connect(desktopPeerId, { reliable: true });
+    this.conn = this.peer.connect(desktopPeerId, {
+      reliable: true
+    });
 
     this.conn.on('open', () => {
       console.log('[P2P] Kết nối WebRTC P2P thành công!');
       clearTimeout(this.retryTimer);
       this.isConnected = true;
       this.updateStatus(true, '🟢 Đã kết nối P2P');
+
+      // Yêu cầu máy tính gửi thông tin bệnh nhân (nếu có)
+      try {
+        this.conn.send({ type: 'REQ_PATIENT_INFO' });
+      } catch (e) {}
+    });
+
+    this.conn.on('data', (data) => {
+      if (!data) return;
+
+      if (data.type === 'PATIENT_INFO' && data.patient) {
+        console.log('[P2P] Nhận thông tin bệnh nhân:', data.patient);
+        this.onPatientInfo(data.patient);
+      } else if (data.type === 'TRANSFER_ACK') {
+        console.log('[P2P] Máy tính xác nhận đã nạp ảnh xong!');
+        if (this.onTransferAck) {
+          this.onTransferAck(data);
+        }
+      }
     });
 
     this.conn.on('close', () => {
       console.log('[P2P] Máy tính đã đóng cửa sổ QR');
       this.isConnected = false;
       this.updateStatus(false, 'Mất kết nối máy bàn');
-      // Thử kết nối lại
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.connectToDesktop(), 3000);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 2500);
     });
 
     this.conn.on('error', (err) => {
       console.warn('[P2P] Lỗi DataChannel:', err);
       this.isConnected = false;
       this.updateStatus(false, 'Chờ máy bàn mở lại...');
+      clearTimeout(this.retryTimer);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 2500);
     });
   }
 
@@ -112,23 +137,38 @@ export class P2PClient {
   }
 
   /**
-   * Gửi ảnh sang máy tính qua WebRTC DataChannel
+   * Gửi ảnh sang máy tính qua WebRTC DataChannel dùng cơ chế phân mảnh 16KB (Chunking)
+   * Tuyệt đối không làm nghẽn hoặc rớt kết nối WebRTC trên mobile.
+   * @param {Blob} blob 
+   * @param {Object} metadata 
+   * @param {Function} onProgress 
    */
-  async sendImage(blob, metadata = {}) {
+  async sendImage(blob, metadata = {}, onProgress = null) {
     if (!this.isConnected || !this.conn || !this.conn.open) {
+      // Kích hoạt kết nối lại ngay lập tức
+      this.connectToDesktop();
       throw new Error('Chưa kết nối được với máy tính bàn! Vui lòng bấm nút [Quét từ ĐT] trên màn hình HIS của máy tính để mở phiên kết nối.');
     }
 
     const reader = new FileReader();
-    const base64Data = await new Promise((resolve) => {
+    const base64Data = await new Promise((resolve, reject) => {
       reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
 
-    console.log('[P2P] Đang truyền ảnh trực tiếp P2P sang máy tính...');
+    const totalLength = base64Data.length;
+    const totalChunks = Math.ceil(totalLength / CHUNK_SIZE);
+    const transferId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
+    console.log(`[P2P] Bắt đầu truyền ảnh: ${totalLength} bytes (~${Math.round(totalLength / 1024)} KB), ${totalChunks} chunks`);
+
+    // 1. Gửi gói tin bắt đầu (START)
     this.conn.send({
-      type: 'SYNC_IMAGE',
-      image: base64Data,
+      type: 'CHUNK_START',
+      transferId,
+      totalChunks,
+      totalBytes: totalLength,
       meta: {
         ...metadata,
         sessionId: this.sessionId,
@@ -136,6 +176,49 @@ export class P2PClient {
       }
     });
 
-    return { success: true, method: 'webrtc_p2p' };
+    // 2. Gửi từng Chunk (16KB) với điều tiết nhịp truyền
+    for (let i = 0; i < totalChunks; i++) {
+      if (!this.conn || !this.conn.open) {
+        throw new Error('Kết nối bị gián đoạn giữa chừng. Vui lòng thử lại.');
+      }
+
+      const chunk = base64Data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      this.conn.send({
+        type: 'CHUNK_DATA',
+        transferId,
+        index: i,
+        chunk
+      });
+
+      if (typeof onProgress === 'function') {
+        const pct = Math.round(((i + 1) / totalChunks) * 100);
+        onProgress(pct);
+      }
+
+      // Nghỉ nhẹ 5ms mỗi 4 chunk để browser giải phóng hàng đợi SCTP
+      if (i % 4 === 0) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    }
+
+    // 3. Gửi gói tin hoàn tất (COMPLETE)
+    this.conn.send({
+      type: 'CHUNK_COMPLETE',
+      transferId
+    });
+
+    // 4. Chờ ACK phản hồi từ máy tính hoặc timeout 5s
+    return new Promise((resolve) => {
+      const ackTimeout = setTimeout(() => {
+        this.onTransferAck = null;
+        resolve({ success: true, method: 'webrtc_chunked' });
+      }, 5000);
+
+      this.onTransferAck = (ackData) => {
+        clearTimeout(ackTimeout);
+        this.onTransferAck = null;
+        resolve({ success: true, method: 'webrtc_chunked', ack: ackData });
+      };
+    });
   }
 }

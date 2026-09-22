@@ -22,6 +22,12 @@
     </div>
   </header>
 
+  <!-- Patient Context Banner -->
+  <div id="patientBanner" class="patient-banner" style="display: none; background: #0c1524; border-bottom: 1px solid #1e293b; padding: 6px 16px; font-size: 13px; color: #38bdf8; align-items: center; gap: 8px;">
+    <span>🩺</span>
+    <span id="patientBannerText" style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+  </div>
+
   <!-- Main View -->
   <main class="main-view">
     <!-- Screen 1: Chụp ảnh -->
@@ -169,6 +175,14 @@
           btnSendToHis.disabled = true;
           btnSendText.textContent = 'Chờ kết nối máy tính...';
         }
+      },
+      onPatientInfo: (patient) => {
+        const banner = document.getElementById('patientBanner');
+        const text = document.getElementById('patientBannerText');
+        if (patient && patient.name) {
+          text.textContent = `${patient.name} (${patient.id})${patient.age ? ' - ' + patient.age : ''}`;
+          banner.style.display = 'flex';
+        }
       }
     });
 
@@ -222,13 +236,22 @@
     btnSendToHis.addEventListener('click', async () => {
       try {
         btnSendToHis.disabled = true;
-        btnSendText.textContent = 'Đang gửi...';
+        btnSendText.textContent = 'Đang nén ảnh...';
 
-        const blob = await editor.exportBlob(0.88);
+        const blob = await editor.exportBlob(0.85);
+        btnSendText.textContent = 'Đang truyền 0%...';
+
         await p2p.sendImage(blob, {
           name: `ECG_${Date.now()}.jpg`,
           type: 'image/jpeg'
+        }, (pct) => {
+          btnSendText.textContent = `Đang truyền ${pct}%...`;
         });
+
+        // Rung nhẹ điện thoại xác nhận thành công
+        if (navigator.vibrate) {
+          try { navigator.vibrate([40, 60, 40]); } catch (e) {}
+        }
 
         // Show Toast
         toast.classList.add('visible');
@@ -240,9 +263,9 @@
           captureScreen.style.display = 'flex';
           btnSendToHis.disabled = false;
           btnSendText.textContent = 'Gửi Lên HIS';
-        }, 1800);
+        }, 1500);
       } catch (err) {
-        alert('Gửi ảnh thất bại: ' + err.message);
+        alert(err.message || 'Lỗi gửi ảnh');
         btnSendToHis.disabled = false;
         btnSendText.textContent = 'Gửi Lên HIS';
       }

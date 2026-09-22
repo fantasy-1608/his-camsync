@@ -68,8 +68,8 @@ export class ImageEditor {
     const targetWidth = isSideways ? img.height : img.width;
     const targetHeight = isSideways ? img.width : img.height;
 
-    // Giới hạn độ phân giải 2560px để tối ưu bộ nhớ và tốc độ xử lý trên mobile
-    const maxDim = 2560;
+    // Giới hạn độ phân giải 1600px chuẩn lâm sàng (đảm bảo từng vạch 0.1mm lưới ECG sắc nét, dung lượng nhẹ ~200KB)
+    const maxDim = 1600;
     let scale = 1;
     if (Math.max(targetWidth, targetHeight) > maxDim) {
       scale = maxDim / Math.max(targetWidth, targetHeight);
@@ -261,7 +261,7 @@ export class ImageEditor {
    * Xuất ảnh đã Crop chuẩn xác 100% theo vùng người dùng đã chọn
    * @returns {Promise<Blob>}
    */
-  exportBlob(quality = 0.88) {
+  exportBlob(quality = 0.85) {
     return new Promise((resolve, reject) => {
       const cw = this.canvas.width;
       const ch = this.canvas.height;

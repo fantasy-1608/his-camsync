@@ -252,7 +252,25 @@
   }
 
   /**
-   * Lắng nghe nhận ảnh qua WebRTC P2P (Google STUN)
+   * Bóc tách thông tin hành chính bệnh nhân từ màn hình trả kết quả HIS
+   */
+  function getPatientInfoFromDOM() {
+    try {
+      const text = document.body.innerText || '';
+      const m = text.match(/Mã bệnh nhân:\s*([0-9]+)\s*-\s*Tên bệnh nhân:\s*([^-\n]+)(?:\s*-\s*Tuổi:\s*([0-9]+\s*Tuổi))?/i);
+      if (m) {
+        return {
+          id: m[1].trim(),
+          name: m[2].trim(),
+          age: m[3] ? m[3].trim() : ''
+        };
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Lắng nghe nhận ảnh qua WebRTC P2P (Google STUN) hỗ trợ Chunking 16KB
    */
   function startReceivingImage(sessionId) {
     const statusText = document.getElementById('camsyncStatusText');
@@ -284,9 +302,83 @@
           if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối P2P!';
           if (statusPill) statusPill.classList.add('connected');
 
+          // Gửi thông tin bệnh nhân sang điện thoại để bác sĩ đối chiếu
+          const sendPatient = () => {
+            const patient = getPatientInfoFromDOM();
+            if (patient) {
+              try { conn.send({ type: 'PATIENT_INFO', patient }); } catch (e) {}
+            }
+          };
+          sendPatient();
+
+          // Bộ đệm nhận từng mảnh (Chunking)
+          const activeTransfers = {};
+
           conn.on('data', (payload) => {
-            if (payload && payload.type === 'SYNC_IMAGE') {
+            if (!payload) return;
+
+            if (payload.type === 'REQ_PATIENT_INFO') {
+              sendPatient();
+              return;
+            }
+
+            // Gói bắt đầu phiên truyền phân mảnh
+            if (payload.type === 'CHUNK_START') {
+              activeTransfers[payload.transferId] = {
+                chunks: new Array(payload.totalChunks),
+                totalChunks: payload.totalChunks,
+                received: 0,
+                meta: payload.meta || {}
+              };
+              if (statusText) statusText.textContent = 'Đang nhận ảnh từ ĐT (0%)...';
+              return;
+            }
+
+            // Gói chứa dữ liệu phân mảnh (16KB)
+            if (payload.type === 'CHUNK_DATA') {
+              const tx = activeTransfers[payload.transferId];
+              if (tx) {
+                tx.chunks[payload.index] = payload.chunk;
+                tx.received++;
+                const pct = Math.round((tx.received / tx.totalChunks) * 100);
+                if (statusText && pct % 20 === 0) {
+                  statusText.textContent = `Đang nhận ảnh từ ĐT (${pct}%)...`;
+                }
+              }
+              return;
+            }
+
+            // Gói hoàn tất truyền phân mảnh -> Tái ráp Base64
+            if (payload.type === 'CHUNK_COMPLETE') {
+              const tx = activeTransfers[payload.transferId];
+              if (tx) {
+                const fullBase64 = tx.chunks.join('');
+                delete activeTransfers[payload.transferId];
+
+                handleIncomingImageData(fullBase64, tx.meta);
+
+                // Gửi xác nhận về điện thoại
+                try {
+                  conn.send({
+                    type: 'TRANSFER_ACK',
+                    success: true,
+                    photoCount: photoCount
+                  });
+                } catch (e) {}
+              }
+              return;
+            }
+
+            // Dự phòng gói tin đơn (nếu client cũ gửi)
+            if (payload.type === 'SYNC_IMAGE') {
               handleIncomingImageData(payload.image, payload.meta);
+              try {
+                conn.send({
+                  type: 'TRANSFER_ACK',
+                  success: true,
+                  photoCount: photoCount
+                });
+              } catch (e) {}
             }
           });
         });
@@ -308,7 +400,10 @@
     photoCount++;
     if (statusText) statusText.textContent = `Đang nạp ảnh thứ ${photoCount} vào HIS...`;
 
-    const filename = meta.name || `ECG_${Date.now()}.jpg`;
+    // Đặt tên file chuẩn lâm sàng
+    const patient = getPatientInfoFromDOM();
+    const patientPrefix = patient?.id ? `ECG_${patient.id}` : 'ECG';
+    const filename = meta.name || `${patientPrefix}_${Date.now()}.jpg`;
     const file = dataURLtoFile(base64Image, filename);
 
     const success = injectFilesAndUpload([file]);
