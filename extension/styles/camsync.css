@@ -22,27 +22,6 @@
   background: #047857 !important;
 }
 
-/* Nút Đổi & Nạp ảnh iPhone (HEIC) trên Toolbar */
-.btn-heic-trigger {
-  background: #0284c7 !important;
-  border-color: #0369a1 !important;
-  color: #ffffff !important;
-  font-weight: 600 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 5px !important;
-  padding: 4px 9px !important;
-  border-radius: 4px !important;
-  margin: 0 !important;
-  font-size: 12px !important;
-  cursor: pointer !important;
-  white-space: nowrap !important;
-  transition: background-color 0.15s ease !important;
-}
-
-.btn-heic-trigger:hover {
-  background: #0369a1 !important;
-}
 
 /* Tooltip chuẩn lâm sàng (300ms delay, 0ms exit) */
 .camsync-tooltip-wrapper {

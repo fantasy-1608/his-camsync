@@ -145,31 +145,6 @@
   }
 
   /**
-   * Kích hoạt hộp thoại chọn ảnh iPhone (HEIC) để nạp trực tiếp trên máy
-   */
-  function triggerHeicConversion() {
-    const existingInput = document.getElementById('camsyncHeicInput');
-    if (existingInput) existingInput.remove();
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.id = 'camsyncHeicInput';
-    input.accept = '.heic,.heif,.HEIC,.HEIF,image/*';
-    input.multiple = true;
-    input.style.display = 'none';
-    document.body.appendChild(input);
-
-    input.addEventListener('change', async (e) => {
-      const files = Array.from(e.target.files || []);
-      input.remove();
-      if (files.length === 0) return;
-      await processAndUploadFiles(files);
-    });
-
-    input.click();
-  }
-
-  /**
    * Nạp danh sách File vào <input id="fileUpload"> và kích hoạt upload
    */
   function injectFilesAndUpload(fileList) {
@@ -321,27 +296,24 @@
         if (!fileInput.files || fileInput.files.length === 0) {
           e.stopImmediatePropagation();
           e.preventDefault();
-          showToast('⚠️ Vui lòng chọn tệp hoặc nhấn "Đổi ảnh iPhone" trước khi bấm Upload!');
+          showToast('⚠️ Vui lòng chọn tệp ảnh trước khi bấm Upload!');
         }
       }, true); // Bắt ở capture phase để chặn trước handler của VNPT HIS
     }
   }
 
   /**
-   * Khởi tạo Nút "Quét từ ĐT" và "Đổi ảnh iPhone (HEIC)" trên Toolbar
+   * Khởi tạo Nút "Quét từ ĐT" trên Toolbar
    */
   function injectSyncButton() {
     const btnUpload = document.getElementById('btnUpload');
     if (!btnUpload || document.getElementById('btnCamSync')) return;
 
-    const group = document.createElement('div');
-    group.className = 'camsync-btn-group';
-    group.style.cssText = 'display: flex; gap: 6px; margin-top: 6px; width: max-content; align-items: center;';
-
-    // 1. Nút "Quét từ ĐT" (P2P CamSync)
+    // Nút "Quét từ ĐT" (P2P CamSync)
     const wrapperCam = document.createElement('div');
     wrapperCam.className = 'camsync-tooltip-wrapper';
     wrapperCam.setAttribute('data-tooltip', 'Chụp ECG từ điện thoại & đồng bộ tức thì');
+    wrapperCam.style.cssText = 'display: inline-block; margin-top: 6px;';
 
     const btnCam = document.createElement('button');
     btnCam.type = 'button';
@@ -353,25 +325,7 @@
     btnCam.addEventListener('click', () => openQrModal());
     wrapperCam.appendChild(btnCam);
 
-    // 2. Nút "Đổi ảnh iPhone (HEIC)" (Chuyển đổi trực tiếp trên máy)
-    const wrapperHeic = document.createElement('div');
-    wrapperHeic.className = 'camsync-tooltip-wrapper';
-    wrapperHeic.setAttribute('data-tooltip', 'Tự động đổi ảnh HEIC/iPhone sang JPG và nạp lên HIS');
-
-    const btnHeic = document.createElement('button');
-    btnHeic.type = 'button';
-    btnHeic.id = 'btnHeicConvert';
-    btnHeic.className = 'btn btn-info btn-heic-trigger';
-    btnHeic.innerHTML = `
-      <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span> Đổi ảnh iPhone (HEIC)
-    `;
-    btnHeic.addEventListener('click', () => triggerHeicConversion());
-    wrapperHeic.appendChild(btnHeic);
-
-    group.appendChild(wrapperCam);
-    group.appendChild(wrapperHeic);
-
-    btnUpload.parentNode.appendChild(group);
+    btnUpload.parentNode.appendChild(wrapperCam);
 
     initNativeUploadInterceptor();
   }
