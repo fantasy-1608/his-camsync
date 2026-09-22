@@ -1,12 +1,13 @@
 /**
- * HIS-CamSync: Image Editor Module
- * Hỗ trợ xoay 90°, Crop theo tỉ lệ dải giấy ECG, Bộ lọc tương phản sóng điện tim.
+ * HIS-CamSync: Image Editor Module (Normalized Coordinates & Smooth Pointer Drag)
+ * Khắc phục triệt để hiện tượng lệch khung crop và giật lag khi kéo 4 góc.
  */
 
 export class ImageEditor {
-  constructor(canvas, cropOverlay, cropBox) {
+  constructor(canvas, container, cropOverlay, cropBox) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+    this.container = container;
     this.cropOverlay = cropOverlay;
     this.cropBox = cropBox;
 
@@ -14,14 +15,16 @@ export class ImageEditor {
     this.rotation = 0; // 0, 90, 180, 270
     this.filter = 'normal'; // 'normal', 'ecg', 'bw'
 
-    // Crop box coordinates relative to canvas display rect
-    this.cropRect = { x: 0, y: 0, width: 0, height: 0 };
-    this.isCropping = false;
-    this.activeHandle = null;
-    this.touchStartPos = { x: 0, y: 0 };
-    this.initialCropRect = { ...this.cropRect };
+    // Tọa độ Crop dạng chuẩn hóa (0.0 đến 1.0)
+    // Giúp khử 100% sai số tỷ lệ và lệch tâm giữa màn hình và ảnh xuất ra
+    this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
 
-    this.initCropEvents();
+    this.isDragging = false;
+    this.activeHandle = null;
+    this.startPoint = { x: 0, y: 0 };
+    this.startCrop = { ...this.normCrop };
+
+    this.initDragEvents();
   }
 
   loadImage(file) {
@@ -33,8 +36,8 @@ export class ImageEditor {
           this.originalImage = img;
           this.rotation = 0;
           this.filter = 'normal';
+          this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
           this.render();
-          this.resetCropBox();
           resolve(img);
         };
         img.onerror = reject;
@@ -47,8 +50,9 @@ export class ImageEditor {
 
   rotate(degrees) {
     this.rotation = (this.rotation + degrees + 360) % 360;
+    // Đặt lại khung crop mặc định khi xoay góc
+    this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
     this.render();
-    this.resetCropBox();
   }
 
   setFilter(filterName) {
@@ -64,32 +68,35 @@ export class ImageEditor {
     const targetWidth = isSideways ? img.height : img.width;
     const targetHeight = isSideways ? img.width : img.height;
 
-    // Giới hạn độ phân giải tối đa 2560px để duy trì tốc độ xử lý trên mobile
+    // Giới hạn độ phân giải 2560px để tối ưu bộ nhớ và tốc độ xử lý trên mobile
     const maxDim = 2560;
     let scale = 1;
     if (Math.max(targetWidth, targetHeight) > maxDim) {
       scale = maxDim / Math.max(targetWidth, targetHeight);
     }
 
-    this.canvas.width = targetWidth * scale;
-    this.canvas.height = targetHeight * scale;
+    this.canvas.width = Math.round(targetWidth * scale);
+    this.canvas.height = Math.round(targetHeight * scale);
 
     this.ctx.save();
     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
     this.ctx.rotate((this.rotation * Math.PI) / 180);
 
-    const drawW = (isSideways ? this.canvas.height : this.canvas.width);
-    const drawH = (isSideways ? this.canvas.width : this.canvas.height);
+    const drawW = isSideways ? this.canvas.height : this.canvas.width;
+    const drawH = isSideways ? this.canvas.width : this.canvas.height;
 
     this.ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
     this.ctx.restore();
 
-    // Áp dụng bộ lọc điểm ảnh nếu có
+    // Áp dụng bộ lọc điểm ảnh
     if (this.filter !== 'normal') {
       this.applyPixelFilter();
     }
 
-    this.updateCropBoxPosition();
+    // Đồng bộ lại kích thước hiển thị của container và khung crop
+    requestAnimationFrame(() => {
+      this.updateCropBoxUI();
+    });
   }
 
   applyPixelFilter() {
@@ -98,27 +105,19 @@ export class ImageEditor {
     const len = data.length;
 
     if (this.filter === 'ecg') {
-      // Bộ lọc tối ưu cho giấy ECG: Giữ lại vạch milimet, làm nổi bật đường sóng màu tối
       for (let i = 0; i < len; i += 4) {
         const r = data[i];
         const g = data[i + 1];
         const b = data[i + 2];
-
-        // Độ sáng tổng hợp
         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
 
-        // Nếu là vạch kẻ đỏ/hồng nhạt của giấy ECG, làm sáng hơn một chút
-        // Nếu là mực in đen của đường sóng điện tim, ép đậm hơn
         let val;
         if (gray < 110) {
-          // Đường sóng đen -> đẩy sâu về đen
-          val = Math.max(0, gray * 0.6);
+          val = Math.max(0, gray * 0.6); // Làm đậm đường sóng
         } else if (r > g + 20 && r > b + 20) {
-          // Lưới đỏ/hồng -> giữ độ tương phản nhẹ
-          val = Math.min(255, gray * 1.05);
+          val = Math.min(255, gray * 1.05); // Giữ lưới hồng/đỏ
         } else {
-          // Nền giấy -> đẩy sáng
-          val = Math.min(255, (gray - 100) * 1.8 + 100);
+          val = Math.min(255, (gray - 100) * 1.8 + 100); // Tăng sáng nền
         }
 
         data[i] = val;
@@ -126,7 +125,6 @@ export class ImageEditor {
         data[i + 2] = val;
       }
     } else if (this.filter === 'bw') {
-      // Trắng đen độ tương phản cao
       for (let i = 0; i < len; i += 4) {
         const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
         const val = gray > 128 ? 255 : 0;
@@ -139,138 +137,154 @@ export class ImageEditor {
     this.ctx.putImageData(imgData, 0, 0);
   }
 
-  resetCropBox() {
-    requestAnimationFrame(() => {
-      const rect = this.canvas.getBoundingClientRect();
-      // Mặc định margin 5%
-      const marginX = rect.width * 0.05;
-      const marginY = rect.height * 0.05;
+  updateCropBoxUI() {
+    if (!this.cropBox || !this.container) return;
 
-      this.cropRect = {
-        x: marginX,
-        y: marginY,
-        width: rect.width - marginX * 2,
-        height: rect.height - marginY * 2
-      };
-      this.updateCropBoxPosition();
-    });
+    const rect = this.container.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    if (w === 0 || h === 0) return;
+
+    const leftPx = Math.round(this.normCrop.left * w);
+    const topPx = Math.round(this.normCrop.top * h);
+    const widthPx = Math.round((this.normCrop.right - this.normCrop.left) * w);
+    const heightPx = Math.round((this.normCrop.bottom - this.normCrop.top) * h);
+
+    this.cropBox.style.left = `${leftPx}px`;
+    this.cropBox.style.top = `${topPx}px`;
+    this.cropBox.style.width = `${widthPx}px`;
+    this.cropBox.style.height = `${heightPx}px`;
   }
 
-  updateCropBoxPosition() {
-    if (!this.cropBox) return;
-    this.cropBox.style.left = `${this.cropRect.x}px`;
-    this.cropBox.style.top = `${this.cropRect.y}px`;
-    this.cropBox.style.width = `${this.cropRect.width}px`;
-    this.cropBox.style.height = `${this.cropRect.height}px`;
-  }
-
-  initCropEvents() {
+  initDragEvents() {
     if (!this.cropBox) return;
 
-    const handles = this.cropBox.querySelectorAll('.crop-handle');
-    handles.forEach(handle => {
-      handle.addEventListener('touchstart', (e) => this.onHandleTouchStart(e, handle), { passive: false });
-    });
+    const onPointerDown = (e) => {
+      const handle = e.target.closest('[data-handle]');
+      if (handle) {
+        this.activeHandle = handle.dataset.handle;
+      } else if (e.target.closest('#cropBox')) {
+        this.activeHandle = 'box';
+      } else {
+        return;
+      }
 
-    this.cropBox.addEventListener('touchstart', (e) => {
-      if (e.target.classList.contains('crop-handle')) return;
-      this.isCropping = true;
-      this.activeHandle = 'box';
-      const touch = e.touches[0];
-      this.touchStartPos = { x: touch.clientX, y: touch.clientY };
-      this.initialCropRect = { ...this.cropRect };
+      this.isDragging = true;
+      this.startPoint = { x: e.clientX, y: e.clientY };
+      this.startCrop = { ...this.normCrop };
+
+      // Khóa pointer capture để vuốt nhanh không bị tuột tay cầm
+      if (e.target.setPointerCapture) {
+        e.target.setPointerCapture(e.pointerId);
+      }
+
       e.preventDefault();
-    }, { passive: false });
+      e.stopPropagation();
+    };
 
-    window.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: false });
-    window.addEventListener('touchend', () => this.onTouchEnd());
-  }
+    const onPointerMove = (e) => {
+      if (!this.isDragging) return;
 
-  onHandleTouchStart(e, handle) {
-    this.isCropping = true;
-    this.activeHandle = handle.dataset.handle;
-    const touch = e.touches[0];
-    this.touchStartPos = { x: touch.clientX, y: touch.clientY };
-    this.initialCropRect = { ...this.cropRect };
-    e.stopPropagation();
-    e.preventDefault();
-  }
+      const rect = this.container.getBoundingClientRect();
+      const contW = rect.width;
+      const contH = rect.height;
+      if (contW <= 0 || contH <= 0) return;
 
-  onTouchMove(e) {
-    if (!this.isCropping) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - this.touchStartPos.x;
-    const dy = touch.clientY - this.touchStartPos.y;
+      const dx = (e.clientX - this.startPoint.x) / contW;
+      const dy = (e.clientY - this.startPoint.y) / contH;
+      const minW = 40 / contW; // Giới hạn kích thước tối thiểu 40px
+      const minH = 40 / contH;
 
-    const canvasRect = this.canvas.getBoundingClientRect();
-    const minSize = 40;
+      const c = this.normCrop;
+      const s = this.startCrop;
 
-    if (this.activeHandle === 'box') {
-      let newX = this.initialCropRect.x + dx;
-      let newY = this.initialCropRect.y + dy;
+      if (this.activeHandle === 'box') {
+        const boxW = s.right - s.left;
+        const boxH = s.bottom - s.top;
 
-      newX = Math.max(0, Math.min(newX, canvasRect.width - this.initialCropRect.width));
-      newY = Math.max(0, Math.min(newY, canvasRect.height - this.initialCropRect.height));
+        let newLeft = Math.max(0, Math.min(s.left + dx, 1 - boxW));
+        let newTop = Math.max(0, Math.min(s.top + dy, 1 - boxH));
 
-      this.cropRect.x = newX;
-      this.cropRect.y = newY;
-    } else if (this.activeHandle === 'tl') {
-      const newX = Math.min(this.initialCropRect.x + dx, this.initialCropRect.x + this.initialCropRect.width - minSize);
-      const newY = Math.min(this.initialCropRect.y + dy, this.initialCropRect.y + this.initialCropRect.height - minSize);
-      this.cropRect.width += this.cropRect.x - Math.max(0, newX);
-      this.cropRect.height += this.cropRect.y - Math.max(0, newY);
-      this.cropRect.x = Math.max(0, newX);
-      this.cropRect.y = Math.max(0, newY);
-    } else if (this.activeHandle === 'br') {
-      const newW = Math.max(minSize, this.initialCropRect.width + dx);
-      const newH = Math.max(minSize, this.initialCropRect.height + dy);
-      this.cropRect.width = Math.min(newW, canvasRect.width - this.cropRect.x);
-      this.cropRect.height = Math.min(newH, canvasRect.height - this.cropRect.y);
-    } else if (this.activeHandle === 'tr') {
-      const newY = Math.min(this.initialCropRect.y + dy, this.initialCropRect.y + this.initialCropRect.height - minSize);
-      this.cropRect.height += this.cropRect.y - Math.max(0, newY);
-      this.cropRect.y = Math.max(0, newY);
-      this.cropRect.width = Math.min(Math.max(minSize, this.initialCropRect.width + dx), canvasRect.width - this.cropRect.x);
-    } else if (this.activeHandle === 'bl') {
-      const newX = Math.min(this.initialCropRect.x + dx, this.initialCropRect.x + this.initialCropRect.width - minSize);
-      this.cropRect.width += this.cropRect.x - Math.max(0, newX);
-      this.cropRect.x = Math.max(0, newX);
-      this.cropRect.height = Math.min(Math.max(minSize, this.initialCropRect.height + dy), canvasRect.height - this.cropRect.y);
-    }
+        c.left = newLeft;
+        c.right = newLeft + boxW;
+        c.top = newTop;
+        c.bottom = newTop + boxH;
+      } else if (this.activeHandle === 'tl') {
+        c.left = Math.max(0, Math.min(s.left + dx, s.right - minW));
+        c.top = Math.max(0, Math.min(s.top + dy, s.bottom - minH));
+      } else if (this.activeHandle === 'tr') {
+        c.right = Math.min(1, Math.max(s.right + dx, s.left + minW));
+        c.top = Math.max(0, Math.min(s.top + dy, s.bottom - minH));
+      } else if (this.activeHandle === 'bl') {
+        c.left = Math.max(0, Math.min(s.left + dx, s.right - minW));
+        c.bottom = Math.min(1, Math.max(s.bottom + dy, s.top + minH));
+      } else if (this.activeHandle === 'br') {
+        c.right = Math.min(1, Math.max(s.right + dx, s.left + minW));
+        c.bottom = Math.min(1, Math.max(s.bottom + dy, s.top + minH));
+      } else if (this.activeHandle === 't') {
+        c.top = Math.max(0, Math.min(s.top + dy, s.bottom - minH));
+      } else if (this.activeHandle === 'b') {
+        c.bottom = Math.min(1, Math.max(s.bottom + dy, s.top + minH));
+      } else if (this.activeHandle === 'l') {
+        c.left = Math.max(0, Math.min(s.left + dx, s.right - minW));
+      } else if (this.activeHandle === 'r') {
+        c.right = Math.min(1, Math.max(s.right + dx, s.left + minW));
+      }
 
-    this.updateCropBoxPosition();
-    e.preventDefault();
-  }
+      this.updateCropBoxUI();
+      e.preventDefault();
+    };
 
-  onTouchEnd() {
-    this.isCropping = false;
-    this.activeHandle = null;
+    const onPointerUp = (e) => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.activeHandle = null;
+        if (e.target.releasePointerCapture && e.pointerId) {
+          try { e.target.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+      }
+    };
+
+    this.cropOverlay.addEventListener('pointerdown', onPointerDown, { passive: false });
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    // Xử lý khi xoay màn hình điện thoại
+    window.addEventListener('resize', () => {
+      this.updateCropBoxUI();
+    });
   }
 
   /**
-   * Xuất ảnh đã Crop, Xoay và áp dụng Bộ lọc
+   * Xuất ảnh đã Crop chuẩn xác 100% theo vùng người dùng đã chọn
    * @returns {Promise<Blob>}
    */
   exportBlob(quality = 0.88) {
     return new Promise((resolve, reject) => {
-      const canvasRect = this.canvas.getBoundingClientRect();
-      const scaleX = this.canvas.width / canvasRect.width;
-      const scaleY = this.canvas.height / canvasRect.height;
+      const cw = this.canvas.width;
+      const ch = this.canvas.height;
 
-      const sourceX = this.cropRect.x * scaleX;
-      const sourceY = this.cropRect.y * scaleY;
-      const sourceW = this.cropRect.width * scaleX;
-      const sourceH = this.cropRect.height * scaleY;
+      // Tính toán trực tiếp từ tọa độ chuẩn hóa (khử hoàn toàn sai lệch CSS/Viewport)
+      const sx = Math.max(0, Math.round(this.normCrop.left * cw));
+      const sy = Math.max(0, Math.round(this.normCrop.top * ch));
+      const sw = Math.min(cw - sx, Math.round((this.normCrop.right - this.normCrop.left) * cw));
+      const sh = Math.min(ch - sy, Math.round((this.normCrop.bottom - this.normCrop.top) * ch));
+
+      if (sw <= 0 || sh <= 0) {
+        return reject(new Error('Vùng cắt không hợp lệ'));
+      }
 
       const outCanvas = document.createElement('canvas');
-      outCanvas.width = sourceW;
-      outCanvas.height = sourceH;
+      outCanvas.width = sw;
+      outCanvas.height = sh;
       const outCtx = outCanvas.getContext('2d');
 
       outCtx.drawImage(
         this.canvas,
-        sourceX, sourceY, sourceW, sourceH,
-        0, 0, sourceW, sourceH
+        sx, sy, sw, sh,
+        0, 0, sw, sh
       );
 
       outCanvas.toBlob((blob) => {

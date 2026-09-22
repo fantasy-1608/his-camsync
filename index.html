@@ -49,13 +49,24 @@
     <!-- Screen 2: Chỉnh sửa & Xử lý ảnh -->
     <section id="editorScreen" class="editor-screen">
       <div class="canvas-viewport">
-        <canvas id="previewCanvas"></canvas>
-        <div id="cropOverlay" class="crop-overlay">
-          <div id="cropBox" class="crop-box">
-            <div class="crop-handle handle-tl" data-handle="tl"></div>
-            <div class="crop-handle handle-tr" data-handle="tr"></div>
-            <div class="crop-handle handle-bl" data-handle="bl"></div>
-            <div class="crop-handle handle-br" data-handle="br"></div>
+        <div id="canvasContainer" class="canvas-container">
+          <canvas id="previewCanvas"></canvas>
+          <div id="cropOverlay" class="crop-overlay">
+            <div id="cropBox" class="crop-box">
+              <div class="crop-grid">
+                <div></div><div></div><div></div>
+                <div></div><div></div><div></div>
+                <div></div><div></div><div></div>
+              </div>
+              <div class="crop-handle handle-tl" data-handle="tl"></div>
+              <div class="crop-handle handle-tr" data-handle="tr"></div>
+              <div class="crop-handle handle-bl" data-handle="bl"></div>
+              <div class="crop-handle handle-br" data-handle="br"></div>
+              <div class="crop-edge-handle handle-t" data-handle="t"></div>
+              <div class="crop-edge-handle handle-b" data-handle="b"></div>
+              <div class="crop-edge-handle handle-l" data-handle="l"></div>
+              <div class="crop-edge-handle handle-r" data-handle="r"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -128,6 +139,7 @@
     const cameraInput = document.getElementById('cameraInput');
     const btnTriggerCapture = document.getElementById('btnTriggerCapture');
     const canvas = document.getElementById('previewCanvas');
+    const canvasContainer = document.getElementById('canvasContainer');
     const cropOverlay = document.getElementById('cropOverlay');
     const cropBox = document.getElementById('cropBox');
 
@@ -144,7 +156,7 @@
     const toast = document.getElementById('toast');
 
     // Khởi tạo Editor & P2P Client
-    const editor = new ImageEditor(canvas, cropOverlay, cropBox);
+    const editor = new ImageEditor(canvas, canvasContainer, cropOverlay, cropBox);
     const p2p = new P2PClient({
       onStatusChange: (connected, text) => {
         statusText.textContent = text;
@@ -171,6 +183,8 @@
         await editor.loadImage(file);
         captureScreen.style.display = 'none';
         editorScreen.style.display = 'flex';
+        // Render lại sau khi layout tính toán xong kích thước
+        setTimeout(() => editor.render(), 50);
       } catch (err) {
         alert('Không thể tải ảnh: ' + err.message);
       }
