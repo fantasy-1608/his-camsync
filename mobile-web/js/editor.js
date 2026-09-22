@@ -15,9 +15,10 @@ export class ImageEditor {
     this.rotation = 0; // 0, 90, 180, 270
     this.filter = 'normal'; // 'normal', 'ecg', 'bw'
 
+    this.currentPreset = 'ecg';
     // Tọa độ Crop dạng chuẩn hóa (0.0 đến 1.0)
-    // Giúp khử 100% sai số tỷ lệ và lệch tâm giữa màn hình và ảnh xuất ra
-    this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
+    // Mặc định chuẩn Dải ECG ngang (rộng 94%, cao 36%, căn giữa)
+    this.normCrop = { left: 0.03, top: 0.32, right: 0.97, bottom: 0.68 };
 
     this.isDragging = false;
     this.activeHandle = null;
@@ -25,6 +26,13 @@ export class ImageEditor {
     this.startCrop = { ...this.normCrop };
 
     this.initDragEvents();
+
+    if (window.ResizeObserver && this.container) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.updateCropBoxUI();
+      });
+      this.resizeObserver.observe(this.container);
+    }
   }
 
   loadImage(file) {
@@ -36,7 +44,7 @@ export class ImageEditor {
           this.originalImage = img;
           this.rotation = 0;
           this.filter = 'normal';
-          this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
+          this.setCropPreset(this.currentPreset || 'ecg');
           this.render();
           resolve(img);
         };
@@ -50,14 +58,33 @@ export class ImageEditor {
 
   rotate(degrees) {
     this.rotation = (this.rotation + degrees + 360) % 360;
-    // Đặt lại khung crop mặc định khi xoay góc
-    this.normCrop = { left: 0.05, top: 0.15, right: 0.95, bottom: 0.85 };
+    // Giữ nguyên tỷ lệ chuẩn theo preset đã chọn khi xoay
+    this.setCropPreset(this.currentPreset || 'ecg');
     this.render();
   }
 
   setFilter(filterName) {
     this.filter = filterName;
     this.render();
+  }
+
+  /**
+   * Cài đặt tỷ lệ khung cắt nhanh chuẩn lâm sàng
+   * @param {'ecg' | 'standard' | 'full'} preset 
+   */
+  setCropPreset(preset) {
+    this.currentPreset = preset;
+    if (preset === 'ecg') {
+      // Dải điện tim ngang: rộng 94%, cao 36%, căn giữa trục dọc
+      this.normCrop = { left: 0.03, top: 0.32, right: 0.97, bottom: 0.68 };
+    } else if (preset === 'standard') {
+      // Khung 4:3 siêu âm / nội soi: rộng 84%, cao 65%, căn giữa
+      this.normCrop = { left: 0.08, top: 0.18, right: 0.92, bottom: 0.82 };
+    } else if (preset === 'full') {
+      // Toàn bộ ảnh
+      this.normCrop = { left: 0.02, top: 0.02, right: 0.98, bottom: 0.98 };
+    }
+    this.updateCropBoxUI();
   }
 
   render() {
@@ -174,9 +201,9 @@ export class ImageEditor {
       this.startPoint = { x: e.clientX, y: e.clientY };
       this.startCrop = { ...this.normCrop };
 
-      // Khóa pointer capture để vuốt nhanh không bị tuột tay cầm
-      if (e.target.setPointerCapture) {
-        e.target.setPointerCapture(e.pointerId);
+      // Khóa pointer capture trên cropOverlay để vuốt nhanh không bị tuột tay cầm
+      if (this.cropOverlay.setPointerCapture && e.pointerId) {
+        try { this.cropOverlay.setPointerCapture(e.pointerId); } catch (_) {}
       }
 
       e.preventDefault();
@@ -240,8 +267,8 @@ export class ImageEditor {
       if (this.isDragging) {
         this.isDragging = false;
         this.activeHandle = null;
-        if (e.target.releasePointerCapture && e.pointerId) {
-          try { e.target.releasePointerCapture(e.pointerId); } catch (err) {}
+        if (this.cropOverlay.releasePointerCapture && e.pointerId) {
+          try { this.cropOverlay.releasePointerCapture(e.pointerId); } catch (err) {}
         }
       }
     };

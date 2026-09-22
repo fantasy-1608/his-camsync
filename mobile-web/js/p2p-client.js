@@ -41,28 +41,7 @@ export class P2PClient {
               { urls: 'stun:stun.l.google.com:19302' },
               { urls: 'stun:stun1.l.google.com:19302' },
               { urls: 'stun:stun2.l.google.com:19302' },
-              { urls: 'stun:stun.cloudflare.com:3478' },
-              { urls: 'stun:openrelay.metered.ca:80' },
-              {
-                urls: 'turn:openrelay.metered.ca:80',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-              },
-              {
-                urls: 'turn:openrelay.metered.ca:443',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-              },
-              {
-                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-              },
-              {
-                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-              }
+              { urls: 'stun:stun.cloudflare.com:3478' }
             ]
           }
         });
@@ -77,14 +56,14 @@ export class P2PClient {
           console.warn('[P2P] PeerJS event error:', err.type, err.message);
 
           if (err.type === 'peer-unavailable') {
-            this.updateStatus(false, 'Máy tính chưa mở QR');
+            this.updateStatus(false, 'Chưa mở QR trên máy tính');
             // Tự động tìm lại máy bàn sau 2 giây
             clearTimeout(this.retryTimer);
             this.retryTimer = setTimeout(() => {
               this.connectToDesktop();
             }, 2000);
           } else {
-            this.updateStatus(false, 'Đang chờ máy bàn...');
+            this.updateStatus(false, 'Chờ Wi-Fi Bệnh viện...');
           }
         });
       } catch (e) {
@@ -121,7 +100,7 @@ export class P2PClient {
       console.log('[P2P] Kết nối WebRTC P2P thành công!');
       clearTimeout(this.retryTimer);
       this.isConnected = true;
-      this.updateStatus(true, '🟢 Đã kết nối P2P');
+      this.updateStatus(true, '🟢 Wi-Fi Bệnh viện');
 
       // Yêu cầu máy tính gửi thông tin bệnh nhân (nếu có)
       try {
@@ -146,17 +125,17 @@ export class P2PClient {
     this.conn.on('close', () => {
       console.log('[P2P] Máy tính đã đóng cửa sổ QR hoặc ngắt kết nối');
       this.isConnected = false;
-      this.updateStatus(false, 'Mất kết nối máy bàn');
+      this.updateStatus(false, '🔴 Ngắt kết nối Wi-Fi BV');
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.connectToDesktop(), 4000);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 3000);
     });
 
     this.conn.on('error', (err) => {
       console.warn('[P2P] Lỗi DataChannel:', err);
       this.isConnected = false;
-      this.updateStatus(false, 'Chờ kết nối máy bàn...');
+      this.updateStatus(false, 'Chờ Wi-Fi Bệnh viện...');
       clearTimeout(this.retryTimer);
-      this.retryTimer = setTimeout(() => this.connectToDesktop(), 4000);
+      this.retryTimer = setTimeout(() => this.connectToDesktop(), 3000);
     });
   }
 
