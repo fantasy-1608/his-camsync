@@ -1,13 +1,11 @@
 /**
- * HIS-CamSync: P2P Client (WebRTC DataChannel + HTTP Fallback)
- * Đảm bảo 100% khả năng kết nối và gửi ảnh tức thì giữa điện thoại và máy tính.
+ * HIS-CamSync: P2P Client (WebRTC DataChannel qua PeerJS Cloud + STUN)
+ * Cho phép điện thoại (4G / Wi-Fi) và máy tính bàn (mạng dây LAN) kết nối trực tiếp P2P xuyên mạng.
  */
 
 export class P2PClient {
   constructor(options = {}) {
     this.sessionId = options.sessionId || this.getSessionIdFromUrl();
-    this.serverHost = options.serverHost || window.location.hostname;
-    this.serverPort = options.serverPort || window.location.port || '3838';
     this.peer = null;
     this.conn = null;
     this.isConnected = false;
@@ -21,26 +19,25 @@ export class P2PClient {
   }
 
   /**
-   * Khởi tạo kết nối WebRTC PeerJS
+   * Khởi tạo kết nối WebRTC PeerJS Cloud
    */
   connect() {
     return new Promise((resolve) => {
       if (typeof window.Peer === 'undefined') {
-        console.warn('PeerJS chưa được tải, sử dụng chế độ HTTP Fallback');
-        this.updateStatus(false, 'HTTP Fallback');
+        console.warn('PeerJS chưa được tải');
+        this.updateStatus(false, 'Lỗi thư viện P2P');
         return resolve(false);
       }
 
       try {
-        // Kết nối qua STUN server công cộng của Google + PeerServer nội bộ
+        // Kết nối qua PeerJS Cloud (0.peerjs.com) + STUN Server Google & Cloudflare
         this.peer = new window.Peer({
-          host: this.serverHost,
-          port: 9000,
-          path: '/peerjs',
           config: {
             iceServers: [
               { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' }
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:stun.cloudflare.com:3478' }
             ]
           }
         });
@@ -48,21 +45,15 @@ export class P2PClient {
         this.peer.on('open', (id) => {
           console.log('[P2P] Mobile Peer ID:', id);
           this.connectToDesktop();
+          resolve(true);
         });
 
         this.peer.on('error', (err) => {
-          console.warn('[P2P] Lỗi PeerJS, kích hoạt HTTP Fallback:', err);
-          this.updateStatus(false, 'Chế độ HTTP');
-          resolve(false);
+          console.warn('[P2P] Lỗi PeerJS:', err);
+          this.updateStatus(false, 'Chờ kết nối...');
+          // Thử kết nối lại sau 3s
+          setTimeout(() => this.connectToDesktop(), 3000);
         });
-
-        // Hạn thời gian chờ 4s, nếu không kết nối được qua WebRTC thì chuyển Fallback
-        setTimeout(() => {
-          if (!this.isConnected) {
-            console.log('[P2P] WebRTC timeout, kích hoạt HTTP Fallback');
-            resolve(false);
-          }
-        }, 4000);
       } catch (e) {
         console.warn('[P2P] Lỗi khởi tạo PeerJS:', e);
         resolve(false);
@@ -74,25 +65,29 @@ export class P2PClient {
     if (!this.peer || !this.sessionId) return;
 
     const desktopPeerId = `his-desktop-${this.sessionId}`;
-    console.log('[P2P] Đang kết nối tới máy tính:', desktopPeerId);
+    console.log('[P2P] Đang kết nối tới máy tính bàn:', desktopPeerId);
+    this.updateStatus(false, 'Đang tìm máy bàn...');
 
     this.conn = this.peer.connect(desktopPeerId, { reliable: true });
 
     this.conn.on('open', () => {
       console.log('[P2P] Kết nối WebRTC P2P thành công!');
       this.isConnected = true;
-      this.updateStatus(true, 'Đã kết nối P2P');
+      this.updateStatus(true, '🟢 Đã kết nối P2P');
     });
 
     this.conn.on('close', () => {
       console.log('[P2P] Đã ngắt kết nối P2P');
       this.isConnected = false;
-      this.updateStatus(false, 'Ngắt kết nối');
+      this.updateStatus(false, 'Mất kết nối');
+      // Tự động kết nối lại
+      setTimeout(() => this.connectToDesktop(), 2000);
     });
 
     this.conn.on('error', (err) => {
       console.warn('[P2P] Lỗi kênh dữ liệu DataChannel:', err);
       this.isConnected = false;
+      this.updateStatus(false, 'Lỗi kênh truyền');
     });
   }
 
@@ -102,57 +97,32 @@ export class P2PClient {
   }
 
   /**
-   * Gửi ảnh sang máy tính (Ưu tiên WebRTC P2P, dự phòng HTTP POST)
+   * Gửi ảnh sang máy tính qua WebRTC DataChannel (P2P trực tiếp giữa 2 máy)
    * @param {Blob} blob 
    * @param {Object} metadata 
    */
   async sendImage(blob, metadata = {}) {
+    if (!this.isConnected || !this.conn || !this.conn.open) {
+      throw new Error('Chưa kết nối được với máy tính bàn. Vui lòng kiểm tra mã QR trên màn hình HIS.');
+    }
+
     const reader = new FileReader();
     const base64Data = await new Promise((resolve) => {
       reader.onloadend = () => resolve(reader.result);
       reader.readAsDataURL(blob);
     });
 
-    // 1. Thử gửi qua WebRTC DataChannel (tốc độ cao, không qua server)
-    if (this.isConnected && this.conn && this.conn.open) {
-      try {
-        console.log('[P2P] Đang gửi ảnh qua WebRTC DataChannel...');
-        this.conn.send({
-          type: 'SYNC_IMAGE',
-          image: base64Data,
-          meta: {
-            ...metadata,
-            sessionId: this.sessionId,
-            timestamp: Date.now()
-          }
-        });
-        return { success: true, method: 'webrtc' };
-      } catch (err) {
-        console.warn('[P2P] Gửi WebRTC thất bại, chuyển sang HTTP:', err);
+    console.log('[P2P] Đang truyền ảnh trực tiếp P2P sang máy tính...');
+    this.conn.send({
+      type: 'SYNC_IMAGE',
+      image: base64Data,
+      meta: {
+        ...metadata,
+        sessionId: this.sessionId,
+        timestamp: Date.now()
       }
-    }
+    });
 
-    // 2. Fallback: Gửi qua HTTP POST tới Server
-    console.log('[P2P] Đang gửi ảnh qua HTTP Fallback...');
-    try {
-      const response = await fetch(`/api/sync/${this.sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: base64Data,
-          meta: {
-            ...metadata,
-            sessionId: this.sessionId,
-            timestamp: Date.now()
-          }
-        })
-      });
-
-      const res = await response.json();
-      return { success: res.success, method: 'http' };
-    } catch (httpErr) {
-      console.error('[P2P] Cả WebRTC và HTTP Fallback đều lỗi:', httpErr);
-      throw httpErr;
-    }
+    return { success: true, method: 'webrtc_p2p' };
   }
 }
