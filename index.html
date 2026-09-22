@@ -3,57 +3,105 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>HIS CamSync - Chụp & Đồng Bộ ECG</title>
+  <title>HIS CamSync - Chụp & Đồng Bộ Lâm Sàng</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <!-- Header -->
   <header class="app-header">
-    <div class="header-title">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-        <circle cx="12" cy="13" r="4"></circle>
-      </svg>
-      <span>HIS CamSync</span>
+    <div class="header-left">
+      <div class="header-brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <span class="brand-title">HIS CamSync</span>
+      </div>
+      <span class="intranet-tag">🔒 Mạng nội bộ BV</span>
     </div>
-    <div id="statusBadge" class="status-badge">
+    <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để thử kết nối lại">
       <span class="status-dot"></span>
-      <span id="statusText">Đang kết nối...</span>
+      <span id="statusText">Chờ Wi-Fi BV...</span>
     </div>
   </header>
 
   <!-- Patient Context Banner -->
-  <div id="patientBanner" class="patient-banner" style="display: none; background: #0c1524; border-bottom: 1px solid #1e293b; padding: 6px 16px; font-size: 13px; color: #38bdf8; align-items: center; gap: 8px;">
-    <span>🩺</span>
-    <span id="patientBannerText" style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">...</span>
+  <div id="patientBanner" class="patient-banner" style="display: none;">
+    <span class="patient-icon">🩺</span>
+    <span id="patientBannerText">...</span>
   </div>
 
   <!-- Main View -->
   <main class="main-view">
-    <!-- Screen 1: Chụp ảnh -->
+    <!-- Screen 1: Chụp ảnh / Khởi đầu -->
     <section id="captureScreen" class="capture-screen">
-      <div class="capture-icon-box">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        </svg>
-      </div>
-      <div>
-        <h2 class="capture-title">Chụp Dải Băng ECG</h2>
-        <p class="capture-subtitle">Chụp trực tiếp bằng camera, xoay và cắt dải sóng để đồng bộ tức thì vào bệnh án HIS.</p>
-      </div>
+      <div class="capture-card">
+        <div class="capture-icon-box">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div class="capture-text-wrap">
+          <h2 class="capture-title">Chụp Dải Băng ECG</h2>
+          <p class="capture-subtitle">Chụp trực tiếp từ camera, xoay và cắt dải sóng điện tim hoặc hình ảnh siêu âm để đồng bộ tức thì vào bệnh án HIS.</p>
+        </div>
 
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
-      <button id="btnTriggerCapture" class="btn-large-capture">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        <span>Chụp Ảnh Mới</span>
-      </button>
+        <!-- Clinical Intranet Security Notice -->
+        <div class="security-card">
+          <div class="security-card-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>Bảo Mật Mạng Nội Bộ</span>
+          </div>
+          <p class="security-card-desc">
+            Yêu cầu kết nối <b>Wi-Fi Bệnh viện</b> (HIS MEDICAL hoặc STAFF). Dữ liệu P2P trực tiếp nội bộ, không qua máy chủ đám mây.
+          </p>
+        </div>
+
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+        <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+
+        <div class="capture-actions">
+          <button type="button" id="btnTriggerCapture" class="btn-large-capture">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <span>Chụp Ảnh Mới</span>
+          </button>
+          <button type="button" id="btnTriggerGallery" class="btn-subtle-gallery">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span>Chọn từ thư viện ảnh</span>
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- Screen 2: Chỉnh sửa & Xử lý ảnh -->
     <section id="editorScreen" class="editor-screen">
+      <!-- Quick Presets Bar -->
+      <div class="presets-bar">
+        <span class="presets-label">Khung cắt:</span>
+        <div class="presets-group">
+          <button type="button" class="preset-pill active" id="presetEcg" data-preset="ecg">
+            ⚡ Dải ECG
+          </button>
+          <button type="button" class="preset-pill" id="presetStandard" data-preset="standard">
+            🖼️ Siêu âm (4:3)
+          </button>
+          <button type="button" class="preset-pill" id="presetFull" data-preset="full">
+            ✂️ Toàn cảnh
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas Viewport -->
       <div class="canvas-viewport">
         <div id="canvasContainer" class="canvas-container">
           <canvas id="previewCanvas"></canvas>
@@ -80,7 +128,7 @@
       <!-- Controls & Tools -->
       <div class="editor-controls">
         <div class="tools-row">
-          <button id="btnRotateLeft" class="tool-btn">
+          <button type="button" id="btnRotateLeft" class="tool-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
               <path d="M3 3v5h5"></path>
@@ -88,7 +136,7 @@
             <span>Trái 90°</span>
           </button>
 
-          <button id="btnRotateRight" class="tool-btn">
+          <button type="button" id="btnRotateRight" class="tool-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
               <path d="M21 3v5h-5"></path>
@@ -96,25 +144,24 @@
             <span>Phải 90°</span>
           </button>
 
-          <button id="btnFilterNormal" class="tool-btn active">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-            </svg>
-            <span>Màu gốc</span>
-          </button>
-
-          <button id="btnFilterEcg" class="tool-btn">
+          <button type="button" id="btnFilterToggle" class="tool-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
-            <span>Nét sóng ECG</span>
+            <span id="btnFilterText">Nét sóng ECG</span>
           </button>
         </div>
 
         <div class="actions-row">
-          <button id="btnRetake" class="btn-secondary">Chụp Lại</button>
-          <button id="btnSendToHis" class="btn-primary">
+          <button type="button" id="btnRetake" class="btn-secondary">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <span>Chụp lại</span>
+          </button>
+          <button type="button" id="btnSendToHis" class="btn-primary">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
@@ -139,20 +186,24 @@
     import { ImageEditor } from './js/editor.js';
     import { P2PClient } from './js/p2p-client.js';
 
-    // Elements
+    // DOM Elements
     const captureScreen = document.getElementById('captureScreen');
     const editorScreen = document.getElementById('editorScreen');
     const cameraInput = document.getElementById('cameraInput');
+    const galleryInput = document.getElementById('galleryInput');
     const btnTriggerCapture = document.getElementById('btnTriggerCapture');
+    const btnTriggerGallery = document.getElementById('btnTriggerGallery');
+
     const canvas = document.getElementById('previewCanvas');
     const canvasContainer = document.getElementById('canvasContainer');
     const cropOverlay = document.getElementById('cropOverlay');
     const cropBox = document.getElementById('cropBox');
 
+    const presetPills = document.querySelectorAll('.preset-pill');
     const btnRotateLeft = document.getElementById('btnRotateLeft');
     const btnRotateRight = document.getElementById('btnRotateRight');
-    const btnFilterNormal = document.getElementById('btnFilterNormal');
-    const btnFilterEcg = document.getElementById('btnFilterEcg');
+    const btnFilterToggle = document.getElementById('btnFilterToggle');
+    const btnFilterText = document.getElementById('btnFilterText');
     const btnRetake = document.getElementById('btnRetake');
     const btnSendToHis = document.getElementById('btnSendToHis');
     const btnSendText = document.getElementById('btnSendText');
@@ -163,6 +214,8 @@
 
     // Khởi tạo Editor & P2P Client
     const editor = new ImageEditor(canvas, canvasContainer, cropOverlay, cropBox);
+    let activeFilter = 'normal';
+
     const p2p = new P2PClient({
       onStatusChange: (connected, text) => {
         statusText.textContent = text;
@@ -173,7 +226,7 @@
         } else {
           statusBadge.classList.add('disconnected');
           btnSendToHis.disabled = true;
-          btnSendText.textContent = 'Chờ kết nối máy tính...';
+          btnSendText.textContent = 'Chờ Wi-Fi BV...';
         }
       },
       onPatientInfo: (patient) => {
@@ -193,41 +246,73 @@
       cameraInput.click();
     });
 
-    cameraInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+    // Trigger Gallery
+    btnTriggerGallery.addEventListener('click', () => {
+      galleryInput.click();
+    });
 
+    async function handleFileSelected(file) {
+      if (!file) return;
       try {
         await editor.loadImage(file);
         captureScreen.style.display = 'none';
         editorScreen.style.display = 'flex';
-        // Render lại sau khi layout tính toán xong kích thước
-        setTimeout(() => editor.render(), 50);
+
+        // Đặt preset mặc định là Dải ECG
+        presetPills.forEach(p => p.classList.remove('active'));
+        document.getElementById('presetEcg').classList.add('active');
+
+        // Reset filter
+        activeFilter = 'normal';
+        btnFilterToggle.classList.remove('active');
+        btnFilterText.textContent = 'Nét sóng ECG';
+
+        setTimeout(() => editor.render(), 60);
       } catch (err) {
         alert('Không thể tải ảnh: ' + err.message);
       }
+    }
+
+    cameraInput.addEventListener('change', (e) => {
+      handleFileSelected(e.target.files?.[0]);
+    });
+
+    galleryInput.addEventListener('change', (e) => {
+      handleFileSelected(e.target.files?.[0]);
+    });
+
+    // Preset Buttons
+    presetPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        presetPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        editor.setCropPreset(pill.dataset.preset);
+      });
     });
 
     // Rotation
     btnRotateLeft.addEventListener('click', () => editor.rotate(-90));
     btnRotateRight.addEventListener('click', () => editor.rotate(90));
 
-    // Filters
-    btnFilterNormal.addEventListener('click', () => {
-      editor.setFilter('normal');
-      btnFilterNormal.classList.add('active');
-      btnFilterEcg.classList.remove('active');
-    });
-
-    btnFilterEcg.addEventListener('click', () => {
-      editor.setFilter('ecg');
-      btnFilterEcg.classList.add('active');
-      btnFilterNormal.classList.remove('active');
+    // Filter Toggle
+    btnFilterToggle.addEventListener('click', () => {
+      if (activeFilter === 'normal') {
+        activeFilter = 'ecg';
+        editor.setFilter('ecg');
+        btnFilterToggle.classList.add('active');
+        btnFilterText.textContent = 'Ảnh gốc';
+      } else {
+        activeFilter = 'normal';
+        editor.setFilter('normal');
+        btnFilterToggle.classList.remove('active');
+        btnFilterText.textContent = 'Nét sóng ECG';
+      }
     });
 
     // Retake
     btnRetake.addEventListener('click', () => {
       cameraInput.value = '';
+      galleryInput.value = '';
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
     });
@@ -242,10 +327,11 @@
     // Send to HIS
     btnSendToHis.addEventListener('click', async () => {
       if (!p2p.isConnected) {
-        btnSendText.textContent = 'Đang thử kết nối lại...';
+        btnSendText.textContent = 'Đang kết nối lại...';
         p2p.connectToDesktop();
         return;
       }
+
       try {
         btnSendToHis.disabled = true;
         btnSendText.textContent = 'Đang nén ảnh...';
@@ -260,7 +346,7 @@
           btnSendText.textContent = `Đang truyền ${pct}%...`;
         });
 
-        // Rung nhẹ điện thoại xác nhận thành công
+        // Rung nhẹ máy xác nhận gửi thành công
         if (navigator.vibrate) {
           try { navigator.vibrate([40, 60, 40]); } catch (e) {}
         }
@@ -271,6 +357,7 @@
           toast.classList.remove('visible');
           // Reset về màn hình chụp cho ca tiếp theo
           cameraInput.value = '';
+          galleryInput.value = '';
           editorScreen.style.display = 'none';
           captureScreen.style.display = 'flex';
           btnSendToHis.disabled = false;
