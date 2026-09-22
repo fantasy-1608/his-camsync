@@ -1,7 +1,7 @@
 /**
- * HIS CamSync - Content Script
+ * HIS CamSync - Content Script (WebRTC P2P NAT Traversal)
  * Tự động tích hợp vào VNPT HIS:
- * 1. Nút "Quét từ ĐT" + Mã QR WebRTC P2P
+ * 1. Nút "Quét từ ĐT" + Mã QR WebRTC P2P (Hoạt động cả khi khác mạng / 4G)
  * 2. Phím tắt Dán ảnh từ Clipboard (Ctrl + V)
  * 3. Kéo - Thả ảnh (Drag & Drop Zone)
  * 4. Tự động Upload khi chọn file
@@ -12,24 +12,9 @@
 
   let currentPeer = null;
   let activeSessionId = null;
-  let pollTimer = null;
-  let serverIp = '127.0.0.1';
-  const SERVER_PORT = 3838;
 
-  // Lấy thông tin IP máy chủ nội bộ
-  async function fetchServerInfo() {
-    try {
-      const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/api/info`);
-      if (res.ok) {
-        const data = await res.json();
-        serverIp = data.primaryIp || '127.0.0.1';
-      }
-    } catch (e) {
-      console.log('[CamSync] Server chưa khởi động hoặc dùng IP mặc định');
-    }
-  }
-
-  fetchServerInfo();
+  // URL Mobile Web Scanner cố định trên GitHub Pages (HTTPS, hoạt động 100% trên mọi mạng)
+  const MOBILE_APP_URL = 'https://fantasy-1608.github.io/his-camsync';
 
   /**
    * Helper: Tạo Toast thông báo ngắn gọn chuẩn lâm sàng
@@ -193,12 +178,12 @@
   /**
    * Mở Modal Quét Mã QR Đồng Bộ
    */
-  async function openQrModal() {
+  function openQrModal() {
     closeQrModal();
-    await fetchServerInfo();
 
+    // Tạo Session ID độc nhất cho ca bệnh
     activeSessionId = 'his-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
-    const mobileUrl = `http://${serverIp}:${SERVER_PORT}/?session=${activeSessionId}&host=${serverIp}`;
+    const mobileUrl = `${MOBILE_APP_URL}/?session=${activeSessionId}`;
 
     const backdrop = document.createElement('div');
     backdrop.className = 'camsync-modal-backdrop';
@@ -209,7 +194,7 @@
         <div class="camsync-modal-header">
           <div class="camsync-modal-title">
             <span class="glyphicon glyphicon-camera" style="color: #059669;"></span>
-            <span>Chụp & Đồng Bộ Từ Điện Thoại</span>
+            <span>Chụp & Đồng Bộ Từ Điện Thoại (P2P)</span>
           </div>
           <button class="camsync-modal-close" id="camsyncCloseBtn">&times;</button>
         </div>
@@ -218,11 +203,11 @@
           
           <div id="camsyncStatusPill" class="camsync-status-pill">
             <span class="camsync-status-dot"></span>
-            <span id="camsyncStatusText">Chờ quét mã...</span>
+            <span id="camsyncStatusText">Đang khởi tạo P2P...</span>
           </div>
 
           <p class="camsync-instruction">
-            Dùng Camera điện thoại quét mã QR để chụp ảnh dải ECG hoặc kết quả cận lâm sàng.
+            Dùng Camera điện thoại (4G hoặc Wi-Fi bất kỳ) quét mã QR để chụp ảnh dải ECG.
           </p>
         </div>
       </div>
@@ -247,7 +232,7 @@
       });
     }
 
-    // Bắt đầu lắng nghe P2P WebRTC & Polling HTTP Fallback
+    // Bắt đầu lắng nghe P2P WebRTC qua STUN xuyên mạng
     startReceivingImage(activeSessionId);
   }
 
@@ -259,37 +244,39 @@
       currentPeer.destroy();
       currentPeer = null;
     }
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
   }
 
   /**
-   * Lắng nghe nhận ảnh qua WebRTC P2P + HTTP Polling
+   * Lắng nghe nhận ảnh qua WebRTC P2P (Google STUN)
    */
   function startReceivingImage(sessionId) {
     const statusText = document.getElementById('camsyncStatusText');
     const statusPill = document.getElementById('camsyncStatusPill');
 
-    // 1. WebRTC PeerJS
     if (window.Peer) {
       try {
         const desktopPeerId = `his-desktop-${sessionId}`;
+        console.log('[CamSync] Khởi tạo Desktop Peer:', desktopPeerId);
+
         currentPeer = new window.Peer(desktopPeerId, {
-          host: serverIp,
-          port: 9000,
-          path: '/peerjs',
           config: {
             iceServers: [
               { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' }
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun2.l.google.com:19302' },
+              { urls: 'stun:stun.cloudflare.com:3478' }
             ]
           }
         });
 
+        currentPeer.on('open', (id) => {
+          console.log('[CamSync] Desktop Peer sẵn sàng:', id);
+          if (statusText) statusText.textContent = 'Chờ quét mã từ điện thoại...';
+        });
+
         currentPeer.on('connection', (conn) => {
-          if (statusText) statusText.textContent = 'Điện thoại đã kết nối!';
+          console.log('[CamSync] Điện thoại đã kết nối P2P thành công!');
+          if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối P2P!';
           if (statusPill) statusPill.classList.add('connected');
 
           conn.on('data', (payload) => {
@@ -298,37 +285,26 @@
             }
           });
         });
+
+        currentPeer.on('error', (err) => {
+          console.warn('[CamSync] PeerJS Desktop thông báo:', err);
+        });
       } catch (err) {
         console.warn('[CamSync] PeerJS lỗi khởi tạo:', err);
       }
     }
-
-    // 2. HTTP Polling Fallback (1s/lần phòng khi tường lửa bệnh viện chặn WebRTC)
-    pollTimer = setInterval(async () => {
-      try {
-        const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/api/sync/${sessionId}`);
-        if (res.ok) {
-          const result = await res.json();
-          if (result.ready && result.data?.image) {
-            handleIncomingImageData(result.data.image, result.data.meta);
-          }
-        }
-      } catch (e) {
-        // im lặng nếu không có kết nối server
-      }
-    }, 1000);
   }
 
   function handleIncomingImageData(base64Image, meta = {}) {
     const statusText = document.getElementById('camsyncStatusText');
-    if (statusText) statusText.textContent = 'Đã nhận ảnh! Đang nạp vào HIS...';
+    if (statusText) statusText.textContent = 'Đang nạp ảnh vào HIS...';
 
     const filename = meta.name || `ECG_${Date.now()}.jpg`;
     const file = dataURLtoFile(base64Image, filename);
 
     const success = injectFilesAndUpload([file]);
     if (success) {
-      if (statusText) statusText.textContent = 'Tải lên thành công!';
+      if (statusText) statusText.textContent = '✅ Đã tải ảnh lên HIS thành công!';
       setTimeout(() => {
         closeQrModal();
       }, 1200);
