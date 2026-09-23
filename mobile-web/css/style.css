@@ -1,0 +1,903 @@
+:root {
+  --bg-primary: #07090e;
+  --bg-surface: #101622;
+  --bg-elevated: #1a2234;
+  --bg-card: #131b2b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-blue: #2563eb;
+  --accent-blue-hover: #1d4ed8;
+  --accent-green: #059669;
+  --accent-green-hover: #047857;
+  --accent-red: #ef4444;
+  --accent-cyan: #38bdf8;
+  --border-subtle: #1e293b;
+  --border-focus: #3b82f6;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+.app-header {
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 20;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.intranet-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(5, 150, 105, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(5, 150, 105, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #34d399;
+  box-shadow: 0 0 6px #34d399;
+}
+
+.status-badge.disconnected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.status-badge.disconnected .status-dot {
+  background-color: #f87171;
+  box-shadow: 0 0 6px #f87171;
+}
+
+/* ==========================================================================
+   Patient Context Banner
+   ========================================================================== */
+.patient-banner {
+  background: #091322;
+  border-bottom: 1px solid #1e293b;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 15;
+}
+
+.patient-icon {
+  font-size: 14px;
+}
+
+#patientBannerText {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Clinical Error Banner (Fail-Closed Notification)
+   ========================================================================== */
+.error-banner {
+  background: #EF4444;
+  border-bottom: 1px solid #DC2626;
+  color: #FFFFFF;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 110;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.error-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.btn-dismiss-error {
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0.85;
+  transition: opacity 300ms ease;
+}
+
+.btn-dismiss-error:active,
+.btn-dismiss-error:hover {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Specialty Mode Selector (ECG vs Ultrasound)
+   ========================================================================== */
+.specialty-tabs-wrap {
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: center;
+  z-index: 14;
+}
+
+.specialty-tabs {
+  display: flex;
+  background: var(--bg-primary);
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  width: 100%;
+  max-width: 360px;
+  gap: 4px;
+}
+
+.spec-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.spec-tab svg {
+  flex-shrink: 0;
+}
+
+.spec-tab.active {
+  background: var(--bg-elevated);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.spec-tab[data-specialty="ecg"].active {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.spec-tab[data-specialty="ultrasound"].active {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+/* ==========================================================================
+   Main View
+   ========================================================================== */
+.main-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Screen 1: Capture Screen
+   ========================================================================== */
+.capture-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px max(76px, calc(env(safe-area-inset-bottom) + 42px));
+  overflow-y: auto;
+}
+
+.capture-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.capture-icon-box {
+  width: 88px;
+  height: 88px;
+  border-radius: 26px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #38bdf8;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.capture-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.capture-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.capture-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 0 8px;
+}
+
+/* Clinical Security Notice */
+.security-card {
+  width: 100%;
+  background: rgba(16, 22, 34, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.security-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+
+.security-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.security-card-desc b {
+  color: #f1f5f9;
+}
+
+.capture-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-large-capture {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: var(--accent-blue);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.btn-large-capture:active {
+  transform: scale(0.98);
+  background: var(--accent-blue-hover);
+}
+
+.btn-subtle-gallery {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-subtle-gallery:active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Screen 2: Editor Screen
+   ========================================================================== */
+.editor-screen {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  background: #030407;
+  overflow: hidden;
+}
+
+/* Presets Bar */
+.presets-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 10;
+}
+
+.presets-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.presets-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.preset-pill {
+  padding: 6px 12px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.preset-pill.active {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
+}
+
+.preset-pill:active {
+  transform: scale(0.95);
+}
+
+/* Canvas Viewport */
+.canvas-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  padding: 10px;
+  touch-action: none;
+}
+
+.canvas-container {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.85);
+  touch-action: none;
+}
+
+#previewCanvas {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 290px);
+  max-height: calc(100dvh - 290px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Crop Overlay */
+.crop-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.crop-box {
+  position: absolute;
+  border: 2px solid #38bdf8;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
+}
+
+/* Grid 3x3 */
+.crop-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.crop-grid div {
+  border-right: 1px dashed #ffffff;
+  border-bottom: 1px dashed #ffffff;
+}
+.crop-grid div:nth-child(3n) {
+  border-right: none;
+}
+.crop-grid div:nth-child(n+7) {
+  border-bottom: none;
+}
+
+/* Handles 4 góc (Vùng chạm 48x48px siêu nhạy) */
+.crop-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: #2563eb;
+  border-radius: 50%;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+  z-index: 5;
+}
+
+.crop-handle::after {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  right: -14px;
+  bottom: -14px;
+}
+
+.handle-tl { top: -12px; left: -12px; cursor: nwse-resize; }
+.handle-tr { top: -12px; right: -12px; cursor: nesw-resize; }
+.handle-bl { bottom: -12px; left: -12px; cursor: nesw-resize; }
+.handle-br { bottom: -12px; right: -12px; cursor: nwse-resize; }
+
+/* Handles 4 cạnh cho dải ECG */
+.crop-edge-handle {
+  position: absolute;
+  z-index: 4;
+}
+
+.crop-edge-handle::after {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  right: -14px;
+  bottom: -14px;
+}
+
+.handle-t {
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 38px;
+  height: 7px;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: ns-resize;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.handle-b {
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 38px;
+  height: 7px;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: ns-resize;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.handle-l {
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 38px;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: ew-resize;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.handle-r {
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 38px;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: ew-resize;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ==========================================================================
+   Editor Controls (Bottom Toolbar)
+   ========================================================================== */
+.editor-controls {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  padding: 10px 14px max(86px, calc(env(safe-area-inset-bottom) + 52px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+}
+
+.tools-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0;
+}
+
+.tool-btn {
+  flex: 1 1 0;
+  min-width: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 48px;
+  white-space: nowrap;
+}
+
+.tool-btn svg {
+  flex-shrink: 0;
+}
+
+.tool-btn span {
+  font-size: 10.5px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.tool-btn.active {
+  background: rgba(37, 99, 235, 0.25);
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+
+.tool-btn.specialty-tool-ecg.active {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.tool-btn.specialty-tool-us.active {
+  background: rgba(52, 211, 153, 0.22);
+  border-color: #34d399;
+  color: #34d399;
+}
+
+.tool-btn:active {
+  transform: scale(0.95);
+}
+
+.actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-secondary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
+  transition: transform 0.1s ease;
+}
+
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--accent-green);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
+  min-height: 50px;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+  background: var(--accent-green-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   Toast Notification
+   ========================================================================== */
+.notification-toast {
+  position: fixed;
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 68px));
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  background: #0f231c;
+  border: 1px solid #059669;
+  color: #34d399;
+  padding: 12px 22px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100;
+}
+
+.notification-toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Loading Overlay (iPhone HEIC to JPEG conversion)
+   ========================================================================== */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(7, 9, 14, 0.82);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 200;
+}
+
+.loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3.5px solid rgba(56, 189, 248, 0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: camsync-spin 0.8s linear infinite;
+}
+
+@keyframes camsync-spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  text-align: center;
+  max-width: 80%;
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================================
+   Upload Progress Modal
+   ========================================================================== */
+.upload-progress-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 9, 14, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 300;
+  animation: camsyncFadeIn 0.2s ease;
+}
+
+.upload-progress-card {
+  background: #101622;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
+}
+
+.upload-progress-spinner-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.upload-spinner {
+  width: 84px;
+  height: 84px;
+  border: 4px solid rgba(56, 189, 248, 0.15);
+  border-top-color: #38bdf8;
+  border-right-color: #34d399;
+  border-radius: 50%;
+  animation: camsync-spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+}
+
+.upload-pct-badge {
+  position: absolute;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.upload-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+
+.upload-meta {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+@keyframes camsyncFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
