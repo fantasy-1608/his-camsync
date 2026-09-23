@@ -17,11 +17,11 @@
         </svg>
         <span class="brand-title">HIS CamSync</span>
       </div>
-      <span class="intranet-tag">🔒 Mạng nội bộ BV</span>
+      <span class="intranet-tag">⚡ P2P Direct</span>
     </div>
     <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để thử kết nối lại">
       <span class="status-dot"></span>
-      <span id="statusText">Chờ Wi-Fi BV...</span>
+      <span id="statusText">Đang tìm máy bàn...</span>
     </div>
   </header>
 
@@ -43,21 +43,7 @@
         </div>
         <div class="capture-text-wrap">
           <h2 class="capture-title">Chụp Dải Băng ECG</h2>
-          <p class="capture-subtitle">Chụp trực tiếp từ camera, xoay và cắt dải sóng điện tim hoặc hình ảnh siêu âm để đồng bộ tức thì vào bệnh án HIS.</p>
-        </div>
-
-        <!-- Clinical Intranet Security Notice -->
-        <div class="security-card">
-          <div class="security-card-header">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            <span>Bảo Mật Mạng Nội Bộ</span>
-          </div>
-          <p class="security-card-desc">
-            Yêu cầu kết nối <b>Wi-Fi Bệnh viện</b> (HIS MEDICAL hoặc STAFF). Dữ liệu P2P trực tiếp nội bộ, không qua máy chủ đám mây.
-          </p>
+          <p class="capture-subtitle">Chụp trực tiếp từ camera (4G / Wi-Fi), căn chỉnh sóng điện tim hoặc siêu âm để đồng bộ tức thì vào bệnh án HIS.</p>
         </div>
 
         <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
@@ -244,7 +230,7 @@
         } else {
           statusBadge.classList.add('disconnected');
           btnSendToHis.disabled = true;
-          btnSendText.textContent = 'Chờ Wi-Fi BV...';
+          btnSendText.textContent = 'Chờ kết nối...';
         }
       },
       onPatientInfo: (patient) => {
