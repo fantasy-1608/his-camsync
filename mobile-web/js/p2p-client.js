@@ -5,9 +5,27 @@
  * 2. Supabase Cloud Relay (Xuyên mạng 4G/5G/CGNAT & Tường lửa bệnh viện với độ trễ < 500ms)
  */
 
-const SUPABASE_URL = 'https://exxynihhyvcligcysbdb.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4eHluaWhoeXZjbGlnY3lzYmRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTA3OTQsImV4cCI6MjA5NTk2Njc5NH0.xyfE9PTTYM-wyqd9-5rEeq8Ko_St26szU2NgmA_TSqQ';
+const SUPABASE_URL = 'https://rmbbqtuzkyxovmskhfgj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYmJxdHV6a3l4b3Ztc2toZmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjI0NDYsImV4cCI6MjEwNTczODQ0Nn0.3RX5PEcKxOI59mgBYzybHAAooeo0hyOJQa035herjh0';
 const CHUNK_SIZE = 16384; // 16KB WebRTC chunk
+const REALTIME_CHUNK_SIZE = 64 * 1024; // 64KB Realtime broadcast chunk
+
+/**
+ * Sinh chuỗi ngẫu nhiên mật mã học 128-bit entropy (32 ký tự hex)
+ * @returns {string} 32-character hex string
+ */
+export function generateSecureToken() {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let hex = '';
+  for (let i = 0; i < 32; i++) {
+    hex += Math.floor(Math.random() * 16).toString(16);
+  }
+  return hex;
+}
 
 export class P2PClient {
   constructor(options = {}) {
@@ -18,8 +36,9 @@ export class P2PClient {
     this.isCloudReady = false;
     this.patientInfo = null;
 
-    this.cloudHeartbeatTimer = null;
-    this.cloudRetryTimer = null;
+    this.realtimeWs = null;
+    this.realtimeHeartbeatTimer = null;
+    this.realtimeRefCounter = 0;
     this.p2pRetryTimer = null;
 
     this.onStatusChange = options.onStatusChange || (() => {});
@@ -28,8 +47,19 @@ export class P2PClient {
   }
 
   getSessionIdFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('session') || 'his-default-session';
+    if (typeof window !== 'undefined') {
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const sid = hashParams.get('session');
+        if (sid) return sid;
+      }
+      if (window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        const sid = params.get('session');
+        if (sid) return sid;
+      }
+    }
+    return generateSecureToken();
   }
 
   /**
@@ -70,13 +100,13 @@ export class P2PClient {
   }
 
   /**
-   * Khởi động đồng thời cả 2 kênh: Cloud Relay (4G) & WebRTC P2P (Wi-Fi)
+   * Khởi động đồng thời cả 2 kênh: Supabase Realtime Broadcast & WebRTC P2P (Wi-Fi)
    */
   async connect() {
     console.log('[CamSync] Khởi tạo kết nối cho phiên:', this.sessionId);
 
-    // Kênh 1: Kiểm tra Supabase Cloud Relay ngay lập tức (Bảo đảm hoạt động 100% trên 4G)
-    this.initCloudSession();
+    // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
+    this.initRealtimeBroadcast();
 
     // Kênh 2: Thử bắt tay WebRTC P2P song song (Tối ưu khi cùng Wi-Fi)
     this.initWebRTC();
@@ -85,110 +115,147 @@ export class P2PClient {
   }
 
   /**
-   * Kênh Cloud Relay: Đọc thông tin phiên và bệnh nhân từ Supabase
+   * Kênh Cloud Relay: Supabase Realtime Broadcast qua WebSocket (Zero-Retention, RAM-to-RAM)
    */
-  async initCloudSession(retryCount = 0) {
-    if (!this.sessionId) return;
+  initRealtimeBroadcast() {
+    if (!this.sessionId || typeof WebSocket === 'undefined') return;
+
+    this.closeRealtime();
+
+    const topic = `realtime:camsync:${this.sessionId}`;
+    const wsUrl = `${SUPABASE_URL.replace(/^http/, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_KEY)}&vsn=1.0.0`;
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(this.sessionId)}&select=*`, {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      });
+      this.realtimeWs = new WebSocket(wsUrl);
+      this.realtimeRefCounter = 0;
 
-      if (res.ok) {
-        const rows = await res.json();
-        if (rows && rows.length > 0) {
-          const session = rows[0];
-          console.log('[Cloud] Đã tìm thấy phiên máy bàn:', session.session_id);
-          this.isCloudReady = true;
-
-          // Cập nhật thông tin bệnh nhân nếu có
-          if (session.patient_info) {
-            this.patientInfo = session.patient_info;
-            this.onPatientInfo(session.patient_info);
-          }
-
-          // Kích hoạt trạng thái sẵn sàng ngay lập tức cho điện thoại
-          this.updateStatus(true, '🟢 Đã kết nối máy bàn');
-
-          // Báo cho máy tính biết điện thoại đã vào phiên kèm thông tin thiết bị
-          fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(this.sessionId)}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-              mobile_connected: true,
-              mobile_device: this.getDeviceMetadata(),
-              updated_at: new Date().toISOString()
-            })
-          }).catch(() => {});
-
-          // Thiết lập chu kỳ kiểm tra trạng thái phiên máy bàn mỗi 3.5s
-          this.startCloudHeartbeat();
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('[Cloud] Lỗi kiểm tra session:', err);
-    }
-
-    // Nếu chưa thấy phiên trên máy tính, thử lại sau 1.5s
-    if (retryCount < 20) {
-      this.updateStatus(false, 'Đang tìm máy bàn...');
-      clearTimeout(this.cloudRetryTimer);
-      this.cloudRetryTimer = setTimeout(() => {
-        this.initCloudSession(retryCount + 1);
-      }, 1500);
-    } else {
-      this.updateStatus(false, 'Chưa mở QR trên máy tính');
-    }
-  }
-
-  /**
-   * Theo dõi phiên máy bàn định kỳ (phát hiện khi máy tính tắt modal)
-   */
-  startCloudHeartbeat() {
-    if (this.cloudHeartbeatTimer) clearInterval(this.cloudHeartbeatTimer);
-
-    this.cloudHeartbeatTimer = setInterval(async () => {
-      try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(this.sessionId)}&select=session_id,patient_info`, {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`
-          }
-        });
-
-        if (res.ok) {
-          const rows = await res.json();
-          if (rows && rows.length > 0) {
-            this.isCloudReady = true;
-            if (rows[0].patient_info && !this.patientInfo) {
-              this.patientInfo = rows[0].patient_info;
-              this.onPatientInfo(rows[0].patient_info);
+      this.realtimeWs.onopen = () => {
+        console.log('[Realtime] WebSocket đã kết nối, gia nhập topic:', topic);
+        // Gửi phx_join vào channel
+        this.realtimeWs.send(JSON.stringify({
+          topic,
+          event: 'phx_join',
+          payload: {
+            config: {
+              broadcast: { ack: true, self: false },
+              presence: { key: '' }
             }
-            if (!this.isConnected) {
-              this.updateStatus(true, '🟢 Đã kết nối máy bàn');
-            }
+          },
+          ref: String(++this.realtimeRefCounter)
+        }));
+
+        // Gửi Phoenix heartbeat mỗi 25s duy trì kết nối
+        this.realtimeHeartbeatTimer = setInterval(() => {
+          if (this.realtimeWs && this.realtimeWs.readyState === WebSocket.OPEN) {
+            this.realtimeWs.send(JSON.stringify({
+              topic: 'phoenix',
+              event: 'heartbeat',
+              payload: {},
+              ref: String(++this.realtimeRefCounter)
+            }));
+          }
+        }, 25000);
+
+        this.isCloudReady = true;
+        this.updateStatus(true, '🟢 Đã kết nối máy bàn');
+
+        // Báo cho máy bàn thông tin thiết bị và yêu cầu dữ liệu bệnh nhân qua RAM broadcast
+        this.broadcast('device_info', { device: this.getDeviceMetadata() });
+        this.broadcast('patient_req', {});
+      };
+
+      this.realtimeWs.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          let subEvent = null;
+          let subPayload = null;
+
+          if (msg.event === 'broadcast' && msg.payload && typeof msg.payload === 'object' && msg.payload.event) {
+            subEvent = msg.payload.event;
+            subPayload = msg.payload.payload;
           } else {
-            // Máy bàn đã xóa session (đóng modal)
+            subEvent = msg.event;
+            subPayload = msg.payload;
+          }
+
+          if (subEvent === 'transfer_ack') {
+            if (this.onTransferAck) this.onTransferAck(subPayload);
+          } else if (subEvent === 'patient_info' && subPayload?.patient) {
+            this.patientInfo = subPayload.patient;
+            this.onPatientInfo(subPayload.patient);
+          } else if (subEvent === 'session_closed') {
             this.isCloudReady = false;
             if (!this.conn || !this.conn.open) {
               this.updateStatus(false, 'Máy bàn đã đóng phiên');
             }
           }
+        } catch (err) {
+          console.warn('[Realtime] Lỗi đọc gói tin WebSocket:', err);
         }
-      } catch (e) {
-        // Tạm thời bỏ qua lỗi mạng
-      }
-    }, 3500);
+      };
+
+      this.realtimeWs.onclose = () => {
+        console.log('[Realtime] WebSocket đóng kết nối');
+        if (this.realtimeHeartbeatTimer) {
+          clearInterval(this.realtimeHeartbeatTimer);
+          this.realtimeHeartbeatTimer = null;
+        }
+        this.isCloudReady = false;
+        if (!this.conn || !this.conn.open) {
+          this.updateStatus(false, 'Mất kết nối máy bàn');
+        }
+      };
+
+      this.realtimeWs.onerror = (err) => {
+        console.warn('[Realtime] Lỗi WebSocket:', err);
+      };
+    } catch (e) {
+      console.warn('[Realtime] Không thể kết nối Realtime:', e);
+    }
+  }
+
+  /**
+   * Phát thông điệp qua Supabase Realtime Broadcast (RAM-to-RAM)
+   */
+  broadcast(event, payload) {
+    if (!this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
+      return false;
+    }
+    const topic = `realtime:camsync:${this.sessionId}`;
+    this.realtimeWs.send(JSON.stringify({
+      topic,
+      event: 'broadcast',
+      payload: {
+        type: 'broadcast',
+        event,
+        payload
+      },
+      ref: String(++this.realtimeRefCounter)
+    }));
+    return true;
+  }
+
+  closeRealtime() {
+    if (this.realtimeHeartbeatTimer) {
+      clearInterval(this.realtimeHeartbeatTimer);
+      this.realtimeHeartbeatTimer = null;
+    }
+    if (this.realtimeWs) {
+      try {
+        if (this.realtimeWs.readyState === (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
+          const topic = `realtime:camsync:${this.sessionId}`;
+          this.realtimeWs.send(JSON.stringify({
+            topic,
+            event: 'phx_leave',
+            payload: {},
+            ref: String(++this.realtimeRefCounter)
+          }));
+        }
+        this.realtimeWs.close();
+      } catch (e) {}
+      this.realtimeWs = null;
+    }
+    this.isCloudReady = false;
   }
 
   /**
@@ -285,7 +352,11 @@ export class P2PClient {
     if (this.conn && this.conn.open) {
       try {
         console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...');
-        return await this.sendImageViaWebRTC(blob, metadata, onProgress);
+        const res = await this.sendImageViaWebRTC(blob, metadata, onProgress);
+        if (res && res.success) {
+          return res;
+        }
+        console.warn('[CamSync] P2P không thành công, tự động chuyển hướng qua Cloud Relay:', res?.error);
       } catch (err) {
         console.warn('[CamSync] P2P gặp lỗi, tự động chuyển hướng qua Cloud Relay:', err);
       }
@@ -297,10 +368,10 @@ export class P2PClient {
   }
 
   /**
-   * Truyền ảnh qua Supabase Cloud Relay
+   * Truyền ảnh qua Supabase Realtime Broadcast (Zero-Retention, 64KB Chunking, RAM-to-RAM)
    */
   async sendImageViaCloud(blob, metadata = {}, onProgress = null) {
-    if (typeof onProgress === 'function') onProgress(15);
+    if (typeof onProgress === 'function') onProgress(10);
 
     // Chuyển blob thành chuỗi Base64
     const base64Data = await new Promise((resolve, reject) => {
@@ -310,39 +381,100 @@ export class P2PClient {
       reader.readAsDataURL(blob);
     });
 
-    if (typeof onProgress === 'function') onProgress(45);
+    if (typeof onProgress === 'function') onProgress(20);
 
-    const payload = {
-      session_id: this.sessionId,
-      image_data: base64Data,
-      metadata: {
+    const commaIdx = base64Data.indexOf(',');
+    const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
+    const mimeType = blob.type || 'image/jpeg';
+    const totalBytes = blob.size;
+    const transferId = generateSecureToken();
+    const filename = metadata.name || `ECG_${Date.now()}.jpg`;
+
+    const CHUNK_CHARS = 64 * 1024; // 64KB chunk
+    const totalChunks = Math.ceil(rawBase64.length / CHUNK_CHARS);
+
+    // Đảm bảo kênh Realtime đã sẵn sàng
+    if (!this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
+      this.initRealtimeBroadcast();
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    // 1. Gửi chunk_start
+    this.broadcast('chunk_start', {
+      transferId,
+      totalChunks,
+      totalSize: totalBytes,
+      mimeType,
+      filename,
+      meta: {
         ...metadata,
         sessionId: this.sessionId,
         device: this.getDeviceMetadata(),
         timestamp: Date.now()
       }
-    };
-
-    if (typeof onProgress === 'function') onProgress(70);
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/camsync_transfers`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(payload)
     });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`Lỗi máy chủ truyền ảnh (${res.status}): ${errText || 'Không thể gửi'}`);
+    if (typeof onProgress === 'function') onProgress(30);
+
+    // 2. Gửi từng chunk_data
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = rawBase64.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
+      this.broadcast('chunk_data', {
+        transferId,
+        chunkIndex: i,
+        data: chunk
+      });
+
+      if (typeof onProgress === 'function') {
+        const pct = 30 + Math.round(((i + 1) / totalChunks) * 60);
+        onProgress(pct);
+      }
+
+      if (i % 4 === 0) {
+        await new Promise(r => setTimeout(r, 5));
+      }
     }
 
-    if (typeof onProgress === 'function') onProgress(100);
-    return { success: true, method: 'cloud_relay' };
+    // 3. Đệm 20ms để socket buffer xả hết trước khi gửi chunk_complete
+    await new Promise(r => setTimeout(r, 20));
+    this.broadcast('chunk_complete', {
+      transferId
+    });
+
+    // 4. Chờ transfer_ack từ máy tính (Fail-Closed: Timeout hoặc Error ACK đều coi là thất bại)
+    return new Promise((resolve) => {
+      const ackTimeout = setTimeout(() => {
+        this.onTransferAck = null;
+        resolve({
+          success: false,
+          method: 'realtime_broadcast',
+          timeout: true,
+          error: 'Hết thời gian chờ xác nhận từ máy HIS'
+        });
+      }, 8000);
+
+      this.onTransferAck = (ackData) => {
+        if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
+          clearTimeout(ackTimeout);
+          this.onTransferAck = null;
+          if (ackData && ackData.status === 'error') {
+            resolve({
+              success: false,
+              method: 'realtime_broadcast',
+              error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              ack: ackData
+            });
+          } else {
+            if (typeof onProgress === 'function') onProgress(100);
+            resolve({
+              success: true,
+              method: 'realtime_broadcast',
+              ack: ackData
+            });
+          }
+        }
+      };
+    });
   }
 
   /**
@@ -358,7 +490,7 @@ export class P2PClient {
 
     const totalLength = base64Data.length;
     const totalChunks = Math.ceil(totalLength / CHUNK_SIZE);
-    const transferId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const transferId = generateSecureToken();
 
     this.conn.send({
       type: 'CHUNK_START',
@@ -404,20 +536,37 @@ export class P2PClient {
     return new Promise((resolve) => {
       const ackTimeout = setTimeout(() => {
         this.onTransferAck = null;
-        resolve({ success: true, method: 'webrtc_chunked' });
+        resolve({
+          success: false,
+          method: 'webrtc_chunked',
+          timeout: true,
+          error: 'Hết thời gian chờ xác nhận từ máy HIS qua P2P'
+        });
       }, 5000);
 
       this.onTransferAck = (ackData) => {
         clearTimeout(ackTimeout);
         this.onTransferAck = null;
-        resolve({ success: true, method: 'webrtc_chunked', ack: ackData });
+        if (ackData && ackData.status === 'error') {
+          resolve({
+            success: false,
+            method: 'webrtc_chunked',
+            error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+            ack: ackData
+          });
+        } else {
+          resolve({
+            success: true,
+            method: 'webrtc_chunked',
+            ack: ackData
+          });
+        }
       };
     });
   }
 
   destroy() {
-    if (this.cloudHeartbeatTimer) clearInterval(this.cloudHeartbeatTimer);
-    if (this.cloudRetryTimer) clearTimeout(this.cloudRetryTimer);
+    this.closeRealtime();
     if (this.p2pRetryTimer) clearTimeout(this.p2pRetryTimer);
     if (this.conn) {
       try { this.conn.close(); } catch (e) {}

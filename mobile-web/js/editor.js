@@ -403,7 +403,21 @@ export class ImageEditor {
     });
   }
 
-  exportBlob(quality = 0.90) {
+  /**
+   * Đóng dấu chìm lâm sàng trực tiếp lên Canvas trước khi xuất file JPEG
+   * Chuẩn: Mã BN + Họ tên (nếu có) + Thời gian chụp (YYYY-MM-DD HH:mm:ss) + HIS CamSync
+   * @param {CanvasRenderingContext2D} ctx Context của canvas xuất
+   * @param {number} width Chiều rộng canvas
+   * @param {number} height Chiều cao canvas
+   * @param {object} options Tuỳ chọn { patient, timestamp }
+   */
+  drawClinicalWatermark(ctx, width, height, options = {}) {
+    const opts = options || {};
+    return drawClinicalWatermark(ctx, width, height, opts);
+  }
+
+  exportBlob(quality = 0.90, options = {}) {
+    const opts = options || {};
     return new Promise((resolve, reject) => {
       const cw = this.canvas.width;
       const ch = this.canvas.height;
@@ -428,10 +442,131 @@ export class ImageEditor {
         0, 0, sw, sh
       );
 
+      // Chèn Clinical Watermark trực tiếp vào điểm ảnh của outCanvas
+      if (opts.watermark !== false) {
+        this.drawClinicalWatermark(outCtx, sw, sh, opts);
+      }
+
       outCanvas.toBlob((blob) => {
         if (blob) resolve(blob);
         else reject(new Error('Lỗi xuất Blob ảnh'));
       }, 'image/jpeg', quality);
     });
   }
+}
+
+/**
+ * Định dạng thời gian chuẩn y tế (YYYY-MM-DD HH:mm:ss)
+ */
+export function formatClinicalTimestamp(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+}
+
+/**
+ * Hàm vẽ dấu chìm lâm sàng độc lập (Clinical Watermark)
+ */
+export function drawClinicalWatermark(ctx, width, height, options = {}) {
+  const opts = options || {};
+  const patient = opts.patient || null;
+  const dateObj = opts.timestamp ? new Date(opts.timestamp) : new Date();
+  const timeStr = formatClinicalTimestamp(dateObj);
+
+  // 1. Định dạng thông tin bệnh nhân
+  let patientStr = 'BN: [Chưa xác định]';
+  if (patient && (patient.id || patient.name)) {
+    if (patient.id && patient.name) {
+      patientStr = `BN: ${patient.id} - ${patient.name}`;
+    } else if (patient.id) {
+      patientStr = `BN: ${patient.id}`;
+    } else {
+      patientStr = `BN: ${patient.name}`;
+    }
+  } else if (opts.patient === false) {
+    patientStr = '';
+  }
+
+  const watermarkText = patientStr ? `${patientStr} | ${timeStr} | HIS CamSync` : `${timeStr} | HIS CamSync`;
+
+  // 2. Tính toán kích thước font chữ co giãn động theo độ phân giải (clamped 10px - 18px)
+  const fontSize = Math.max(10, Math.min(18, Math.round(width / 65)));
+  ctx.save();
+  ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+  ctx.textBaseline = 'middle';
+
+  let textMetrics = ctx.measureText(watermarkText);
+  let textWidth = textMetrics.width;
+
+  // Rút gọn văn bản nếu vượt quá chiều ngang an toàn của ảnh
+  let displayText = watermarkText;
+  if (textWidth > width - 24) {
+    const shortPatient = patient?.id ? `BN: ${patient.id}` : (patientStr.startsWith('BN:') ? 'BN: ---' : '');
+    displayText = shortPatient ? `${shortPatient} | ${timeStr} | HIS CamSync` : `${timeStr} | HIS CamSync`;
+    textWidth = ctx.measureText(displayText).width;
+  }
+
+  const paddingX = Math.round(fontSize * 0.7);
+  const paddingY = Math.round(fontSize * 0.4);
+  const pillWidth = textWidth + paddingX * 2;
+  const pillHeight = fontSize + paddingY * 2;
+  const margin = Math.max(6, Math.round(width * 0.008));
+
+  // Vị trí: Sát mép ngoài cùng bên phải ở đáy ảnh (Bottom-Right margin)
+  let pillX = width - pillWidth - margin;
+  let pillY = height - pillHeight - margin;
+  if (pillY < 0) {
+    pillY = Math.max(0, height - pillHeight);
+  }
+  if (pillX < 0) {
+    pillX = Math.max(0, width - pillWidth);
+  }
+
+  // 3. Vẽ hộp capsule nền tương phản (semi-transparent slate)
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.80)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = 1;
+
+  // Vẽ hình chữ nhật bo góc (Pill)
+  const radius = 4;
+  ctx.beginPath();
+  ctx.moveTo(pillX + radius, pillY);
+  ctx.lineTo(pillX + pillWidth - radius, pillY);
+  ctx.quadraticCurveTo(pillX + pillWidth, pillY, pillX + pillWidth, pillY + radius);
+  ctx.lineTo(pillX + pillWidth, pillY + pillHeight - radius);
+  ctx.quadraticCurveTo(pillX + pillWidth, pillY + pillHeight, pillX + pillWidth - radius, pillY + pillHeight);
+  ctx.lineTo(pillX + radius, pillY + pillHeight);
+  ctx.quadraticCurveTo(pillX, pillY + pillHeight, pillX, pillY + pillHeight - radius);
+  ctx.lineTo(pillX, pillY + radius);
+  ctx.quadraticCurveTo(pillX, pillY, pillX + radius, pillY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 4. Vẽ chữ watermark sắc nét có đổ bóng
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = 2;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 1;
+  ctx.fillStyle = '#F8FAFC';
+  ctx.fillText(displayText, pillX + paddingX, pillY + pillHeight / 2);
+
+  ctx.restore();
+
+  return {
+    displayText,
+    fontSize,
+    pillBounds: {
+      x: pillX,
+      y: pillY,
+      width: pillWidth,
+      height: pillHeight,
+      margin
+    }
+  };
 }

@@ -9,14 +9,33 @@
   let currentPeer = null;
   let activeSessionId = null;
   let photoCount = 0;
-  let cloudPollTimer = null;
+  let realtimeWs = null;
+  let realtimeHeartbeatTimer = null;
+  let realtimeRefCounter = 0;
+  const activeChunkTransfers = {};
   const processedTransferIds = new Set();
 
-  const SUPABASE_URL = 'https://exxynihhyvcligcysbdb.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4eHluaWhoeXZjbGlnY3lzYmRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTA3OTQsImV4cCI6MjA5NTk2Njc5NH0.xyfE9PTTYM-wyqd9-5rEeq8Ko_St26szU2NgmA_TSqQ';
+  const SUPABASE_URL = 'https://rmbbqtuzkyxovmskhfgj.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYmJxdHV6a3l4b3Ztc2toZmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjI0NDYsImV4cCI6MjEwNTczODQ0Nn0.3RX5PEcKxOI59mgBYzybHAAooeo0hyOJQa035herjh0';
 
   // URL Mobile Web Scanner cố định trên GitHub Pages (HTTPS, hoạt động 100% trên mọi mạng)
-  const MOBILE_APP_URL = 'https://fantasy-1608.github.io/his-camsync';
+  const MOBILE_APP_URL = 'https://fantasy-1608.github.io/his-camsync/mobile-web';
+
+  /**
+   * Sinh Session ID chuẩn mật mã học 128-bit entropy (32 ký tự hex)
+   */
+  function generateSecureSessionId() {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let hex = '';
+    for (let i = 0; i < 32; i++) {
+      hex += Math.floor(Math.random() * 16).toString(16);
+    }
+    return hex;
+  }
 
   /**
    * Helper: Tạo Toast thông báo ngắn gọn chuẩn lâm sàng
@@ -343,9 +362,9 @@
     photoCount = 0;
     processedTransferIds.clear();
 
-    // Tạo Session ID cố định cho ca bệnh này
-    activeSessionId = 'his-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
-    const mobileUrl = `${MOBILE_APP_URL}/?session=${activeSessionId}`;
+    // Tạo Session ID cố định cho ca bệnh này (128-bit cryptographic hex)
+    activeSessionId = generateSecureSessionId();
+    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}`;
     const patient = getPatientInfoFromDOM();
 
     const backdrop = document.createElement('div');
@@ -463,25 +482,8 @@
       });
     }
 
-    // Đăng ký phiên trên Supabase Cloud Relay (Bảo đảm thông suốt trên 4G & máy bàn nội bộ)
-    fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({
-        session_id: activeSessionId,
-        patient_info: patient,
-        mobile_connected: false,
-        created_at: new Date().toISOString()
-      })
-    }).catch(err => console.warn('[CamSync] Lỗi đăng ký session:', err));
-
-    // Bắt đầu lắng nghe Cloud Relay qua Polling 800ms
-    startCloudPolling(activeSessionId);
+    // Khởi tạo Supabase Realtime Broadcast qua WebSocket (RAM-to-RAM, Zero-Retention on Cloud)
+    initRealtimeBroadcast(activeSessionId);
 
     // Chạy song song WebRTC PeerJS dự phòng (khi cùng Wi-Fi)
     startReceivingImage(activeSessionId);
@@ -491,26 +493,14 @@
     const modal = document.getElementById('camsyncModal');
     if (modal) modal.remove();
 
-    if (cloudPollTimer) {
-      clearInterval(cloudPollTimer);
-      cloudPollTimer = null;
-    }
-
-    if (activeSessionId) {
-      const sid = activeSessionId;
-      fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sid)}`, {
-        method: 'DELETE',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      }).catch(() => {});
-    }
+    closeRealtimeBroadcast();
 
     if (currentPeer) {
-      currentPeer.destroy();
+      try { currentPeer.destroy(); } catch (e) {}
       currentPeer = null;
     }
+
+    activeSessionId = null;
   }
 
   /**
@@ -574,71 +564,295 @@
   }
 
   /**
-   * Lắng nghe nhận ảnh qua Supabase Cloud Relay (Hoạt động 100% trên 4G và mạng nội bộ bệnh viện)
+   * Khởi tạo kết nối Supabase Realtime Broadcast qua WebSocket (RAM-to-RAM, Zero-Retention on Cloud)
    */
-  function startCloudPolling(sessionId) {
-    if (cloudPollTimer) clearInterval(cloudPollTimer);
+  function initRealtimeBroadcast(sessionId) {
+    closeRealtimeBroadcast();
+    if (!sessionId || typeof WebSocket === 'undefined') return;
 
-    let isPolling = false;
+    const topic = `realtime:camsync:${sessionId}`;
+    const wsUrl = `${SUPABASE_URL.replace(/^http/, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_KEY)}&vsn=1.0.0`;
 
-    const pollTick = async () => {
-      if (isPolling || !sessionId) return;
-      isPolling = true;
+    try {
+      realtimeWs = new WebSocket(wsUrl);
+      realtimeRefCounter = 0;
 
-      try {
-        // 1. Kiểm tra ảnh mới truyền lên từ điện thoại
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/camsync_transfers?session_id=eq.${encodeURIComponent(sessionId)}&select=*&order=created_at.asc`, {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`
-          }
-        });
-
-        if (res.ok) {
-          const rows = await res.json();
-          if (rows && rows.length > 0) {
-            for (const row of rows) {
-              if (processedTransferIds.has(row.id)) continue;
-              processedTransferIds.add(row.id);
-
-              // Ngay lập tức xóa khỏi Cloud để không lưu trữ dữ liệu (Zero retention)
-              fetch(`${SUPABASE_URL}/rest/v1/camsync_transfers?id=eq.${row.id}`, {
-                method: 'DELETE',
-                headers: {
-                  'apikey': SUPABASE_KEY,
-                  'Authorization': `Bearer ${SUPABASE_KEY}`
-                }
-              }).catch(() => {});
-
-              // Nạp ảnh trực tiếp vào VNPT HIS
-              handleIncomingImageData(row.image_data, row.metadata || {});
+      realtimeWs.onopen = () => {
+        console.log('[CamSync Realtime] Connected, joining topic:', topic);
+        // Tham gia channel
+        realtimeWs.send(JSON.stringify({
+          topic,
+          event: 'phx_join',
+          payload: {
+            config: {
+              broadcast: { ack: true, self: false },
+              presence: { key: '' }
             }
-          }
-        }
+          },
+          ref: String(++realtimeRefCounter)
+        }));
 
-        // 2. Kiểm tra thông tin thiết bị đã kết nối
-        const sRes = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=mobile_connected,mobile_device`, {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`
+        // Gửi Phoenix heartbeat mỗi 25s
+        realtimeHeartbeatTimer = setInterval(() => {
+          if (realtimeWs && realtimeWs.readyState === WebSocket.OPEN) {
+            realtimeWs.send(JSON.stringify({
+              topic: 'phoenix',
+              event: 'heartbeat',
+              payload: {},
+              ref: String(++realtimeRefCounter)
+            }));
           }
-        });
+        }, 25000);
+      };
 
-        if (sRes.ok) {
-          const sRows = await sRes.json();
-          if (sRows && sRows.length > 0 && sRows[0].mobile_connected) {
-            updateConnectedDeviceUI(sRows[0].mobile_device, 'cloud');
+      realtimeWs.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          let subEvent = null;
+          let subPayload = null;
+
+          if (msg.event === 'broadcast' && msg.payload && typeof msg.payload === 'object' && msg.payload.event) {
+            subEvent = msg.payload.event;
+            subPayload = msg.payload.payload;
+          } else {
+            subEvent = msg.event;
+            subPayload = msg.payload;
           }
+
+          handleRealtimeBroadcastMessage(subEvent, subPayload, topic);
+        } catch (err) {
+          console.warn('[CamSync Realtime] Parse error:', err);
         }
-      } catch (err) {
-        // Bỏ qua lỗi mạng tạm thời
-      } finally {
-        isPolling = false;
+      };
+
+      realtimeWs.onclose = () => {
+        console.log('[CamSync Realtime] WebSocket closed');
+        if (realtimeHeartbeatTimer) {
+          clearInterval(realtimeHeartbeatTimer);
+          realtimeHeartbeatTimer = null;
+        }
+      };
+
+      realtimeWs.onerror = (err) => {
+        console.warn('[CamSync Realtime] WebSocket error:', err);
+      };
+    } catch (err) {
+      console.warn('[CamSync Realtime] Initialization error:', err);
+    }
+  }
+
+  /**
+   * Xử lý gói tin nhận được từ kênh Realtime Broadcast
+   */
+  function handleRealtimeBroadcastMessage(event, payload, topic) {
+    if (!event || !payload) return;
+
+    if (event === 'device_info' && payload.device) {
+      updateConnectedDeviceUI(payload.device, 'cloud');
+      return;
+    }
+
+    if (event === 'patient_req') {
+      const patient = getPatientInfoFromDOM();
+      if (patient) {
+        sendRealtimeBroadcast('patient_info', { patient });
       }
-    };
+      return;
+    }
 
-    cloudPollTimer = setInterval(pollTick, 800);
-    pollTick();
+    // Realtime Broadcast Chunking Protocol (64KB chunks with Fail-Closed & Out-of-Order Guard)
+    if (event === 'chunk_start') {
+      const { transferId, totalChunks, totalSize, mimeType, filename, meta } = payload;
+      if (!transferId || !totalChunks || totalChunks <= 0) return;
+
+      // Hủy phiên truyền cũ nếu trùng transferId
+      cleanupChunkTransfer(transferId);
+
+      // TTL 60 giây dọn dẹp bộ nhớ nếu phiên truyền bị bỏ dở giữa chừng (Memory Hygiene)
+      const ttlTimer = setTimeout(() => {
+        if (activeChunkTransfers[transferId]) {
+          console.warn(`[CamSync] Phiên truyền ${transferId} quá hạn TTL 60s, giải phóng bộ nhớ.`);
+          cleanupChunkTransfer(transferId);
+        }
+      }, 60000);
+
+      activeChunkTransfers[transferId] = {
+        chunks: new Array(totalChunks),
+        totalChunks,
+        totalSize: totalSize || 0,
+        mimeType: mimeType || 'image/jpeg',
+        filename: filename || '',
+        meta: meta || {},
+        received: 0,
+        completed: false,
+        ttlTimer,
+        timeoutId: ttlTimer,
+        completeWaitTimer: null
+      };
+      updateProgressUI(0, '0 KB', 'Đang nhận ảnh từ ĐT (0%)...');
+      return;
+    }
+
+    if (event === 'chunk_data') {
+      const { transferId, chunkIndex, data } = payload;
+      const tx = activeChunkTransfers[transferId];
+      if (tx && typeof chunkIndex === 'number' && chunkIndex >= 0 && chunkIndex < tx.totalChunks) {
+        // Nhận gói tin lũy tích (idempotent: không đếm trùng lặp nếu gói tin gửi lại)
+        if (typeof tx.chunks[chunkIndex] !== 'string') {
+          tx.chunks[chunkIndex] = data;
+          tx.received++;
+        } else {
+          tx.chunks[chunkIndex] = data;
+        }
+
+        const pct = Math.round((tx.received / tx.totalChunks) * 100);
+        const kbReceived = Math.round((tx.received * 64));
+        const kbTotal = Math.round((tx.totalSize / 1024)) || Math.round(tx.totalChunks * 64);
+        updateProgressUI(pct, `${kbReceived} KB / ${kbTotal} KB`, `Đang nhận ảnh (${pct}%)...`);
+
+        // Trường hợp chunk_complete đã đến trước: kiểm tra nếu gói tin cuối vừa đến đủ
+        if (tx.completed && tx.received === tx.totalChunks) {
+          finalizeChunkTransfer(transferId);
+        }
+      }
+      return;
+    }
+
+    if (event === 'chunk_complete') {
+      const { transferId } = payload;
+      const tx = activeChunkTransfers[transferId];
+      if (tx) {
+        tx.completed = true;
+
+        if (tx.received === tx.totalChunks) {
+          // Toàn bộ các gói tin 0..totalChunks-1 đã nhận đầy đủ -> Khớp nối ngay
+          finalizeChunkTransfer(transferId);
+        } else {
+          // Gói tin chunk_complete đến trước (Out-of-order) do mạng chập chờn:
+          // Chờ tối đa 10 giây để các gói tin còn lại đến bù
+          console.warn(`[CamSync] chunk_complete đến sớm cho ${transferId} (${tx.received}/${tx.totalChunks} gói). Đang chờ gói tin đến bù...`);
+          if (!tx.completeWaitTimer) {
+            tx.completeWaitTimer = setTimeout(() => {
+              const currentTx = activeChunkTransfers[transferId];
+              if (currentTx && currentTx.received < currentTx.totalChunks) {
+                console.warn(`[CamSync] Hết 10s chờ gói tin cho ${transferId}: chỉ nhận ${currentTx.received}/${currentTx.totalChunks}. Từ chối nạp ảnh!`);
+                cleanupChunkTransfer(transferId);
+                sendRealtimeBroadcast('transfer_ack', {
+                  transferId,
+                  status: 'error',
+                  error: 'missing_chunks'
+                });
+                showToast('⚠️ Lỗi nhận ảnh: Thiếu gói tin từ điện thoại, vui lòng chụp lại!');
+              }
+            }, 10000);
+          }
+        }
+      }
+      return;
+    }
+  }
+
+  /**
+   * Giải phóng tài nguyên và hủy các bộ hẹn giờ của phiên truyền chunk
+   */
+  function cleanupChunkTransfer(transferId) {
+    const tx = activeChunkTransfers[transferId];
+    if (tx) {
+      if (tx.ttlTimer) clearTimeout(tx.ttlTimer);
+      if (tx.timeoutId && tx.timeoutId !== tx.ttlTimer) clearTimeout(tx.timeoutId);
+      if (tx.completeWaitTimer) clearTimeout(tx.completeWaitTimer);
+      delete activeChunkTransfers[transferId];
+    }
+  }
+
+  /**
+   * Khớp nối và nạp ảnh an toàn vào Form HIS (Fail-Closed Integrity Check)
+   */
+  function finalizeChunkTransfer(transferId) {
+    const tx = activeChunkTransfers[transferId];
+    if (!tx) return;
+
+    // Rào chắn bảo vệ lâm sàng tuyệt đối: kiểm tra đủ 100% gói tin và không có lỗ hổng rỗng
+    const isComplete = tx.completed &&
+                       tx.received === tx.totalChunks &&
+                       !tx.chunks.some(c => typeof c !== 'string');
+
+    if (!isComplete) {
+      console.warn(`[CamSync] Từ chối nạp ảnh ${transferId}: dữ liệu bị khuyết (${tx.received}/${tx.totalChunks}).`);
+      cleanupChunkTransfer(transferId);
+      sendRealtimeBroadcast('transfer_ack', {
+        transferId,
+        status: 'error',
+        error: 'missing_chunks'
+      });
+      showToast('⚠️ Lỗi nhận ảnh: Dữ liệu ảnh không toàn vẹn, vui lòng chụp lại!');
+      return;
+    }
+
+    // Dữ liệu đã vẹn toàn 100%: sao chép thông tin và hủy timer
+    const fullBase64 = tx.chunks.join('');
+    const meta = { ...tx.meta, name: tx.filename || tx.meta?.name };
+    const mimeType = tx.mimeType || 'image/jpeg';
+    cleanupChunkTransfer(transferId);
+
+    const dataUrl = fullBase64.startsWith('data:') ? fullBase64 : `data:${mimeType};base64,${fullBase64}`;
+    handleIncomingImageData(dataUrl, meta);
+
+    // Gửi transfer_ack xác nhận thành công về điện thoại
+    sendRealtimeBroadcast('transfer_ack', {
+      transferId,
+      status: 'success',
+      photoCount
+    });
+  }
+
+  /**
+   * Phát thông điệp qua Supabase Realtime Broadcast (RAM-to-RAM)
+   */
+  function sendRealtimeBroadcast(event, payload) {
+    if (!realtimeWs || realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1) || !activeSessionId) {
+      return false;
+    }
+    const topic = `realtime:camsync:${activeSessionId}`;
+    realtimeWs.send(JSON.stringify({
+      topic,
+      event: 'broadcast',
+      payload: {
+        type: 'broadcast',
+        event,
+        payload
+      },
+      ref: String(++realtimeRefCounter)
+    }));
+    return true;
+  }
+
+  /**
+   * Thu hồi hoàn toàn kết nối Realtime Broadcast & dọn dẹp RAM (0% Overhead)
+   */
+  function closeRealtimeBroadcast() {
+    if (realtimeHeartbeatTimer) {
+      clearInterval(realtimeHeartbeatTimer);
+      realtimeHeartbeatTimer = null;
+    }
+    if (realtimeWs) {
+      try {
+        if (realtimeWs.readyState === (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1) && activeSessionId) {
+          const topic = `realtime:camsync:${activeSessionId}`;
+          realtimeWs.send(JSON.stringify({
+            topic,
+            event: 'phx_leave',
+            payload: {},
+            ref: String(++realtimeRefCounter)
+          }));
+        }
+        realtimeWs.close();
+      } catch (e) {}
+      realtimeWs = null;
+    }
+    for (const tid in activeChunkTransfers) {
+      cleanupChunkTransfer(tid);
+    }
   }
 
   /**
@@ -869,6 +1083,7 @@
    * Observer: Tự động khởi tạo khi giao diện chẩn đoán hình ảnh mở ra
    */
   function setupObserver() {
+    let debounceTimer = null;
     const checkAndInit = () => {
       if (document.getElementById('fileUpload') && document.getElementById('btnUpload')) {
         injectSyncButton();
@@ -880,7 +1095,8 @@
     initDragAndDrop();
 
     const observer = new MutationObserver(() => {
-      checkAndInit();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkAndInit, 120);
     });
 
     observer.observe(document.body, {

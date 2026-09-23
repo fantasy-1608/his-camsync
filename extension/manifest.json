@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HIS CamSync - Đồng Bộ Ảnh & ECG Cận Lâm Sàng",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Đồng bộ ảnh chụp ECG giấy và kết quả cận lâm sàng trực tiếp từ điện thoại vào VNPT HIS qua WebRTC P2P.",
   "icons": {
     "16": "icons/icon16.png",
@@ -34,6 +34,8 @@
     "https://*.vncare.vn/*",
     "http://*.vncare.vn/*",
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://*.supabase.co/*",
+    "wss://*.supabase.co/*"
   ]
 }
