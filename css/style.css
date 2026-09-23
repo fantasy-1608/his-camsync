@@ -27,15 +27,27 @@
   user-select: none;
 }
 
+html {
+  height: 100%;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
+  height: -webkit-fill-available;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 /* ==========================================================================
@@ -195,6 +207,11 @@ body {
   display: flex;
   justify-content: center;
   z-index: 14;
+  flex-shrink: 0;
+}
+
+body.in-editor .specialty-tabs-wrap {
+  display: none !important;
 }
 
 .specialty-tabs {
@@ -249,7 +266,9 @@ body {
    Main View
    ========================================================================== */
 .main-view {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -399,7 +418,9 @@ body {
    Screen 2: Editor Screen
    ========================================================================== */
 .editor-screen {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
   display: none;
   flex-direction: column;
   background: #030407;
@@ -408,6 +429,7 @@ body {
 
 /* Presets Bar */
 .presets-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -458,20 +480,22 @@ body {
 
 /* Canvas Viewport */
 .canvas-viewport {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #000000;
-  padding: 10px;
+  padding: 6px 8px;
   touch-action: none;
 }
 
 .canvas-container {
   position: relative;
-  display: inline-block;
+  display: block;
   line-height: 0;
   max-width: 100%;
   max-height: 100%;
@@ -482,10 +506,9 @@ body {
 #previewCanvas {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 290px);
-  max-height: calc(100dvh - 290px);
-  width: auto;
-  height: auto;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
@@ -622,12 +645,13 @@ body {
    Editor Controls (Bottom Toolbar)
    ========================================================================== */
 .editor-controls {
+  flex-shrink: 0;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
-  padding: 10px 14px max(86px, calc(env(safe-area-inset-bottom) + 52px));
+  padding: 8px 14px max(74px, calc(env(safe-area-inset-bottom, 20px) + 52px));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   z-index: 10;
 }
 
@@ -648,17 +672,17 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  padding: 8px 3px;
+  padding: 6px 3px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 48px;
+  min-height: 44px;
   white-space: nowrap;
 }
 
@@ -707,7 +731,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 14px;
+  padding: 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -715,7 +739,7 @@ body {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  min-height: 50px;
+  min-height: 48px;
   transition: transform 0.1s ease;
 }
 
@@ -729,7 +753,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 14px;
+  padding: 12px;
   background: var(--accent-green);
   border: none;
   border-radius: var(--radius-md);
@@ -738,7 +762,7 @@ body {
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
-  min-height: 50px;
+  min-height: 48px;
   transition: transform 0.1s ease, background 0.15s ease;
 }
 
