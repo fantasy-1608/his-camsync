@@ -31,6 +31,19 @@
     <span id="patientBannerText">...</span>
   </div>
 
+  <!-- Red Error Banner (Fail-Closed Clinical Alert) -->
+  <div id="errorBanner" class="error-banner" style="display: none;">
+    <div class="error-banner-content">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span id="errorBannerText">Lỗi nạp ảnh lên HIS</span>
+    </div>
+    <button type="button" id="btnDismissError" class="btn-dismiss-error" aria-label="Đóng">&times;</button>
+  </div>
+
   <!-- Specialty Mode Selector (ECG vs Ultrasound) -->
   <div class="specialty-tabs-wrap">
     <div class="specialty-tabs">
@@ -346,10 +359,29 @@
       if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
+    // Hỗ trợ trích xuất session_id từ URL hash fragment #session=<id> hoặc search query
+    let initialSessionId = null;
+    if (window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      initialSessionId = hashParams.get('session');
+    }
+    if (!initialSessionId && window.location.search) {
+      const searchParams = new URLSearchParams(window.location.search);
+      initialSessionId = searchParams.get('session');
+    }
+
+    // Làm sạch thanh địa chỉ ngay lập tức để triệt tiêu rò rỉ session ID
+    if (window.location.hash || window.location.search) {
+      try {
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch (_) {}
+    }
+
     // Khởi tạo Editor & P2P Client
     const editor = new ImageEditor(canvas, canvasContainer, cropOverlay, cropBox);
 
     const p2p = new P2PClient({
+      sessionId: initialSessionId || undefined,
       onStatusChange: (connected, text) => {
         statusText.textContent = text;
         if (connected) {
@@ -593,7 +625,10 @@
         uploadTitle.textContent = 'Đang xử lý xuất ảnh...';
         uploadMeta.textContent = 'Chuẩn hóa định dạng JPEG lâm sàng...';
 
-        const blob = await editor.exportBlob(0.90);
+        const blob = await editor.exportBlob(0.90, {
+          patient: p2p.patientInfo,
+          timestamp: Date.now()
+        });
         const approxKB = Math.round(blob.size / 1024);
 
         uploadTitle.textContent = 'Đang truyền ảnh lên HIS...';
@@ -603,7 +638,9 @@
         const prefix = currentSpecialty === 'ultrasound' ? (patient?.id ? `SA_${patient.id}` : 'SA') : (patient?.id ? `ECG_${patient.id}` : 'ECG');
         const filename = `${prefix}_${Date.now()}.jpg`;
 
-        await p2p.sendImage(blob, {
+        hideErrorBanner();
+
+        const res = await p2p.sendImage(blob, {
           name: filename,
           type: 'image/jpeg',
           specialty: currentSpecialty
@@ -611,6 +648,11 @@
           uploadPctBadge.textContent = `${pct}%`;
           uploadMeta.textContent = `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
         });
+
+        // Rào chắn xác thực kết quả: chỉ báo thành công khi res.success === true
+        if (!res || !res.success) {
+          throw new Error(res?.error || 'Không nhận được xác nhận từ máy tính HIS');
+        }
 
         // Phản hồi rung haptic
         if (navigator.vibrate) {
@@ -637,11 +679,27 @@
 
       } catch (err) {
         uploadProgressModal.style.display = 'none';
-        alert(err.message || 'Lỗi gửi ảnh');
+        showErrorBanner(err.message || 'Lỗi gửi ảnh lên máy HIS');
         btnSendToHis.disabled = false;
         btnSendText.textContent = 'Gửi Lên HIS';
       }
     });
+
+    function showErrorBanner(message) {
+      const banner = document.getElementById('errorBanner');
+      const text = document.getElementById('errorBannerText');
+      if (banner && text) {
+        text.textContent = message;
+        banner.style.display = 'flex';
+      }
+    }
+
+    function hideErrorBanner() {
+      const banner = document.getElementById('errorBanner');
+      if (banner) banner.style.display = 'none';
+    }
+
+    document.getElementById('btnDismissError')?.addEventListener('click', hideErrorBanner);
   </script>
 </body>
 </html>

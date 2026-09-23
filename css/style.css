@@ -141,6 +141,51 @@ body {
 }
 
 /* ==========================================================================
+   Clinical Error Banner (Fail-Closed Notification)
+   ========================================================================== */
+.error-banner {
+  background: #EF4444;
+  border-bottom: 1px solid #DC2626;
+  color: #FFFFFF;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 110;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.error-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.btn-dismiss-error {
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0.85;
+  transition: opacity 300ms ease;
+}
+
+.btn-dismiss-error:active,
+.btn-dismiss-error:hover {
+  opacity: 1;
+}
+
+/* ==========================================================================
    Specialty Mode Selector (ECG vs Ultrasound)
    ========================================================================== */
 .specialty-tabs-wrap {
