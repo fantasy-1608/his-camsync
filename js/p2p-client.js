@@ -33,6 +33,43 @@ export class P2PClient {
   }
 
   /**
+   * Thu thập thông tin thiết bị an toàn để máy tính hiển thị nhận dạng
+   */
+  getDeviceMetadata() {
+    const ua = navigator.userAgent || '';
+    let name = 'Điện thoại di động';
+    let os = 'Di động';
+
+    if (/iPhone/i.test(ua)) {
+      name = 'Apple iPhone';
+      const m = ua.match(/OS (\d+[_\.]\d+)/);
+      os = m ? `iOS ${m[1].replace('_', '.')}` : 'iOS';
+    } else if (/iPad/i.test(ua)) {
+      name = 'Apple iPad';
+      const m = ua.match(/OS (\d+[_\.]\d+)/);
+      os = m ? `iPadOS ${m[1].replace('_', '.')}` : 'iPadOS';
+    } else if (/Android/i.test(ua)) {
+      name = 'Điện thoại Android';
+      const m = ua.match(/Android (\d+(\.\d+)?)/);
+      os = m ? `Android ${m[1]}` : 'Android';
+      if (/Samsung|SM-/i.test(ua)) name = 'Samsung Galaxy';
+      else if (/Xiaomi|Redmi/i.test(ua)) name = 'Xiaomi';
+      else if (/Oppo/i.test(ua)) name = 'OPPO';
+      else if (/Pixel/i.test(ua)) name = 'Google Pixel';
+    } else if (/Macintosh/i.test(ua)) {
+      name = 'MacBook';
+      os = 'macOS';
+    } else if (/Windows/i.test(ua)) {
+      name = 'Máy tính Windows';
+      os = 'Windows';
+    }
+
+    const browser = /Safari/i.test(ua) && !/Chrome/i.test(ua) ? 'Safari' : (/Chrome/i.test(ua) ? 'Chrome' : 'Mobile Web');
+
+    return { name, os, browser };
+  }
+
+  /**
    * Khởi động đồng thời cả 2 kênh: Cloud Relay (4G) & WebRTC P2P (Wi-Fi)
    */
   async connect() {
@@ -77,7 +114,7 @@ export class P2PClient {
           // Kích hoạt trạng thái sẵn sàng ngay lập tức cho điện thoại
           this.updateStatus(true, '🟢 Đã kết nối máy bàn');
 
-          // Báo cho máy tính biết điện thoại đã vào phiên
+          // Báo cho máy tính biết điện thoại đã vào phiên kèm thông tin thiết bị
           fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(this.sessionId)}`, {
             method: 'PATCH',
             headers: {
@@ -88,6 +125,7 @@ export class P2PClient {
             },
             body: JSON.stringify({
               mobile_connected: true,
+              mobile_device: this.getDeviceMetadata(),
               updated_at: new Date().toISOString()
             })
           }).catch(() => {});
@@ -101,7 +139,7 @@ export class P2PClient {
       console.warn('[Cloud] Lỗi kiểm tra session:', err);
     }
 
-    // Nếu chưa thấy phiên trên máy tính (do máy tính vừa tạo xong), thử lại sau 1.5s
+    // Nếu chưa thấy phiên trên máy tính, thử lại sau 1.5s
     if (retryCount < 20) {
       this.updateStatus(false, 'Đang tìm máy bàn...');
       clearTimeout(this.cloudRetryTimer);
@@ -148,7 +186,7 @@ export class P2PClient {
           }
         }
       } catch (e) {
-        // Tạm thời bỏ qua lỗi mạng chập chờn
+        // Tạm thời bỏ qua lỗi mạng
       }
     }, 3500);
   }
@@ -177,7 +215,6 @@ export class P2PClient {
 
       this.peer.on('error', (err) => {
         console.warn('[P2P] WebRTC event error:', err.type);
-        // Nếu cloud relay đã sẵn sàng, không làm phiền người dùng với lỗi P2P
         if (!this.isCloudReady) {
           this.updateStatus(false, 'Đang tìm máy bàn...');
         }
@@ -205,6 +242,8 @@ export class P2PClient {
       this.updateStatus(true, '🟢 Đã kết nối máy bàn');
 
       try {
+        // Gửi thông tin thiết bị và yêu cầu dữ liệu bệnh nhân
+        this.conn.send({ type: 'DEVICE_INFO', device: this.getDeviceMetadata() });
         this.conn.send({ type: 'REQ_PATIENT_INFO' });
       } catch (e) {}
     });
@@ -279,6 +318,7 @@ export class P2PClient {
       metadata: {
         ...metadata,
         sessionId: this.sessionId,
+        device: this.getDeviceMetadata(),
         timestamp: Date.now()
       }
     };
@@ -328,6 +368,7 @@ export class P2PClient {
       meta: {
         ...metadata,
         sessionId: this.sessionId,
+        device: this.getDeviceMetadata(),
         timestamp: Date.now()
       }
     });

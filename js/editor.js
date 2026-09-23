@@ -1,6 +1,8 @@
 /**
- * HIS-CamSync: Image Editor Module (Normalized Coordinates & Smooth Pointer Drag)
- * Khắc phục triệt để hiện tượng lệch khung crop và giật lag khi kéo 4 góc.
+ * HIS-CamSync: Image Editor Module (Clinical ECG & Ultrasound Specialist)
+ * Chuyên biệt hóa cho 2 nhóm cận lâm sàng:
+ * 1. Điện Tâm Đồ (ECG): Dải nhịp Lead II, 12 chuyển đạo, lưới 1mm, bộ lọc nét chì & nền nhiệt.
+ * 2. Siêu Âm (Ultrasound): Đầu dò Convex/Linear, 4:3, tương phản mô (Tissue Contrast), sắc nét bờ tổn thương (Sharpen), âm bản (Invert).
  */
 
 export class ImageEditor {
@@ -13,11 +15,11 @@ export class ImageEditor {
 
     this.originalImage = null;
     this.rotation = 0; // 0, 90, 180, 270
-    this.filter = 'normal'; // 'normal', 'ecg', 'bw'
+    this.specialty = 'ecg'; // 'ecg' | 'ultrasound'
+    this.filter = 'normal'; // 'normal', 'ecg', 'bw', 'us-contrast', 'us-sharpen', 'us-invert'
+    this.showEcgGridGuide = false; // Lưới milimet tham chiếu
 
-    this.currentPreset = 'ecg';
-    // Tọa độ Crop dạng chuẩn hóa (0.0 đến 1.0)
-    // Mặc định chuẩn Dải ECG ngang (rộng 94%, cao 36%, căn giữa)
+    this.currentPreset = 'ecg-strip';
     this.normCrop = { left: 0.03, top: 0.32, right: 0.97, bottom: 0.68 };
 
     this.isDragging = false;
@@ -35,6 +37,16 @@ export class ImageEditor {
     }
   }
 
+  setSpecialty(specialty) {
+    this.specialty = specialty;
+    this.filter = 'normal';
+    if (specialty === 'ecg') {
+      this.setCropPreset('ecg-strip');
+    } else {
+      this.setCropPreset('us-convex');
+    }
+  }
+
   loadImage(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -44,7 +56,11 @@ export class ImageEditor {
           this.originalImage = img;
           this.rotation = 0;
           this.filter = 'normal';
-          this.setCropPreset(this.currentPreset || 'ecg');
+          if (this.specialty === 'ecg') {
+            this.setCropPreset('ecg-strip');
+          } else {
+            this.setCropPreset('us-convex');
+          }
           this.render();
           resolve(img);
         };
@@ -58,8 +74,7 @@ export class ImageEditor {
 
   rotate(degrees) {
     this.rotation = (this.rotation + degrees + 360) % 360;
-    // Giữ nguyên tỷ lệ chuẩn theo preset đã chọn khi xoay
-    this.setCropPreset(this.currentPreset || 'ecg');
+    this.setCropPreset(this.currentPreset);
     this.render();
   }
 
@@ -68,21 +83,43 @@ export class ImageEditor {
     this.render();
   }
 
+  toggleEcgGridGuide() {
+    this.showEcgGridGuide = !this.showEcgGridGuide;
+    this.render();
+    return this.showEcgGridGuide;
+  }
+
   /**
    * Cài đặt tỷ lệ khung cắt nhanh chuẩn lâm sàng
-   * @param {'ecg' | 'standard' | 'full'} preset 
+   * @param {'ecg-strip' | 'ecg-12lead' | 'us-convex' | 'us-linear' | 'us-4x3' | 'full'} preset 
    */
   setCropPreset(preset) {
     this.currentPreset = preset;
-    if (preset === 'ecg') {
-      // Dải điện tim ngang: rộng 94%, cao 36%, căn giữa trục dọc
-      this.normCrop = { left: 0.03, top: 0.32, right: 0.97, bottom: 0.68 };
-    } else if (preset === 'standard') {
-      // Khung 4:3 siêu âm / nội soi: rộng 84%, cao 65%, căn giữa
-      this.normCrop = { left: 0.08, top: 0.18, right: 0.92, bottom: 0.82 };
-    } else if (preset === 'full') {
-      // Toàn bộ ảnh
-      this.normCrop = { left: 0.02, top: 0.02, right: 0.98, bottom: 0.98 };
+    switch (preset) {
+      case 'ecg-strip':
+        // Dải nhịp Lead II / 1 chuyển đạo: dài hẹp ngang
+        this.normCrop = { left: 0.02, top: 0.34, right: 0.98, bottom: 0.66 };
+        break;
+      case 'ecg-12lead':
+        // Bản ghi 12 chuyển đạo tiêu chuẩn khổ ngang (16:9)
+        this.normCrop = { left: 0.03, top: 0.16, right: 0.97, bottom: 0.84 };
+        break;
+      case 'us-convex':
+        // Đầu dò Convex / Tim hình quạt: rộng 82%, cao 74%
+        this.normCrop = { left: 0.09, top: 0.13, right: 0.91, bottom: 0.87 };
+        break;
+      case 'us-linear':
+        // Đầu dò Linear (mạch máu, giáp, tuyến vú): khung chữ nhật phẳng
+        this.normCrop = { left: 0.05, top: 0.22, right: 0.95, bottom: 0.78 };
+        break;
+      case 'us-4x3':
+        // Tỷ lệ màn hình siêu âm 4:3 truyền thống
+        this.normCrop = { left: 0.08, top: 0.16, right: 0.92, bottom: 0.84 };
+        break;
+      case 'full':
+      default:
+        this.normCrop = { left: 0.02, top: 0.02, right: 0.98, bottom: 0.98 };
+        break;
     }
     this.updateCropBoxUI();
   }
@@ -95,7 +132,7 @@ export class ImageEditor {
     const targetWidth = isSideways ? img.height : img.width;
     const targetHeight = isSideways ? img.width : img.height;
 
-    // Giới hạn độ phân giải 1600px chuẩn lâm sàng (đảm bảo từng vạch 0.1mm lưới ECG sắc nét, dung lượng nhẹ ~200KB)
+    // Giới hạn 1600px chuẩn lâm sàng: sắc nét từng mm lưới, dung lượng ~250KB JPEG
     const maxDim = 1600;
     let scale = 1;
     if (Math.max(targetWidth, targetHeight) > maxDim) {
@@ -115,12 +152,16 @@ export class ImageEditor {
     this.ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
     this.ctx.restore();
 
-    // Áp dụng bộ lọc điểm ảnh
+    // Áp dụng bộ lọc điểm ảnh chuyên dụng
     if (this.filter !== 'normal') {
       this.applyPixelFilter();
     }
 
-    // Đồng bộ lại kích thước hiển thị của container và khung crop
+    // Vẽ lưới milimet tham chiếu ECG nếu được bật
+    if (this.showEcgGridGuide && this.specialty === 'ecg') {
+      this.drawEcgGridGuide();
+    }
+
     requestAnimationFrame(() => {
       this.updateCropBoxUI();
     });
@@ -131,6 +172,7 @@ export class ImageEditor {
     const data = imgData.data;
     const len = data.length;
 
+    // 1. ECG: Nét sóng chì & Lưới milimet
     if (this.filter === 'ecg') {
       for (let i = 0; i < len; i += 4) {
         const r = data[i];
@@ -140,21 +182,76 @@ export class ImageEditor {
 
         let val;
         if (gray < 110) {
-          val = Math.max(0, gray * 0.6); // Làm đậm đường sóng
+          val = Math.max(0, gray * 0.6); // Làm đậm đường sóng chì
         } else if (r > g + 20 && r > b + 20) {
-          val = Math.min(255, gray * 1.05); // Giữ lưới hồng/đỏ
+          val = Math.min(255, gray * 1.05); // Giữ lưới milimet hồng/đỏ
         } else {
-          val = Math.min(255, (gray - 100) * 1.8 + 100); // Tăng sáng nền
+          val = Math.min(255, (gray - 100) * 1.8 + 100); // Tăng sáng nền giấy
         }
 
         data[i] = val;
         data[i + 1] = val;
         data[i + 2] = val;
       }
-    } else if (this.filter === 'bw') {
+    }
+    // 2. ECG: Trắng đen thuần giấy in nhiệt (B&W High Contrast)
+    else if (this.filter === 'bw') {
       for (let i = 0; i < len; i += 4) {
         const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        const val = gray > 128 ? 255 : 0;
+        const val = gray > 132 ? 255 : 0;
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+      }
+    }
+    // 3. Siêu Âm: Tương phản mô (Tissue Contrast - Sigmoid Curve)
+    else if (this.filter === 'us-contrast') {
+      for (let i = 0; i < len; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        // S-Curve tăng độ sâu tổn thương dạng nang/dịch (tối hơn) và mô đặc (sáng hơn)
+        const norm = gray / 255;
+        let enhanced;
+        if (norm < 0.5) {
+          enhanced = 2 * norm * norm;
+        } else {
+          enhanced = 1 - 2 * (1 - norm) * (1 - norm);
+        }
+        const val = Math.round(enhanced * 255);
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+      }
+    }
+    // 4. Siêu Âm: Làm nét đường viền giải phẫu (Sharpening convolution)
+    else if (this.filter === 'us-sharpen') {
+      // Áp dụng bộ lọc Unsharp Mask nhẹ trực tiếp
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      const copy = new Uint8ClampedArray(data);
+
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const idx = (y * w + x) * 4;
+          // Kernel: [0, -1, 0; -1, 5, -1; 0, -1, 0]
+          const c = copy[idx];
+          const top = copy[((y - 1) * w + x) * 4];
+          const bottom = copy[((y + 1) * w + x) * 4];
+          const left = copy[(y * w + (x - 1)) * 4];
+          const right = copy[(y * w + (x + 1)) * 4];
+
+          const sharp = 5 * c - (top + bottom + left + right);
+          const val = Math.max(0, Math.min(255, sharp));
+          data[idx] = val;
+          data[idx + 1] = val;
+          data[idx + 2] = val;
+        }
+      }
+    }
+    // 5. Siêu Âm: Đảo màu âm bản (Invert - xem rõ vôi hóa & phản âm)
+    else if (this.filter === 'us-invert') {
+      for (let i = 0; i < len; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        const val = 255 - gray;
         data[i] = val;
         data[i + 1] = val;
         data[i + 2] = val;
@@ -162,6 +259,30 @@ export class ImageEditor {
     }
 
     this.ctx.putImageData(imgData, 0, 0);
+  }
+
+  /**
+   * Lưới milimet tham chiếu ECG (5mm ô lớn, 1mm ô nhỏ)
+   */
+  drawEcgGridGuide() {
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(239, 68, 68, 0.22)';
+    this.ctx.lineWidth = 1;
+
+    const step = 20; // 1 ô lớn tương đương 5mm
+    for (let x = 0; x < this.canvas.width; x += step) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x, this.canvas.height);
+      this.ctx.stroke();
+    }
+    for (let y = 0; y < this.canvas.height; y += step) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, y);
+      this.ctx.lineTo(this.canvas.width, y);
+      this.ctx.stroke();
+    }
+    this.ctx.restore();
   }
 
   updateCropBoxUI() {
@@ -201,7 +322,6 @@ export class ImageEditor {
       this.startPoint = { x: e.clientX, y: e.clientY };
       this.startCrop = { ...this.normCrop };
 
-      // Khóa pointer capture trên cropOverlay để vuốt nhanh không bị tuột tay cầm
       if (this.cropOverlay.setPointerCapture && e.pointerId) {
         try { this.cropOverlay.setPointerCapture(e.pointerId); } catch (_) {}
       }
@@ -220,7 +340,7 @@ export class ImageEditor {
 
       const dx = (e.clientX - this.startPoint.x) / contW;
       const dy = (e.clientY - this.startPoint.y) / contH;
-      const minW = 40 / contW; // Giới hạn kích thước tối thiểu 40px
+      const minW = 40 / contW;
       const minH = 40 / contH;
 
       const c = this.normCrop;
@@ -278,22 +398,16 @@ export class ImageEditor {
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
 
-    // Xử lý khi xoay màn hình điện thoại
     window.addEventListener('resize', () => {
       this.updateCropBoxUI();
     });
   }
 
-  /**
-   * Xuất ảnh đã Crop chuẩn xác 100% theo vùng người dùng đã chọn
-   * @returns {Promise<Blob>}
-   */
-  exportBlob(quality = 0.85) {
+  exportBlob(quality = 0.90) {
     return new Promise((resolve, reject) => {
       const cw = this.canvas.width;
       const ch = this.canvas.height;
 
-      // Tính toán trực tiếp từ tọa độ chuẩn hóa (khử hoàn toàn sai lệch CSS/Viewport)
       const sx = Math.max(0, Math.round(this.normCrop.left * cw));
       const sy = Math.max(0, Math.round(this.normCrop.top * ch));
       const sw = Math.min(cw - sx, Math.round((this.normCrop.right - this.normCrop.left) * cw));
