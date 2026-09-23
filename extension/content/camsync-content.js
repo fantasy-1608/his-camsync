@@ -363,7 +363,7 @@
           </div>
 
           <p class="camsync-instruction" id="camsyncInstruction" style="font-size: 12px; color: #475569; margin: 8px 0; line-height: 1.4;">
-            🔒 Quét mã QR bằng điện thoại kết nối <b>Wi-Fi Bệnh viện</b> (HIS MEDICAL hoặc STAFF). Kết nối P2P nội bộ an toàn 100%.
+            Dùng camera điện thoại (hỗ trợ 4G / 5G / Wi-Fi) quét mã QR để chụp và truyền ảnh tức thì lên HIS.
           </p>
 
           <button type="button" class="btn btn-default btn-sm" id="camsyncDoneBtn" style="margin-top: 8px; width: 100%;">
@@ -393,7 +393,7 @@
       });
     }
 
-    // Bắt đầu lắng nghe P2P WebRTC qua STUN xuyên mạng
+    // Bắt đầu lắng nghe P2P WebRTC qua STUN/TURN xuyên mạng 4G
     startReceivingImage(activeSessionId);
   }
 
@@ -426,7 +426,7 @@
   }
 
   /**
-   * Lắng nghe nhận ảnh qua WebRTC P2P (Google STUN) hỗ trợ Chunking 16KB
+   * Lắng nghe nhận ảnh qua WebRTC P2P (STUN + TURN OpenRelay) xuyên mọi mạng 4G/LAN
    */
   function startReceivingImage(sessionId) {
     const statusText = document.getElementById('camsyncStatusText');
@@ -443,14 +443,35 @@
               { urls: 'stun:stun.l.google.com:19302' },
               { urls: 'stun:stun1.l.google.com:19302' },
               { urls: 'stun:stun2.l.google.com:19302' },
-              { urls: 'stun:stun.cloudflare.com:3478' }
+              { urls: 'stun:stun.cloudflare.com:3478' },
+              { urls: 'stun:openrelay.metered.ca:80' },
+              {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+              },
+              {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+              },
+              {
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+              },
+              {
+                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+              }
             ]
           }
         });
 
         currentPeer.on('open', (id) => {
           console.log('[CamSync] Desktop Peer sẵn sàng:', id);
-          if (statusText) statusText.textContent = 'Chờ quét mã từ Wi-Fi Bệnh viện...';
+          if (statusText) statusText.textContent = 'Chờ quét mã từ điện thoại (4G / Wi-Fi)...';
         });
 
         currentPeer.on('connection', (conn) => {
@@ -458,7 +479,7 @@
 
           conn.on('open', () => {
             console.log('[CamSync] Kênh WebRTC DataChannel đã mở thành công!');
-            if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối (Wi-Fi BV)!';
+            if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối!';
             if (statusPill) statusPill.classList.add('connected');
 
             // Chỉ gửi thông tin bệnh nhân khi DataChannel đã OPEN hoàn toàn
@@ -470,7 +491,7 @@
 
           conn.on('close', () => {
             console.log('[CamSync] Điện thoại đã ngắt kết nối');
-            if (statusText) statusText.textContent = 'Chờ quét mã từ Wi-Fi Bệnh viện...';
+            if (statusText) statusText.textContent = 'Chờ quét mã từ điện thoại...';
             if (statusPill) statusPill.classList.remove('connected');
           });
 
