@@ -142,6 +142,10 @@ export class ImageEditor {
     this.canvas.width = Math.round(targetWidth * scale);
     this.canvas.height = Math.round(targetHeight * scale);
 
+    if (this.container) {
+      this.container.style.aspectRatio = `${this.canvas.width} / ${this.canvas.height}`;
+    }
+
     this.ctx.save();
     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
     this.ctx.rotate((this.rotation * Math.PI) / 180);

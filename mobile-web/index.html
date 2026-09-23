@@ -489,6 +489,7 @@
         await editor.loadImage(processedFile);
         captureScreen.style.display = 'none';
         editorScreen.style.display = 'flex';
+        document.body.classList.add('in-editor');
 
         // Đặt preset ban đầu
         const presetGroup = currentSpecialty === 'ecg' ? groupEcgPresets : groupUsPresets;
@@ -601,6 +602,7 @@
       galleryInput.value = '';
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
+      document.body.classList.remove('in-editor');
     });
 
     statusBadge.addEventListener('click', () => {
@@ -672,6 +674,7 @@
             galleryInput.value = '';
             editorScreen.style.display = 'none';
             captureScreen.style.display = 'flex';
+            document.body.classList.remove('in-editor');
             btnSendToHis.disabled = false;
             btnSendText.textContent = 'Gửi Lên HIS';
           }, 1400);
