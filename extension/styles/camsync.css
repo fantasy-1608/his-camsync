@@ -1,6 +1,8 @@
-/* HIS CamSync Clinical Styling */
+/* ==========================================================================
+   HIS CamSync Clinical Styling - Quiet Clinical Utility (WCAG AA)
+   ========================================================================== */
 
-/* Nút Chụp từ ĐT trên Toolbar */
+/* Nút Chụp từ ĐT trên Toolbar HIS */
 .btn-camsync-trigger {
   background: #059669 !important;
   border-color: #047857 !important;
@@ -21,7 +23,6 @@
 .btn-camsync-trigger:hover {
   background: #047857 !important;
 }
-
 
 /* Tooltip chuẩn lâm sàng (300ms delay, 0ms exit) */
 .camsync-tooltip-wrapper {
@@ -55,14 +56,16 @@
   visibility: visible;
 }
 
-/* Modal Quét Mã QR */
+/* ==========================================================================
+   Modal Quét Mã QR & Điều Khiển Đồng Bộ
+   ========================================================================== */
 .camsync-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -73,22 +76,24 @@
 .camsync-modal-card {
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  width: 360px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-radius: 14px;
+  width: 400px;
+  max-width: 95vw;
+  box-shadow: 0 25px 35px -5px rgba(0, 0, 0, 0.15), 0 10px 15px -5px rgba(0, 0, 0, 0.06);
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #1e293b;
-  animation: camsyncFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: camsyncFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes camsyncFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+/* Modal Header */
 .camsync-modal-header {
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
@@ -97,84 +102,332 @@
 }
 
 .camsync-modal-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: #0f172a;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .camsync-modal-close {
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   color: #64748b;
   cursor: pointer;
-  padding: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
 }
 
 .camsync-modal-close:hover {
   color: #0f172a;
+  background: #e2e8f0;
 }
 
+/* Patient Context Banner trong Modal */
+.camsync-patient-banner {
+  background: #eff6ff;
+  border-bottom: 1px solid #dbeafe;
+  padding: 7px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.camsync-patient-icon {
+  font-size: 14px;
+}
+
+.camsync-patient-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Modal Body */
 .camsync-modal-body {
-  padding: 20px 16px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+}
+
+/* ==========================================================================
+   Khung QR Scanner Công Nghệ (Corner Brackets & Scanline)
+   ========================================================================== */
+.camsync-qr-wrapper {
+  position: relative;
+  padding: 10px;
 }
 
 .camsync-qr-container {
-  padding: 12px;
+  padding: 10px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  border-radius: 10px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
 }
 
+.camsync-qr-container canvas,
 .camsync-qr-container img {
   display: block;
+  border-radius: 4px;
 }
 
-.camsync-status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
+/* Khung góc ngắm radar */
+.camsync-corner-bracket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: #059669;
+  border-style: solid;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.bracket-tl { top: 3px; left: 3px; border-width: 2.5px 0 0 2.5px; border-top-left-radius: 4px; }
+.bracket-tr { top: 3px; right: 3px; border-width: 2.5px 2.5px 0 0; border-top-right-radius: 4px; }
+.bracket-bl { bottom: 3px; left: 3px; border-width: 0 0 2.5px 2.5px; border-bottom-left-radius: 4px; }
+.bracket-br { bottom: 3px; right: 3px; border-width: 0 2.5px 2.5px 0; border-bottom-right-radius: 4px; }
+
+/* Tia quét animated scanline nhẹ nhàng */
+.camsync-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.8) 50%, transparent 100%);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  pointer-events: none;
+  animation: camsyncScan 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes camsyncScan {
+  0% { top: 5%; opacity: 0.2; }
+  50% { opacity: 0.9; }
+  100% { top: 95%; opacity: 0.2; }
+}
+
+.camsync-qr-container.connected-qr .camsync-scanline {
+  display: none;
+}
+
+/* ==========================================================================
+   Thẻ Thiết Bị Đã Ghép Đôi (Device Connected Card)
+   ========================================================================== */
+.camsync-device-card {
+  width: 100%;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: camsyncSlideDown 0.25s ease;
 }
 
-.camsync-status-dot {
-  width: 8px;
-  height: 8px;
+@keyframes camsyncSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.camsync-device-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.camsync-device-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e0f2fe;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.camsync-device-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.camsync-device-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.camsync-device-type {
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.camsync-badge-network {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.camsync-device-status-dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #94a3b8;
-}
-
-.camsync-status-pill.connected {
-  background: #ecfdf5;
-  color: #047857;
-  border-color: #a7f3d0;
-}
-
-.camsync-status-pill.connected .camsync-status-dot {
   background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  animation: camsyncPulse 1.8s infinite;
 }
 
+@keyframes camsyncPulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* ==========================================================================
+   Thanh Tiến Độ Truyền Tải Thời Gian Thực (Live Progress Widget)
+   ========================================================================== */
+.camsync-progress-container {
+  width: 100%;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: camsyncSlideDown 0.2s ease;
+}
+
+.camsync-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.camsync-progress-pct {
+  color: #059669;
+  font-weight: 700;
+}
+
+.camsync-progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.camsync-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #10b981, #059669);
+  border-radius: 4px;
+  transition: width 0.15s ease-out;
+}
+
+.camsync-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Thẻ Thumbnail Ảnh Vừa Nạp Vào HIS (Success Thumbnail Strip)
+   ========================================================================== */
+.camsync-thumbnail-card {
+  width: 100%;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: camsyncSlideDown 0.25s ease;
+}
+
+.camsync-thumbnail-img {
+  width: 52px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.camsync-thumbnail-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.camsync-thumbnail-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #065f46;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.camsync-thumbnail-status {
+  font-size: 11px;
+  color: #047857;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   Footer & Instruction
+   ========================================================================== */
 .camsync-instruction {
   font-size: 12px;
-  color: #64748b;
+  color: #475569;
   text-align: center;
   line-height: 1.45;
-  max-width: 280px;
+  max-width: 320px;
+  margin: 0;
+}
+
+.camsync-counter-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 /* Vùng Dropzone Kéo Thả */

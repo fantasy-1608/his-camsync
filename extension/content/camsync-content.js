@@ -346,6 +346,7 @@
     // Tạo Session ID cố định cho ca bệnh này
     activeSessionId = 'his-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
     const mobileUrl = `${MOBILE_APP_URL}/?session=${activeSessionId}`;
+    const patient = getPatientInfoFromDOM();
 
     const backdrop = document.createElement('div');
     backdrop.className = 'camsync-modal-backdrop';
@@ -358,21 +359,84 @@
             <span class="glyphicon glyphicon-camera" style="color: #059669;"></span>
             <span>Chụp & Đồng Bộ Từ Điện Thoại</span>
           </div>
-          <button class="camsync-modal-close" id="camsyncCloseBtn">&times;</button>
+          <button class="camsync-modal-close" id="camsyncCloseBtn" title="Đóng">&times;</button>
         </div>
+
+        <div class="camsync-patient-banner" id="camsyncPatientBanner">
+          <span class="camsync-patient-icon">🩺</span>
+          <span class="camsync-patient-name" id="camsyncPatientName">
+            BN: ${patient?.name || 'Chưa chọn'} (${patient?.id || '---'})${patient?.age ? ' - ' + patient.age : ''}
+          </span>
+        </div>
+
         <div class="camsync-modal-body">
-          <div id="camsyncQrCode" class="camsync-qr-container"></div>
+          <!-- Khung QR Scanner Radar Công Nghệ -->
+          <div class="camsync-qr-wrapper">
+            <div class="camsync-corner-bracket bracket-tl"></div>
+            <div class="camsync-corner-bracket bracket-tr"></div>
+            <div class="camsync-corner-bracket bracket-bl"></div>
+            <div class="camsync-corner-bracket bracket-br"></div>
+            <div id="camsyncQrCode" class="camsync-qr-container">
+              <div class="camsync-scanline"></div>
+            </div>
+          </div>
           
           <div id="camsyncStatusPill" class="camsync-status-pill">
             <span class="camsync-status-dot"></span>
             <span id="camsyncStatusText">Chờ quét mã từ điện thoại...</span>
           </div>
 
-          <p class="camsync-instruction" id="camsyncInstruction" style="font-size: 12px; color: #475569; margin: 8px 0; line-height: 1.4;">
+          <!-- Thẻ Thiết Bị Đã Ghép Đôi -->
+          <div id="camsyncDeviceCard" class="camsync-device-card" style="display: none;">
+            <div class="camsync-device-left">
+              <div class="camsync-device-icon" id="camsyncDeviceIcon">📱</div>
+              <div class="camsync-device-info">
+                <span class="camsync-device-name" id="camsyncDeviceName">Điện thoại di động</span>
+                <span class="camsync-device-type">
+                  <span id="camsyncNetBadge" class="camsync-badge-network">Đang kết nối</span>
+                  <span id="camsyncDeviceOs">iOS / Android</span>
+                </span>
+              </div>
+            </div>
+            <div class="camsync-device-status-dot"></div>
+          </div>
+
+          <!-- Thanh Tiến Độ Truyền Tải Thời Gian Thực -->
+          <div id="camsyncProgressContainer" class="camsync-progress-container" style="display: none;">
+            <div class="camsync-progress-header">
+              <span id="camsyncProgressTitle">Đang nhận ảnh từ ĐT...</span>
+              <span id="camsyncProgressPct" class="camsync-progress-pct">0%</span>
+            </div>
+            <div class="camsync-progress-track">
+              <div id="camsyncProgressBar" class="camsync-progress-bar"></div>
+            </div>
+            <div class="camsync-progress-meta">
+              <span id="camsyncProgressBytes">0 KB</span>
+              <span id="camsyncProgressSpeed">Đang đồng bộ</span>
+            </div>
+          </div>
+
+          <!-- Thẻ Thumbnail Ảnh Vừa Nạp Vào HIS -->
+          <div id="camsyncThumbCard" class="camsync-thumbnail-card" style="display: none;">
+            <img id="camsyncThumbImg" class="camsync-thumbnail-img" src="" alt="Thumbnail">
+            <div class="camsync-thumbnail-info">
+              <span id="camsyncThumbName" class="camsync-thumbnail-name">ECG_photo.jpg</span>
+              <span class="camsync-thumbnail-status">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Đã nạp thành công vào HIS</span>
+              </span>
+            </div>
+          </div>
+
+          <div id="camsyncCounterBadge" class="camsync-counter-badge" style="display: none;">
+            Đã nạp: <strong id="camsyncPhotoCount">0</strong> ảnh trong phiên
+          </div>
+
+          <p class="camsync-instruction" id="camsyncInstruction">
             Dùng camera điện thoại (hỗ trợ 4G / 5G / Wi-Fi) quét mã QR để chụp và truyền ảnh tức thì lên HIS.
           </p>
 
-          <button type="button" class="btn btn-default btn-sm" id="camsyncDoneBtn" style="margin-top: 8px; width: 100%;">
+          <button type="button" class="btn btn-default btn-sm" id="camsyncDoneBtn" style="margin-top: 4px; width: 100%;">
             Đóng cửa sổ này khi xong
           </button>
         </div>
@@ -391,8 +455,8 @@
     if (window.QRCode) {
       new window.QRCode(document.getElementById('camsyncQrCode'), {
         text: mobileUrl,
-        width: 180,
-        height: 180,
+        width: 175,
+        height: 175,
         colorDark: '#0f172a',
         colorLight: '#ffffff',
         correctLevel: window.QRCode.CorrectLevel.M
@@ -400,7 +464,6 @@
     }
 
     // Đăng ký phiên trên Supabase Cloud Relay (Bảo đảm thông suốt trên 4G & máy bàn nội bộ)
-    const patient = getPatientInfoFromDOM();
     fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions`, {
       method: 'POST',
       headers: {
@@ -451,6 +514,66 @@
   }
 
   /**
+   * Cập nhật giao diện tiến độ truyền tải thời gian thực
+   */
+  function updateProgressUI(pct, bytesInfo, title = 'Đang nhận ảnh từ ĐT...') {
+    const container = document.getElementById('camsyncProgressContainer');
+    const bar = document.getElementById('camsyncProgressBar');
+    const pctText = document.getElementById('camsyncProgressPct');
+    const titleText = document.getElementById('camsyncProgressTitle');
+    const bytesText = document.getElementById('camsyncProgressBytes');
+
+    if (container && bar && pctText) {
+      container.style.display = 'flex';
+      const safePct = Math.min(100, Math.max(0, Math.round(pct)));
+      bar.style.width = `${safePct}%`;
+      pctText.textContent = `${safePct}%`;
+      if (titleText && title) titleText.textContent = title;
+      if (bytesText && bytesInfo) bytesText.textContent = bytesInfo;
+
+      if (safePct >= 100) {
+        setTimeout(() => {
+          container.style.display = 'none';
+          bar.style.width = '0%';
+        }, 1200);
+      }
+    }
+  }
+
+  /**
+   * Cập nhật giao diện thẻ thiết bị kết nối
+   */
+  function updateConnectedDeviceUI(deviceInfo, method = 'cloud') {
+    const card = document.getElementById('camsyncDeviceCard');
+    const nameEl = document.getElementById('camsyncDeviceName');
+    const osEl = document.getElementById('camsyncDeviceOs');
+    const iconEl = document.getElementById('camsyncDeviceIcon');
+    const badgeEl = document.getElementById('camsyncNetBadge');
+    const statusText = document.getElementById('camsyncStatusText');
+    const statusPill = document.getElementById('camsyncStatusPill');
+    const qrContainer = document.getElementById('camsyncQrCode');
+
+    if (qrContainer) qrContainer.classList.add('connected-qr');
+    if (statusPill) statusPill.classList.add('connected');
+    if (statusText) statusText.textContent = '🟢 Điện thoại đã kết nối!';
+
+    if (card) {
+      card.style.display = 'flex';
+      const devName = deviceInfo?.name || (deviceInfo?.os?.includes('iOS') ? 'Apple iPhone' : 'Điện thoại di động');
+      if (nameEl) nameEl.textContent = devName;
+      if (osEl) osEl.textContent = deviceInfo?.os || (deviceInfo?.browser ? deviceInfo.browser : 'Kết nối sẵn sàng');
+      if (iconEl) {
+        const isApple = deviceInfo?.os?.includes('iOS') || deviceInfo?.name?.includes('iPhone') || deviceInfo?.name?.includes('iPad');
+        const isAndroid = deviceInfo?.os?.includes('Android');
+        iconEl.textContent = isApple ? '🍎' : (isAndroid ? '🤖' : '📱');
+      }
+      if (badgeEl) {
+        badgeEl.textContent = method === 'p2p' ? '⚡ P2P Trực tiếp' : '☁️ Cloud 4G/Wi-Fi';
+      }
+    }
+  }
+
+  /**
    * Lắng nghe nhận ảnh qua Supabase Cloud Relay (Hoạt động 100% trên 4G và mạng nội bộ bệnh viện)
    */
   function startCloudPolling(sessionId) {
@@ -493,8 +616,8 @@
           }
         }
 
-        // 2. Kiểm tra trạng thái điện thoại đã quét mã QR thành công chưa
-        const sRes = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=mobile_connected`, {
+        // 2. Kiểm tra thông tin thiết bị đã kết nối
+        const sRes = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=mobile_connected,mobile_device`, {
           headers: {
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${SUPABASE_KEY}`
@@ -504,12 +627,7 @@
         if (sRes.ok) {
           const sRows = await sRes.json();
           if (sRows && sRows.length > 0 && sRows[0].mobile_connected) {
-            const statusText = document.getElementById('camsyncStatusText');
-            const statusPill = document.getElementById('camsyncStatusPill');
-            if (statusText && statusPill && !statusPill.classList.contains('connected')) {
-              statusText.textContent = '🟢 Điện thoại đã kết nối!';
-              statusPill.classList.add('connected');
-            }
+            updateConnectedDeviceUI(sRows[0].mobile_device, 'cloud');
           }
         }
       } catch (err) {
@@ -629,15 +747,21 @@
               return;
             }
 
+            if (payload.type === 'DEVICE_INFO' && payload.device) {
+              updateConnectedDeviceUI(payload.device, 'p2p');
+              return;
+            }
+
             // Gói bắt đầu phiên truyền phân mảnh
             if (payload.type === 'CHUNK_START') {
               activeTransfers[payload.transferId] = {
                 chunks: new Array(payload.totalChunks),
                 totalChunks: payload.totalChunks,
+                totalBytes: payload.totalBytes || 0,
                 received: 0,
                 meta: payload.meta || {}
               };
-              if (statusText) statusText.textContent = 'Đang nhận ảnh từ ĐT (0%)...';
+              updateProgressUI(0, '0 KB', 'Đang nhận ảnh từ ĐT (0%)...');
               return;
             }
 
@@ -648,9 +772,9 @@
                 tx.chunks[payload.index] = payload.chunk;
                 tx.received++;
                 const pct = Math.round((tx.received / tx.totalChunks) * 100);
-                if (statusText && pct % 20 === 0) {
-                  statusText.textContent = `Đang nhận ảnh từ ĐT (${pct}%)...`;
-                }
+                const kbReceived = Math.round(tx.received * 16);
+                const kbTotal = Math.round(tx.totalBytes / 1024) || Math.round(tx.totalChunks * 16);
+                updateProgressUI(pct, `${kbReceived} KB / ${kbTotal} KB`, `Đang nhận ảnh (${pct}%)...`);
               }
               return;
             }
@@ -703,22 +827,41 @@
     const statusText = document.getElementById('camsyncStatusText');
     const statusPill = document.getElementById('camsyncStatusPill');
     const instruction = document.getElementById('camsyncInstruction');
+    const thumbCard = document.getElementById('camsyncThumbCard');
+    const thumbImg = document.getElementById('camsyncThumbImg');
+    const thumbName = document.getElementById('camsyncThumbName');
+    const counterBadge = document.getElementById('camsyncCounterBadge');
+    const photoCountEl = document.getElementById('camsyncPhotoCount');
 
     photoCount++;
-    if (statusText) statusText.textContent = `Đang nạp ảnh thứ ${photoCount} vào HIS...`;
+    const approxKB = Math.round((base64Image.length * 0.75) / 1024);
+    updateProgressUI(100, `${approxKB} KB`, `Đã nhận xong ảnh thứ ${photoCount}!`);
 
     // Đặt tên file chuẩn lâm sàng
     const patient = getPatientInfoFromDOM();
-    const patientPrefix = patient?.id ? `ECG_${patient.id}` : 'ECG';
-    const filename = meta.name || `${patientPrefix}_${Date.now()}.jpg`;
+    const isUltrasound = meta.specialty === 'ultrasound';
+    const prefix = isUltrasound ? (patient?.id ? `SA_${patient.id}` : 'SA') : (patient?.id ? `ECG_${patient.id}` : 'ECG');
+    const filename = meta.name || `${prefix}_${Date.now()}.jpg`;
     const file = dataURLtoFile(base64Image, filename);
 
     const success = injectFilesAndUpload([file]);
     if (success) {
-      // Giữ kết nối mở, KHÔNG đóng modal ngay để người dùng chụp liên tục nhiều ảnh
       if (statusText) statusText.textContent = `✅ Đã nạp thành công ảnh thứ ${photoCount}!`;
       if (statusPill) statusPill.classList.add('connected');
       if (instruction) instruction.textContent = 'Bạn có thể chụp tiếp ảnh khác trên điện thoại hoặc bấm "Đóng" bên dưới.';
+
+      // Cập nhật Thumbnail preview
+      if (thumbCard && thumbImg) {
+        thumbImg.src = base64Image;
+        if (thumbName) thumbName.textContent = `${filename} (${approxKB} KB)`;
+        thumbCard.style.display = 'flex';
+      }
+
+      // Cập nhật bộ đếm
+      if (counterBadge && photoCountEl) {
+        photoCountEl.textContent = photoCount;
+        counterBadge.style.display = 'inline-block';
+      }
     }
   }
 
