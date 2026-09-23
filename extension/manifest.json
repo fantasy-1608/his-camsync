@@ -33,9 +33,6 @@
   "host_permissions": [
     "https://*.vncare.vn/*",
     "http://*.vncare.vn/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*",
-    "https://*.supabase.co/*",
-    "wss://*.supabase.co/*"
+    "https://*.supabase.co/*"
   ]
 }

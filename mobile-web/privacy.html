@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chính Sách Bảo Mật - HIS CamSync</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #2563eb;
+      --green: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px 32px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 3px 10px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .updated {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    h2 {
+      font-size: 17px;
+      margin-top: 24px;
+      margin-bottom: 10px;
+      color: #60a5fa;
+      border-left: 3px solid var(--accent);
+      padding-left: 10px;
+    }
+    p, ul {
+      font-size: 14.5px;
+      color: #d1d5db;
+      margin-bottom: 14px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .highlight-box {
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 18px 0;
+    }
+    .footer {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      HIS CamSync — Privacy Policy
+      <span class="badge">Zero-Retention</span>
+    </h1>
+    <div class="updated">Cập nhật lần cuối: 24/09/2026 • Phiên bản: 1.1.0</div>
+
+    <div class="highlight-box">
+      <strong>Cam kết cốt lõi:</strong> HIS CamSync tuân thủ nghiêm ngặt nguyên tắc <strong>Zero-Retention (Không lưu trữ đám mây)</strong> và <strong>Zero-Leakage (Bảo mật lâm sàng tuyệt đối)</strong>. Dữ liệu hình ảnh cận lâm sàng chỉ truyền trực tiếp trong bộ nhớ tạm (RAM) giữa điện thoại của nhân viên y tế và máy trạm VNPT HIS của bệnh viện, tuyệt đối không lưu trữ trên ổ đĩa hay cơ sở dữ liệu bên thứ ba.
+    </div>
+
+    <h2>1. Mục đích duy nhất (Single Purpose)</h2>
+    <p>Tiện ích HIS CamSync được phát triển với mục đích duy nhất: hỗ trợ nhân viên y tế chụp ảnh dải băng Điện tâm đồ (ECG) hoặc hình ảnh siêu âm/nội soi từ điện thoại di động và đồng bộ tức thì vào phần mềm quản lý bệnh viện VNPT HIS trên máy trạm thông qua mã QR và giao thức truyền tải bảo mật.</p>
+
+    <h2>2. Dữ liệu thu thập và phương thức xử lý</h2>
+    <ul>
+      <li><strong>Dữ liệu hình ảnh y tế:</strong> Ảnh chụp dải băng điện tim hoặc hình ảnh siêu âm chỉ được xử lý tạm thời trên trình duyệt của điện thoại và máy tính. Ảnh được đóng dấu chìm định danh (Clinical Watermark) và nạp thẳng vào biểu mẫu bệnh án trên VNPT HIS. Chúng tôi <em>không lưu lại bất kỳ bản sao nào</em> trên máy chủ.</li>
+      <li><strong>Thông tin bệnh nhân (PHI):</strong> Mã bệnh nhân và họ tên chỉ được hiển thị cục bộ trên giao diện nhằm đảm bảo an toàn lâm sàng (tránh nạp nhầm bệnh án). Mã QR và URL trên điện thoại <em>hoàn toàn không chứa thông tin định danh cá nhân</em>.</li>
+      <li><strong>Dữ liệu phiên làm việc:</strong> Session ID được sinh ngẫu nhiên theo chuẩn mật mã học 128-bit entropy (crypto.getRandomValues) và tự động bị hủy ngay khi đóng modal hoặc sau 60 giây hết hạn.</li>
+    </ul>
+
+    <h2>3. Lưu trữ và Truyền tải dữ liệu</h2>
+    <ul>
+      <li><strong>Kênh truyền ưu tiên:</strong> Kết nối trực tiếp ngang hàng WebRTC P2P DataChannel trong mạng nội bộ bệnh viện (không đi qua internet).</li>
+      <li><strong>Kênh truyền dự phòng:</strong> Supabase Realtime Broadcast qua WebSockets an toàn (WSS). Dữ liệu chỉ trung chuyển trực tiếp trong bộ nhớ RAM và tự hủy ngay sau khi máy tính nhận xong. Không có thao tác ghi đĩa (Zero-Disk-Write).</li>
+    </ul>
+
+    <h2>4. Chia sẻ dữ liệu với bên thứ ba</h2>
+    <p>HIS CamSync <strong>KHÔNG</strong> bán, không cho thuê, không chia sẻ và không thương mại hóa dữ liệu người dùng hoặc dữ liệu y tế dưới bất kỳ hình thức nào. Chúng tôi không sử dụng cookies theo dõi, không tích hợp mạng quảng cáo và không dùng công cụ phân tích hành vi của bên thứ ba.</p>
+
+    <h2>5. Quyền hạn trình duyệt yêu cầu (Permissions Justification)</h2>
+    <ul>
+      <li><strong>storage:</strong> Dùng để ghi nhớ cấu hình cục bộ của nhân viên y tế (ví dụ: chế độ chuyên khoa ưa thích, cài đặt bộ lọc ảnh) trên chính máy tính đang dùng.</li>
+      <li><strong>host_permissions (*.vncare.vn, *.supabase.co):</strong> Cần thiết để tương tác với giao diện VNPT HIS tại các cơ sở y tế và kết nối kênh truyền tín hiệu WebSockets bảo mật.</li>
+    </ul>
+
+    <h2>6. Thông tin liên hệ</h2>
+    <p>Nếu bạn có bất kỳ câu hỏi nào liên quan đến chính sách bảo mật hoặc an toàn thông tin của HIS CamSync, vui lòng liên hệ:</p>
+    <ul>
+      <li><strong>Tác giả / Nhà phát triển:</strong> Huỳnh Trung Anh</li>
+      <li><strong>Dự án:</strong> HIS CamSync Project</li>
+      <li><strong>Website:</strong> <a href="https://fantasy-1608.github.io/his-camsync/" style="color: #60a5fa;">https://fantasy-1608.github.io/his-camsync/</a></li>
+      <li><strong>Kho mã nguồn:</strong> <a href="https://github.com/fantasy-1608/his-camsync" style="color: #60a5fa;">https://github.com/fantasy-1608/his-camsync</a></li>
+    </ul>
+
+    <div class="footer">
+      &copy; 2026 HIS CamSync. Tiện ích cận lâm sàng mã nguồn mở dành cho ngành y tế.
+    </div>
+  </div>
+</body>
+</html>
