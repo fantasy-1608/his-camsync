@@ -17,7 +17,7 @@
         </svg>
         <span class="brand-title">HIS CamSync</span>
       </div>
-      <span class="intranet-tag">⚡ P2P Direct</span>
+      <span class="intranet-tag">🩺 Lâm Sàng</span>
     </div>
     <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để thử kết nối lại">
       <span class="status-dot"></span>
@@ -361,7 +361,7 @@
     statusBadge.addEventListener('click', () => {
       if (!p2p.isConnected) {
         statusText.textContent = 'Đang thử lại...';
-        p2p.connectToDesktop();
+        p2p.connect();
       }
     });
 
@@ -369,7 +369,7 @@
     btnSendToHis.addEventListener('click', async () => {
       if (!p2p.isConnected) {
         btnSendText.textContent = 'Đang kết nối lại...';
-        p2p.connectToDesktop();
+        p2p.connect();
         return;
       }
 

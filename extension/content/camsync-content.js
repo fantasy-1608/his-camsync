@@ -9,6 +9,11 @@
   let currentPeer = null;
   let activeSessionId = null;
   let photoCount = 0;
+  let cloudPollTimer = null;
+  const processedTransferIds = new Set();
+
+  const SUPABASE_URL = 'https://exxynihhyvcligcysbdb.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4eHluaWhoeXZjbGlnY3lzYmRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTA3OTQsImV4cCI6MjA5NTk2Njc5NH0.xyfE9PTTYM-wyqd9-5rEeq8Ko_St26szU2NgmA_TSqQ';
 
   // URL Mobile Web Scanner cố định trên GitHub Pages (HTTPS, hoạt động 100% trên mọi mạng)
   const MOBILE_APP_URL = 'https://fantasy-1608.github.io/his-camsync';
@@ -336,6 +341,7 @@
   function openQrModal() {
     closeQrModal();
     photoCount = 0;
+    processedTransferIds.clear();
 
     // Tạo Session ID cố định cho ca bệnh này
     activeSessionId = 'his-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
@@ -350,7 +356,7 @@
         <div class="camsync-modal-header">
           <div class="camsync-modal-title">
             <span class="glyphicon glyphicon-camera" style="color: #059669;"></span>
-            <span>Chụp & Đồng Bộ Từ Điện Thoại (P2P)</span>
+            <span>Chụp & Đồng Bộ Từ Điện Thoại</span>
           </div>
           <button class="camsync-modal-close" id="camsyncCloseBtn">&times;</button>
         </div>
@@ -359,7 +365,7 @@
           
           <div id="camsyncStatusPill" class="camsync-status-pill">
             <span class="camsync-status-dot"></span>
-            <span id="camsyncStatusText">Đang khởi tạo P2P...</span>
+            <span id="camsyncStatusText">Chờ quét mã từ điện thoại...</span>
           </div>
 
           <p class="camsync-instruction" id="camsyncInstruction" style="font-size: 12px; color: #475569; margin: 8px 0; line-height: 1.4;">
@@ -393,7 +399,28 @@
       });
     }
 
-    // Bắt đầu lắng nghe P2P WebRTC qua STUN/TURN xuyên mạng 4G
+    // Đăng ký phiên trên Supabase Cloud Relay (Bảo đảm thông suốt trên 4G & máy bàn nội bộ)
+    const patient = getPatientInfoFromDOM();
+    fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        session_id: activeSessionId,
+        patient_info: patient,
+        mobile_connected: false,
+        created_at: new Date().toISOString()
+      })
+    }).catch(err => console.warn('[CamSync] Lỗi đăng ký session:', err));
+
+    // Bắt đầu lắng nghe Cloud Relay qua Polling 800ms
+    startCloudPolling(activeSessionId);
+
+    // Chạy song song WebRTC PeerJS dự phòng (khi cùng Wi-Fi)
     startReceivingImage(activeSessionId);
   }
 
@@ -401,10 +428,99 @@
     const modal = document.getElementById('camsyncModal');
     if (modal) modal.remove();
 
+    if (cloudPollTimer) {
+      clearInterval(cloudPollTimer);
+      cloudPollTimer = null;
+    }
+
+    if (activeSessionId) {
+      const sid = activeSessionId;
+      fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sid)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      }).catch(() => {});
+    }
+
     if (currentPeer) {
       currentPeer.destroy();
       currentPeer = null;
     }
+  }
+
+  /**
+   * Lắng nghe nhận ảnh qua Supabase Cloud Relay (Hoạt động 100% trên 4G và mạng nội bộ bệnh viện)
+   */
+  function startCloudPolling(sessionId) {
+    if (cloudPollTimer) clearInterval(cloudPollTimer);
+
+    let isPolling = false;
+
+    const pollTick = async () => {
+      if (isPolling || !sessionId) return;
+      isPolling = true;
+
+      try {
+        // 1. Kiểm tra ảnh mới truyền lên từ điện thoại
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/camsync_transfers?session_id=eq.${encodeURIComponent(sessionId)}&select=*&order=created_at.asc`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        });
+
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows && rows.length > 0) {
+            for (const row of rows) {
+              if (processedTransferIds.has(row.id)) continue;
+              processedTransferIds.add(row.id);
+
+              // Ngay lập tức xóa khỏi Cloud để không lưu trữ dữ liệu (Zero retention)
+              fetch(`${SUPABASE_URL}/rest/v1/camsync_transfers?id=eq.${row.id}`, {
+                method: 'DELETE',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`
+                }
+              }).catch(() => {});
+
+              // Nạp ảnh trực tiếp vào VNPT HIS
+              handleIncomingImageData(row.image_data, row.metadata || {});
+            }
+          }
+        }
+
+        // 2. Kiểm tra trạng thái điện thoại đã quét mã QR thành công chưa
+        const sRes = await fetch(`${SUPABASE_URL}/rest/v1/camsync_sessions?session_id=eq.${encodeURIComponent(sessionId)}&select=mobile_connected`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        });
+
+        if (sRes.ok) {
+          const sRows = await sRes.json();
+          if (sRows && sRows.length > 0 && sRows[0].mobile_connected) {
+            const statusText = document.getElementById('camsyncStatusText');
+            const statusPill = document.getElementById('camsyncStatusPill');
+            if (statusText && statusPill && !statusPill.classList.contains('connected')) {
+              statusText.textContent = '🟢 Điện thoại đã kết nối!';
+              statusPill.classList.add('connected');
+            }
+          }
+        }
+      } catch (err) {
+        // Bỏ qua lỗi mạng tạm thời
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    cloudPollTimer = setInterval(pollTick, 800);
+    pollTick();
   }
 
   /**
