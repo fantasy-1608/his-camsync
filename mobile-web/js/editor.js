@@ -444,7 +444,7 @@ export class ImageEditor {
 
       // Chèn Clinical Watermark trực tiếp vào điểm ảnh của outCanvas
       if (opts.watermark !== false) {
-        this.drawClinicalWatermark(outCtx, sw, sh, opts);
+        this.drawClinicalWatermark(outCtx, sw, sh, { specialty: this.specialty, ...opts });
       }
 
       outCanvas.toBlob((blob) => {
@@ -497,7 +497,7 @@ export function drawClinicalWatermark(ctx, width, height, options = {}) {
   // 2. Tính toán kích thước font chữ co giãn động theo độ phân giải (clamped 10px - 18px)
   const fontSize = Math.max(10, Math.min(18, Math.round(width / 65)));
   ctx.save();
-  ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
   ctx.textBaseline = 'middle';
 
   let textMetrics = ctx.measureText(watermarkText);
@@ -527,33 +527,14 @@ export function drawClinicalWatermark(ctx, width, height, options = {}) {
     pillX = Math.max(0, width - pillWidth);
   }
 
-  // 3. Vẽ hộp capsule nền tương phản (semi-transparent slate)
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.80)';
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = 1;
-
-  // Vẽ hình chữ nhật bo góc (Pill)
-  const radius = 4;
-  ctx.beginPath();
-  ctx.moveTo(pillX + radius, pillY);
-  ctx.lineTo(pillX + pillWidth - radius, pillY);
-  ctx.quadraticCurveTo(pillX + pillWidth, pillY, pillX + pillWidth, pillY + radius);
-  ctx.lineTo(pillX + pillWidth, pillY + pillHeight - radius);
-  ctx.quadraticCurveTo(pillX + pillWidth, pillY + pillHeight, pillX + pillWidth - radius, pillY + pillHeight);
-  ctx.lineTo(pillX + radius, pillY + pillHeight);
-  ctx.quadraticCurveTo(pillX, pillY + pillHeight, pillX, pillY + pillHeight - radius);
-  ctx.lineTo(pillX, pillY + radius);
-  ctx.quadraticCurveTo(pillX, pillY, pillX + radius, pillY);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // 4. Vẽ chữ watermark sắc nét có đổ bóng
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-  ctx.shadowBlur = 2;
+  // 3. Vẽ chữ watermark lâm sàng: KHÔNG CÓ KHUNG NỀN (Zero-Background), độ trong suốt 75% (opacity 25%)
+  // Giữ nguyên dải sóng ECG và vạch kẻ phía sau nhìn xuyên qua 100% không bị che khuất
+  const isUltrasound = opts.specialty === 'ultrasound';
+  ctx.fillStyle = isUltrasound ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.25)';
+  ctx.shadowColor = isUltrasound ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.35)';
+  ctx.shadowBlur = 1;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 1;
-  ctx.fillStyle = '#F8FAFC';
   ctx.fillText(displayText, pillX + paddingX, pillY + pillHeight / 2);
 
   ctx.restore();
