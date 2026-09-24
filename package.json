@@ -1,12 +1,13 @@
 {
   "name": "his-camsync",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Zero-install mobile document scanner & instant WebRTC sync tool for hospital HIS (ECG, Endoscopy, Ultrasound)",
   "main": "server/server.js",
   "type": "module",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "node server/server.js"
+    "dev": "node server/server.js",
+    "test": "node tests/run_all_hardening_tiers.js"
   },
   "keywords": [
     "vnpt-his",

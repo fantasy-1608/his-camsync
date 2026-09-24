@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src wss://*.supabase.co https://*.supabase.co wss://*.peerjs.com https://*.peerjs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -653,7 +654,7 @@
 
         // Rào chắn xác thực kết quả: chỉ báo thành công khi res.success === true
         if (!res || !res.success) {
-          throw new Error(res?.error || 'Không nhận được xác nhận từ máy tính HIS');
+          throw new Error(res?.reason || res?.error || 'Không nhận được xác nhận từ máy tính HIS');
         }
 
         // Phản hồi rung haptic
@@ -703,6 +704,10 @@
     }
 
     document.getElementById('btnDismissError')?.addEventListener('click', hideErrorBanner);
+
+    window.addEventListener('beforeunload', () => {
+      try { p2p.destroy(); } catch (e) {}
+    });
   </script>
 </body>
 </html>

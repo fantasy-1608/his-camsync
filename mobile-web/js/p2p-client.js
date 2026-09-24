@@ -9,6 +9,8 @@ const SUPABASE_URL = 'https://rmbbqtuzkyxovmskhfgj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYmJxdHV6a3l4b3Ztc2toZmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjI0NDYsImV4cCI6MjEwNTczODQ0Nn0.3RX5PEcKxOI59mgBYzybHAAooeo0hyOJQa035herjh0';
 const CHUNK_SIZE = 16384; // 16KB WebRTC chunk
 const REALTIME_CHUNK_SIZE = 64 * 1024; // 64KB Realtime broadcast chunk
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB giới hạn tối đa ảnh lâm sàng (P0-5)
+export const MAX_TOTAL_CHUNKS = 2000;            // Giới hạn tối đa số gói tin (P0-5)
 
 /**
  * Sinh chuỗi ngẫu nhiên mật mã học 128-bit entropy (32 ký tự hex)
@@ -27,9 +29,92 @@ export function generateSecureToken() {
   return hex;
 }
 
+/**
+ * Import khóa AES-GCM 256-bit từ chuỗi hex
+ */
+export async function importAesGcmKey(hexKey) {
+  if (!hexKey || typeof crypto === 'undefined' || !crypto.subtle) return null;
+  try {
+    const rawBytes = new Uint8Array(hexKey.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    return await crypto.subtle.importKey(
+      'raw',
+      rawBytes,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  } catch (e) {
+    console.warn('[CamSync Crypto] Lỗi import khóa AES-GCM:', e);
+    return null;
+  }
+}
+
+export function uint8ToBase64(bytes) {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64');
+  }
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function base64ToUint8(base64) {
+  if (typeof Buffer !== 'undefined') {
+    return new Uint8Array(Buffer.from(base64, 'base64'));
+  }
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Mã hóa payload ảnh bằng WebCrypto AES-GCM 256-bit (Zero-Knowledge)
+ */
+export async function encryptAesGcmPayload(cryptoKey, plaintext) {
+  if (!cryptoKey || typeof crypto === 'undefined' || !crypto.subtle) {
+    return { encrypted: false, data: plaintext, iv: null };
+  }
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+
+  let plaintextBytes;
+  if (typeof TextEncoder !== 'undefined') {
+    plaintextBytes = new TextEncoder().encode(plaintext);
+  } else if (typeof Buffer !== 'undefined') {
+    plaintextBytes = Buffer.from(plaintext, 'utf-8');
+  } else {
+    plaintextBytes = new Uint8Array(plaintext.length);
+    for (let i = 0; i < plaintext.length; i++) {
+      plaintextBytes[i] = plaintext.charCodeAt(i);
+    }
+  }
+
+  const ciphertextBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    plaintextBytes
+  );
+
+  return {
+    encrypted: true,
+    data: uint8ToBase64(new Uint8Array(ciphertextBuf)),
+    iv: uint8ToBase64(iv)
+  };
+}
+
 export class P2PClient {
   constructor(options = {}) {
     this.sessionId = options.sessionId || this.getSessionIdFromUrl();
+    this.encryptionKeyHex = options.encryptionKeyHex || this.getEncryptionKeyFromUrl();
+    this.cryptoKey = null;
+
     this.peer = null;
     this.conn = null;
     this.isConnected = false;
@@ -40,6 +125,12 @@ export class P2PClient {
     this.realtimeHeartbeatTimer = null;
     this.realtimeRefCounter = 0;
     this.p2pRetryTimer = null;
+
+    // Resiliency & Backoff Reconnect (Phase 5: P1-2)
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectTimer = null;
+    this.isSessionIntentionallyClosed = false;
 
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onPatientInfo = options.onPatientInfo || (() => {});
@@ -60,6 +151,37 @@ export class P2PClient {
       }
     }
     return generateSecureToken();
+  }
+
+  getEncryptionKeyFromUrl() {
+    let key = null;
+    if (typeof window !== 'undefined') {
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        key = hashParams.get('key');
+      }
+      if (!key && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        key = params.get('key');
+      }
+      // Scrub key from URL immediately so it never leaks into browser history or logs
+      if (key && window.history && typeof window.history.replaceState === 'function') {
+        try {
+          const cleanHash = this.sessionId ? `#session=${this.sessionId}` : '';
+          window.history.replaceState(null, '', window.location.pathname + cleanHash);
+        } catch (e) {}
+      }
+    }
+    return key;
+  }
+
+  async initCrypto(customKeyHex) {
+    const keyHex = customKeyHex || this.encryptionKeyHex;
+    if (keyHex) {
+      this.encryptionKeyHex = keyHex;
+      this.cryptoKey = await importAesGcmKey(keyHex);
+    }
+    return this.cryptoKey;
   }
 
   /**
@@ -103,6 +225,8 @@ export class P2PClient {
    * Khởi động đồng thời cả 2 kênh: Supabase Realtime Broadcast & WebRTC P2P (Wi-Fi)
    */
   async connect() {
+    this.isSessionIntentionallyClosed = false;
+    await this.initCrypto();
     console.log('[CamSync] Khởi tạo kết nối cho phiên:', this.sessionId);
 
     // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
@@ -131,6 +255,12 @@ export class P2PClient {
 
       this.realtimeWs.onopen = () => {
         console.log('[Realtime] WebSocket đã kết nối, gia nhập topic:', topic);
+        this.reconnectAttempts = 0;
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+
         // Gửi phx_join vào channel
         this.realtimeWs.send(JSON.stringify({
           topic,
@@ -181,12 +311,25 @@ export class P2PClient {
           if (subEvent === 'transfer_ack') {
             if (this.onTransferAck) this.onTransferAck(subPayload);
           } else if (subEvent === 'patient_info' && subPayload?.patient) {
-            this.patientInfo = subPayload.patient;
-            this.onPatientInfo(subPayload.patient);
+            this.patientInfo = {
+              ...subPayload.patient,
+              orderId: subPayload.orderId || subPayload.encounter?.orderId || null,
+              fingerprint: subPayload.fingerprint || null
+            };
+            this.onPatientInfo(this.patientInfo);
           } else if (subEvent === 'session_closed') {
+            this.isSessionIntentionallyClosed = true;
+            if (this.reconnectTimer) {
+              clearTimeout(this.reconnectTimer);
+              this.reconnectTimer = null;
+            }
             this.isCloudReady = false;
+            const isContextChanged = subPayload?.reason === 'clinical_context_changed';
+            const msg = isContextChanged ?
+              '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
+              'Máy bàn đã đóng phiên';
             if (!this.conn || !this.conn.open) {
-              this.updateStatus(false, 'Máy bàn đã đóng phiên');
+              this.updateStatus(false, msg);
             }
           }
         } catch (err) {
@@ -201,7 +344,16 @@ export class P2PClient {
           this.realtimeHeartbeatTimer = null;
         }
         this.isCloudReady = false;
-        if (!this.conn || !this.conn.open) {
+
+        if (!this.isSessionIntentionallyClosed && this.sessionId && this.reconnectAttempts < this.maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 8000);
+          console.log(`[Realtime] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          this.updateStatus(false, `Đang kết nối lại máy bàn... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectAttempts++;
+            this.initRealtimeBroadcast();
+          }, delay);
+        } else if (!this.conn || !this.conn.open) {
           this.updateStatus(false, 'Mất kết nối máy bàn');
         }
       };
@@ -236,6 +388,10 @@ export class P2PClient {
   }
 
   closeRealtime() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.realtimeHeartbeatTimer) {
       clearInterval(this.realtimeHeartbeatTimer);
       this.realtimeHeartbeatTimer = null;
@@ -318,10 +474,20 @@ export class P2PClient {
     this.conn.on('data', (data) => {
       if (!data) return;
       if (data.type === 'PATIENT_INFO' && data.patient) {
-        this.patientInfo = data.patient;
-        this.onPatientInfo(data.patient);
+        this.patientInfo = {
+          ...data.patient,
+          orderId: data.orderId || data.encounter?.orderId || null,
+          fingerprint: data.fingerprint || null
+        };
+        this.onPatientInfo(this.patientInfo);
       } else if (data.type === 'TRANSFER_ACK') {
         if (this.onTransferAck) this.onTransferAck(data);
+      } else if (data.type === 'SESSION_CLOSED') {
+        const isContextChanged = data.reason === 'clinical_context_changed';
+        const msg = isContextChanged ?
+          '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
+          'Máy bàn đã đóng phiên';
+        this.updateStatus(false, msg);
       }
     });
 
@@ -348,6 +514,11 @@ export class P2PClient {
    * Gửi ảnh sang máy tính bàn (Tự động chọn WebRTC hoặc Cloud Relay)
    */
   async sendImage(blob, metadata = {}, onProgress = null) {
+    if (blob && blob.size > MAX_IMAGE_BYTES) {
+      const mb = (blob.size / (1024 * 1024)).toFixed(1);
+      throw new Error(`Kích thước ảnh (${mb}MB) vượt quá giới hạn an toàn 15MB`);
+    }
+
     // 1. Nếu WebRTC DataChannel đang thông suốt (Wi-Fi), gửi P2P siêu tốc
     if (this.conn && this.conn.open) {
       try {
@@ -390,8 +561,29 @@ export class P2PClient {
     const transferId = generateSecureToken();
     const filename = metadata.name || `ECG_${Date.now()}.jpg`;
 
+    let payloadToSend = rawBase64;
+    let isEncrypted = false;
+    let encryptionIv = null;
+
+    if (this.cryptoKey) {
+      try {
+        const encResult = await encryptAesGcmPayload(this.cryptoKey, rawBase64);
+        if (encResult.encrypted) {
+          payloadToSend = encResult.data;
+          isEncrypted = true;
+          encryptionIv = encResult.iv;
+        }
+      } catch (err) {
+        console.warn('[CamSync Mobile] Lỗi mã hóa E2EE Cloud Relay:', err);
+      }
+    }
+
     const CHUNK_CHARS = 64 * 1024; // 64KB chunk
-    const totalChunks = Math.ceil(rawBase64.length / CHUNK_CHARS);
+    const totalChunks = Math.ceil(payloadToSend.length / CHUNK_CHARS);
+
+    if (totalChunks > MAX_TOTAL_CHUNKS) {
+      throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
+    }
 
     // Đảm bảo kênh Realtime đã sẵn sàng
     if (!this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
@@ -406,10 +598,17 @@ export class P2PClient {
       totalSize: totalBytes,
       mimeType,
       filename,
+      encrypted: isEncrypted,
+      iv: encryptionIv,
       meta: {
         ...metadata,
         sessionId: this.sessionId,
+        patientId: this.patientInfo?.id || null,
+        orderId: this.patientInfo?.orderId || null,
+        fingerprint: this.patientInfo?.fingerprint || null,
         device: this.getDeviceMetadata(),
+        encrypted: isEncrypted,
+        iv: encryptionIv,
         timestamp: Date.now()
       }
     });
@@ -418,11 +617,13 @@ export class P2PClient {
 
     // 2. Gửi từng chunk_data
     for (let i = 0; i < totalChunks; i++) {
-      const chunk = rawBase64.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
+      const chunk = payloadToSend.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
       this.broadcast('chunk_data', {
         transferId,
         chunkIndex: i,
-        data: chunk
+        data: chunk,
+        encrypted: isEncrypted,
+        iv: encryptionIv
       });
 
       if (typeof onProgress === 'function') {
@@ -457,11 +658,12 @@ export class P2PClient {
         if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
           clearTimeout(ackTimeout);
           this.onTransferAck = null;
-          if (ackData && ackData.status === 'error') {
+          if (ackData && (ackData.status === 'error' || ackData.success === false)) {
             resolve({
               success: false,
               method: 'realtime_broadcast',
-              error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              reason: ackData.reason || null,
               ack: ackData
             });
           } else {
@@ -488,19 +690,47 @@ export class P2PClient {
       reader.readAsDataURL(blob);
     });
 
-    const totalLength = base64Data.length;
+    let payloadToSend = base64Data;
+    let isEncrypted = false;
+    let encryptionIv = null;
+
+    if (this.cryptoKey) {
+      try {
+        const encResult = await encryptAesGcmPayload(this.cryptoKey, base64Data);
+        if (encResult.encrypted) {
+          payloadToSend = encResult.data;
+          isEncrypted = true;
+          encryptionIv = encResult.iv;
+        }
+      } catch (err) {
+        console.warn('[CamSync Mobile] Lỗi mã hóa WebRTC E2EE:', err);
+      }
+    }
+
+    const totalLength = payloadToSend.length;
     const totalChunks = Math.ceil(totalLength / CHUNK_SIZE);
     const transferId = generateSecureToken();
+
+    if (totalChunks > MAX_TOTAL_CHUNKS) {
+      throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
+    }
 
     this.conn.send({
       type: 'CHUNK_START',
       transferId,
       totalChunks,
       totalBytes: totalLength,
+      encrypted: isEncrypted,
+      iv: encryptionIv,
       meta: {
         ...metadata,
         sessionId: this.sessionId,
+        patientId: this.patientInfo?.id || null,
+        orderId: this.patientInfo?.orderId || null,
+        fingerprint: this.patientInfo?.fingerprint || null,
         device: this.getDeviceMetadata(),
+        encrypted: isEncrypted,
+        iv: encryptionIv,
         timestamp: Date.now()
       }
     });
@@ -510,12 +740,14 @@ export class P2PClient {
         throw new Error('Kết nối WebRTC bị gián đoạn');
       }
 
-      const chunk = base64Data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const chunk = payloadToSend.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
       this.conn.send({
         type: 'CHUNK_DATA',
         transferId,
         index: i,
-        chunk
+        chunk,
+        encrypted: isEncrypted,
+        iv: encryptionIv
       });
 
       if (typeof onProgress === 'function') {
@@ -547,11 +779,12 @@ export class P2PClient {
       this.onTransferAck = (ackData) => {
         clearTimeout(ackTimeout);
         this.onTransferAck = null;
-        if (ackData && ackData.status === 'error') {
+        if (ackData && (ackData.status === 'error' || ackData.success === false)) {
           resolve({
             success: false,
             method: 'webrtc_chunked',
-            error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+            error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+            reason: ackData.reason || null,
             ack: ackData
           });
         } else {
@@ -566,13 +799,20 @@ export class P2PClient {
   }
 
   destroy() {
+    this.isSessionIntentionallyClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.closeRealtime();
     if (this.p2pRetryTimer) clearTimeout(this.p2pRetryTimer);
     if (this.conn) {
       try { this.conn.close(); } catch (e) {}
+      this.conn = null;
     }
     if (this.peer) {
       try { this.peer.destroy(); } catch (e) {}
+      this.peer = null;
     }
   }
 }

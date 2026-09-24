@@ -282,11 +282,26 @@ function createContentScriptEnvironment(options = {}) {
     window: {
       location: { href: 'http://his.local/diagnostics' },
       addEventListener: () => {},
-      crypto: {
-        getRandomValues: (buf) => crypto.randomFillSync(buf)
+      crypto: globalThis.crypto,
+      WebSocket: MockWebSocket,
+      sessionStorage: {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+        clear: () => {}
       },
-      WebSocket: MockWebSocket
+      confirm: () => true
     },
+    sessionStorage: {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {}
+    },
+    confirm: () => true,
+    crypto: globalThis.crypto,
+    TextDecoder: globalThis.TextDecoder,
+    TextEncoder: globalThis.TextEncoder,
     WebSocket: MockWebSocket,
     navigator: { userAgent: 'Chrome/120.0', vibrate: () => {} },
     console: {
@@ -344,6 +359,10 @@ function createContentScriptEnvironment(options = {}) {
     Blob
   };
 
+  const cryptoCode = fs.readFileSync(path.join(rootDir, 'extension/content/crypto-utils.js'), 'utf8');
+  const auditCode = fs.readFileSync(path.join(rootDir, 'extension/content/audit-logger.js'), 'utf8');
+  const clinicalCode = fs.readFileSync(path.join(rootDir, 'extension/content/clinical-guard.js'), 'utf8');
+  const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Inject hooks to directly inspect internal variables for empirical testing
   code = code.replace(
@@ -360,6 +379,10 @@ function createContentScriptEnvironment(options = {}) {
   );
 
   vm.createContext(sandbox);
+  vm.runInContext(cryptoCode, sandbox);
+  vm.runInContext(auditCode, sandbox);
+  vm.runInContext(clinicalCode, sandbox);
+  vm.runInContext(transferCode, sandbox);
   vm.runInContext(code, sandbox);
 
   return {
@@ -1257,9 +1280,10 @@ async function runAdversarialSuite() {
     const expectedMobileUrl = `https://fantasy-1608.github.io/his-camsync/mobile-web/#session=${sessionId}`;
 
     // Verify absence of PHI in URL
-    const hasName = expectedMobileUrl.includes('NGUYEN') || expectedMobileUrl.includes('PHI');
-    const hasId = expectedMobileUrl.includes('99999');
-    const hasAge = expectedMobileUrl.includes('55');
+    const parsedUrl = new URL(expectedMobileUrl);
+    const hasName = parsedUrl.searchParams.has('name') || expectedMobileUrl.includes('NGUYEN') || expectedMobileUrl.includes('VAN');
+    const hasId = parsedUrl.searchParams.has('id') || expectedMobileUrl.includes('99999');
+    const hasAge = parsedUrl.searchParams.has('age') || parsedUrl.searchParams.has('tuoi');
     const hasSessionHash = expectedMobileUrl.includes(`#session=${sessionId}`);
 
     const passed = !hasName && !hasId && !hasAge && hasSessionHash && sessionId.length === 32;
