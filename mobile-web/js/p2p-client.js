@@ -9,27 +9,208 @@ const SUPABASE_URL = 'https://rmbbqtuzkyxovmskhfgj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtYmJxdHV6a3l4b3Ztc2toZmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNjI0NDYsImV4cCI6MjEwNTczODQ0Nn0.3RX5PEcKxOI59mgBYzybHAAooeo0hyOJQa035herjh0';
 const CHUNK_SIZE = 16384; // 16KB WebRTC chunk
 const REALTIME_CHUNK_SIZE = 64 * 1024; // 64KB Realtime broadcast chunk
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB giới hạn tối đa ảnh lâm sàng (P0-5)
+export const MAX_TOTAL_CHUNKS = 2000;            // Giới hạn tối đa số gói tin (P0-5)
 
 /**
  * Sinh chuỗi ngẫu nhiên mật mã học 128-bit entropy (32 ký tự hex)
+ * BẮT BUỘC dùng CSPRNG WebCrypto; FAIL-CLOSED nếu không có.
  * @returns {string} 32-character hex string
  */
 export function generateSecureToken() {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    throw new Error('CSPRNG_UNAVAILABLE: WebCrypto cryptographic randomness is required');
   }
-  let hex = '';
-  for (let i = 0; i < 32; i++) {
-    hex += Math.floor(Math.random() * 16).toString(16);
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Import khóa AES-GCM 256-bit từ chuỗi hex hoặc Base64
+ */
+export async function importAesGcmKey(hexKey) {
+  if (!hexKey || typeof crypto === 'undefined' || !crypto.subtle) return null;
+  try {
+    const rawBytes = new Uint8Array(hexKey.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    return await crypto.subtle.importKey(
+      'raw',
+      rawBytes,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  } catch (e) {
+    console.warn('[CamSync Crypto] Lỗi import khóa AES-GCM:', e);
+    return null;
   }
-  return hex;
+}
+
+export function uint8ToBase64(bytes) {
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(bytes)) {
+    return bytes.toString('base64');
+  }
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function base64ToUint8(base64) {
+  let standard = base64.replace(/-/g, '+').replace(/_/g, '/');
+  while (standard.length % 4 !== 0) {
+    standard += '=';
+  }
+  if (typeof Buffer !== 'undefined') {
+    return new Uint8Array(Buffer.from(standard, 'base64'));
+  }
+  const binary = atob(standard);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Chuẩn hóa và serialize metadata header thành AAD bytes (Deterministic Canonical Serialization)
+ * Ràng buộc: v, sid, transferId, contentType
+ * @param {object|string|Uint8Array} header
+ * @returns {Uint8Array}
+ */
+export function canonicalSerializeAad(header) {
+  if (!header) return new Uint8Array(0);
+  if (header instanceof Uint8Array) return header;
+  if (typeof header === 'string') return new TextEncoder().encode(header);
+  if (typeof header !== 'object') return new Uint8Array(0);
+
+  const v = Number(header.v !== undefined ? header.v : 2);
+  const sid = String(header.sid || header.sessionId || '');
+  const transferId = String(header.transferId || '');
+  const contentType = String(header.contentType || header.mimeType || 'image/jpeg');
+
+  const canonical = `v=${v}&sid=${sid}&transferId=${transferId}&contentType=${contentType}`;
+  return new TextEncoder().encode(canonical);
+}
+
+/**
+ * Mã hóa payload bằng WebCrypto AES-GCM 256-bit với Nonce 96-bit & AAD (Zero-Knowledge)
+ */
+export async function encryptAesGcmPayload(cryptoKey, plaintext, aadHeader = null) {
+  if (!cryptoKey || typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('E2EE_KEY_REQUIRED: Plaintext fallback prohibited');
+  }
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    throw new Error('CSPRNG_UNAVAILABLE: WebCrypto cryptographic randomness is required');
+  }
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+
+  let plaintextBytes;
+  if (typeof TextEncoder !== 'undefined') {
+    plaintextBytes = new TextEncoder().encode(plaintext);
+  } else if (typeof Buffer !== 'undefined') {
+    plaintextBytes = Buffer.from(plaintext, 'utf-8');
+  } else {
+    plaintextBytes = new Uint8Array(plaintext.length);
+    for (let i = 0; i < plaintext.length; i++) {
+      plaintextBytes[i] = plaintext.charCodeAt(i);
+    }
+  }
+
+  const algorithm = {
+    name: 'AES-GCM',
+    iv,
+    tagLength: 128
+  };
+
+  if (aadHeader) {
+    const aadBytes = canonicalSerializeAad(aadHeader);
+    if (aadBytes && aadBytes.byteLength > 0) {
+      algorithm.additionalData = aadBytes;
+    }
+  }
+
+  const ciphertextBuf = await crypto.subtle.encrypt(
+    algorithm,
+    cryptoKey,
+    plaintextBytes
+  );
+
+  return {
+    encrypted: true,
+    data: uint8ToBase64(new Uint8Array(ciphertextBuf)),
+    iv: uint8ToBase64(iv)
+  };
+}
+
+/**
+ * Giải mã payload bằng WebCrypto AES-GCM 256-bit với AAD (Zero-Knowledge)
+ */
+export async function decryptAesGcmPayload(cryptoKey, ivB64, ciphertextB64, aadHeader = null) {
+  if (!cryptoKey || !ivB64 || !ciphertextB64) {
+    const err = new Error('Thiếu tham số giải mã');
+    err.code = 'DECRYPTION_FAILED';
+    throw err;
+  }
+
+  try {
+    const iv = base64ToUint8(ivB64);
+    const ciphertext = base64ToUint8(ciphertextB64);
+
+    if (iv.byteLength !== 12) {
+      const err = new Error(`INVALID_IV_LENGTH: Expected 12 bytes, got ${iv.byteLength}`);
+      err.code = 'DECRYPTION_FAILED';
+      throw err;
+    }
+
+    const algorithm = {
+      name: 'AES-GCM',
+      iv,
+      tagLength: 128
+    };
+
+    if (aadHeader) {
+      const aadBytes = canonicalSerializeAad(aadHeader);
+      if (aadBytes && aadBytes.byteLength > 0) {
+        algorithm.additionalData = aadBytes;
+      }
+    }
+
+    const decryptedBuf = await crypto.subtle.decrypt(algorithm, cryptoKey, ciphertext);
+    if (typeof TextDecoder !== 'undefined') {
+      return new TextDecoder().decode(decryptedBuf);
+    }
+    return Buffer.from(decryptedBuf).toString('utf-8');
+  } catch (e) {
+    const err = new Error(e.message || 'Decryption failed');
+    err.code = 'DECRYPTION_FAILED';
+    err.cause = e;
+    throw err;
+  }
 }
 
 export class P2PClient {
   constructor(options = {}) {
     this.sessionId = options.sessionId || this.getSessionIdFromUrl();
+    this.generation = typeof options.generation === 'number' ? options.generation : this.getGenerationFromUrl();
+    const optKey = options.cryptoKey || options.encryptionKeyHex;
+    if (optKey) {
+      if (typeof optKey === 'string') {
+        this.encryptionKeyHex = optKey;
+        this.cryptoKey = null;
+      } else {
+        this.cryptoKey = optKey;
+        this.encryptionKeyHex = null;
+      }
+    } else {
+      this.encryptionKeyHex = this.getEncryptionKeyFromUrl();
+      this.cryptoKey = null;
+    }
+
     this.peer = null;
     this.conn = null;
     this.isConnected = false;
@@ -41,9 +222,40 @@ export class P2PClient {
     this.realtimeRefCounter = 0;
     this.p2pRetryTimer = null;
 
+    // Resiliency & Backoff Reconnect (Phase 5: P1-2)
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectTimer = null;
+    this.isSessionIntentionallyClosed = false;
+
+    // Architectural Status: P1-03 Channel Privacy Boundary
+    this.channelStatus = 'PRIVATE_CHANNEL_PENDING';
+
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onPatientInfo = options.onPatientInfo || (() => {});
     this.onTransferAck = null;
+  }
+
+  getGenerationFromUrl() {
+    if (typeof window !== 'undefined') {
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const genVal = hashParams.get('gen');
+        if (genVal !== null && genVal !== '') {
+          const parsed = parseInt(genVal, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+      if (window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        const genVal = params.get('gen');
+        if (genVal !== null && genVal !== '') {
+          const parsed = parseInt(genVal, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+    }
+    return undefined;
   }
 
   getSessionIdFromUrl() {
@@ -60,6 +272,40 @@ export class P2PClient {
       }
     }
     return generateSecureToken();
+  }
+
+  getEncryptionKeyFromUrl() {
+    let key = null;
+    if (typeof window !== 'undefined') {
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        key = hashParams.get('key');
+      }
+      if (!key && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        key = params.get('key');
+      }
+      // Scrub key from URL immediately so it never leaks into browser history or logs
+      if (key && window.history && typeof window.history.replaceState === 'function') {
+        try {
+          const cleanHash = this.sessionId ? `#session=${this.sessionId}` : '';
+          window.history.replaceState(null, '', window.location.pathname + cleanHash);
+        } catch (e) {}
+      }
+    }
+    return key;
+  }
+
+  async initCrypto(customKeyHex) {
+    if (this.cryptoKey && !customKeyHex) {
+      return this.cryptoKey;
+    }
+    const keyHex = customKeyHex || this.encryptionKeyHex;
+    if (keyHex) {
+      this.encryptionKeyHex = keyHex;
+      this.cryptoKey = await importAesGcmKey(keyHex);
+    }
+    return this.cryptoKey;
   }
 
   /**
@@ -103,6 +349,8 @@ export class P2PClient {
    * Khởi động đồng thời cả 2 kênh: Supabase Realtime Broadcast & WebRTC P2P (Wi-Fi)
    */
   async connect() {
+    this.isSessionIntentionallyClosed = false;
+    await this.initCrypto();
     console.log('[CamSync] Khởi tạo kết nối cho phiên:', this.sessionId);
 
     // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
@@ -131,6 +379,12 @@ export class P2PClient {
 
       this.realtimeWs.onopen = () => {
         console.log('[Realtime] WebSocket đã kết nối, gia nhập topic:', topic);
+        this.reconnectAttempts = 0;
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+
         // Gửi phx_join vào channel
         this.realtimeWs.send(JSON.stringify({
           topic,
@@ -164,7 +418,7 @@ export class P2PClient {
         this.broadcast('patient_req', {});
       };
 
-      this.realtimeWs.onmessage = (e) => {
+      this.realtimeWs.onmessage = async (e) => {
         try {
           const msg = JSON.parse(e.data);
           let subEvent = null;
@@ -180,13 +434,64 @@ export class P2PClient {
 
           if (subEvent === 'transfer_ack') {
             if (this.onTransferAck) this.onTransferAck(subPayload);
-          } else if (subEvent === 'patient_info' && subPayload?.patient) {
-            this.patientInfo = subPayload.patient;
-            this.onPatientInfo(subPayload.patient);
+          } else if (subEvent === 'patient_info') {
+            let patientObj = null;
+            let orderId = null;
+            let fingerprint = null;
+
+            if (subPayload?.encrypted === true && (subPayload?.data || subPayload?.ciphertext) && subPayload?.iv) {
+              try {
+                if (!this.cryptoKey && this.encryptionKeyHex) {
+                  this.cryptoKey = await importAesGcmKey(this.encryptionKeyHex);
+                }
+                if (this.cryptoKey) {
+                  const sid = subPayload.sid || subPayload.sessionId || this.sessionId;
+                  const aadHeader = { v: subPayload.v || 2, sid, contentType: 'application/json' };
+                  const ciphertext = subPayload.data || subPayload.ciphertext;
+                  const decryptedStr = await decryptAesGcmPayload(this.cryptoKey, subPayload.iv, ciphertext, aadHeader);
+                  const parsed = JSON.parse(decryptedStr);
+                  patientObj = parsed.patient;
+                  orderId = parsed.encounter?.orderId || parsed.orderId;
+                  fingerprint = parsed.fingerprint;
+                }
+              } catch (e) {
+                console.warn('[CamSync] Lỗi giải mã patient_info:', e);
+              }
+            } else if (subPayload?.patient) {
+              console.warn('[CamSync] Bỏ qua gói patient_info không được mã hóa E2EE từ Cloud Relay');
+            }
+
+            if (patientObj) {
+              if (typeof subPayload.generation === 'number') {
+                this.generation = subPayload.generation;
+              }
+              if (subPayload.sessionId || subPayload.sid) {
+                this.sessionId = subPayload.sessionId || subPayload.sid;
+              }
+              this.patientInfo = {
+                ...patientObj,
+                orderId: orderId || null,
+                fingerprint: fingerprint || null
+              };
+              this.onPatientInfo(this.patientInfo);
+            }
           } else if (subEvent === 'session_closed') {
+            this.isSessionIntentionallyClosed = true;
+            if (this.reconnectTimer) {
+              clearTimeout(this.reconnectTimer);
+              this.reconnectTimer = null;
+            }
             this.isCloudReady = false;
+            const isExpired = subPayload?.reason === 'session_expired';
+            const isContextChanged = subPayload?.reason === 'clinical_context_changed';
+            let msg = 'Máy bàn đã đóng phiên';
+            if (isExpired) {
+              msg = '⏰ Phiên chụp đã hết hạn (5 phút). Vui lòng quét lại mã QR trên máy tính.';
+            } else if (isContextChanged) {
+              msg = subPayload?.message || '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.';
+            }
             if (!this.conn || !this.conn.open) {
-              this.updateStatus(false, 'Máy bàn đã đóng phiên');
+              this.updateStatus(false, msg);
             }
           }
         } catch (err) {
@@ -201,7 +506,16 @@ export class P2PClient {
           this.realtimeHeartbeatTimer = null;
         }
         this.isCloudReady = false;
-        if (!this.conn || !this.conn.open) {
+
+        if (!this.isSessionIntentionallyClosed && this.sessionId && this.reconnectAttempts < this.maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 8000);
+          console.log(`[Realtime] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          this.updateStatus(false, `Đang kết nối lại máy bàn... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectAttempts++;
+            this.initRealtimeBroadcast();
+          }, delay);
+        } else if (!this.conn || !this.conn.open) {
           this.updateStatus(false, 'Mất kết nối máy bàn');
         }
       };
@@ -236,6 +550,10 @@ export class P2PClient {
   }
 
   closeRealtime() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.realtimeHeartbeatTimer) {
       clearInterval(this.realtimeHeartbeatTimer);
       this.realtimeHeartbeatTimer = null;
@@ -315,13 +633,57 @@ export class P2PClient {
       } catch (e) {}
     });
 
-    this.conn.on('data', (data) => {
+    this.conn.on('data', async (data) => {
       if (!data) return;
-      if (data.type === 'PATIENT_INFO' && data.patient) {
-        this.patientInfo = data.patient;
-        this.onPatientInfo(data.patient);
+      if (data.type === 'PATIENT_INFO') {
+        let patientObj = null;
+        let orderId = null;
+        let fingerprint = null;
+
+        if (data.encrypted === true && (data.data || data.ciphertext) && data.iv) {
+          try {
+            if (!this.cryptoKey && this.encryptionKeyHex) {
+              this.cryptoKey = await importAesGcmKey(this.encryptionKeyHex);
+            }
+            if (this.cryptoKey) {
+              const sid = data.sid || data.sessionId || this.sessionId;
+              const aadHeader = { v: data.v || 2, sid, contentType: 'application/json' };
+              const ciphertext = data.data || data.ciphertext;
+              const decryptedStr = await decryptAesGcmPayload(this.cryptoKey, data.iv, ciphertext, aadHeader);
+              const parsed = JSON.parse(decryptedStr);
+              patientObj = parsed.patient;
+              orderId = parsed.encounter?.orderId || parsed.orderId;
+              fingerprint = parsed.fingerprint;
+            }
+          } catch (e) {
+            console.warn('[CamSync P2P] Lỗi giải mã PATIENT_INFO:', e);
+          }
+        } else if (data.patient) {
+          console.warn('[CamSync P2P] Bỏ qua gói PATIENT_INFO không được mã hóa E2EE từ DataChannel');
+        }
+
+        if (patientObj) {
+          if (typeof data.generation === 'number') {
+            this.generation = data.generation;
+          }
+          if (data.sessionId || data.sid) {
+            this.sessionId = data.sessionId || data.sid;
+          }
+          this.patientInfo = {
+            ...patientObj,
+            orderId: orderId || null,
+            fingerprint: fingerprint || null
+          };
+          this.onPatientInfo(this.patientInfo);
+        }
       } else if (data.type === 'TRANSFER_ACK') {
         if (this.onTransferAck) this.onTransferAck(data);
+      } else if (data.type === 'SESSION_CLOSED') {
+        const isContextChanged = data.reason === 'clinical_context_changed';
+        const msg = isContextChanged ?
+          '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
+          'Máy bàn đã đóng phiên';
+        this.updateStatus(false, msg);
       }
     });
 
@@ -348,12 +710,28 @@ export class P2PClient {
    * Gửi ảnh sang máy tính bàn (Tự động chọn WebRTC hoặc Cloud Relay)
    */
   async sendImage(blob, metadata = {}, onProgress = null) {
+    if (blob && blob.size > MAX_IMAGE_BYTES) {
+      const mb = (blob.size / (1024 * 1024)).toFixed(1);
+      throw new Error(`Kích thước ảnh (${mb}MB) vượt quá giới hạn an toàn 15MB`);
+    }
+
+    // Định danh phiên truyền bất biến cho toàn bộ chu trình (chống ghi đúp)
+    const transferId = metadata.transferId || generateSecureToken();
+    const meta = { ...metadata, transferId };
+
     // 1. Nếu WebRTC DataChannel đang thông suốt (Wi-Fi), gửi P2P siêu tốc
     if (this.conn && this.conn.open) {
       try {
-        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...');
-        const res = await this.sendImageViaWebRTC(blob, metadata, onProgress);
+        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...', transferId);
+        const res = await this.sendImageViaWebRTC(blob, meta, onProgress);
         if (res && res.success) {
+          return res;
+        }
+        // RÀO CHẮN CHỐNG GHI ĐÚP LÂM SÀNG:
+        // Nếu kết quả trả về là HIS_UNKNOWN, máy chủ HIS có thể đã lưu hoặc đang lưu ảnh.
+        // Tuyệt đối KHÔNG tự động chuyển tiếp qua Cloud Relay để tránh ghi trùng lặp 2 ảnh!
+        if (res && res.status === 'HIS_UNKNOWN') {
+          console.warn('[CamSync] WebRTC trả về HIS_UNKNOWN: Không chuyển tiếp sang Cloud để bảo vệ tính toàn vẹn hồ sơ.');
           return res;
         }
         console.warn('[CamSync] P2P không thành công, tự động chuyển hướng qua Cloud Relay:', res?.error);
@@ -363,8 +741,8 @@ export class P2PClient {
     }
 
     // 2. Chuyển sang Supabase Cloud Relay (4G/5G/LAN)
-    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay...');
-    return await this.sendImageViaCloud(blob, metadata, onProgress);
+    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay...', transferId);
+    return await this.sendImageViaCloud(blob, meta, onProgress);
   }
 
   /**
@@ -387,11 +765,56 @@ export class P2PClient {
     const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
     const mimeType = blob.type || 'image/jpeg';
     const totalBytes = blob.size;
-    const transferId = generateSecureToken();
+    const transferId = metadata.transferId || generateSecureToken();
     const filename = metadata.name || `ECG_${Date.now()}.jpg`;
 
+    let payloadToSend = rawBase64;
+    let isEncrypted = false;
+    let encryptionIv = null;
+
+    if (this.cryptoKey) {
+      // Pack clinical metadata INSIDE the encrypted container - ZERO PHI in outer headers (F12, R3)
+      const container = JSON.stringify({
+        image: rawBase64,
+        mimeType: mimeType || 'image/jpeg',
+        meta: {
+          ...metadata,
+          patientId: this.patientInfo?.id || null,
+          orderId: this.patientInfo?.orderId || null,
+          fingerprint: this.patientInfo?.fingerprint || null,
+          device: this.getDeviceMetadata(),
+          timestamp: Date.now()
+        }
+      });
+
+      const aadHeader = {
+        v: 2,
+        sid: this.sessionId,
+        transferId,
+        contentType: mimeType || 'image/jpeg'
+      };
+
+      try {
+        const encResult = await encryptAesGcmPayload(this.cryptoKey, container, aadHeader);
+        if (encResult.encrypted) {
+          payloadToSend = encResult.data;
+          isEncrypted = true;
+          encryptionIv = encResult.iv;
+        }
+      } catch (err) {
+        console.warn('[CamSync Mobile] Lỗi mã hóa E2EE Cloud Relay:', err);
+        throw err;
+      }
+    } else {
+      isEncrypted = false;
+    }
+
     const CHUNK_CHARS = 64 * 1024; // 64KB chunk
-    const totalChunks = Math.ceil(rawBase64.length / CHUNK_CHARS);
+    const totalChunks = Math.ceil(payloadToSend.length / CHUNK_CHARS);
+
+    if (totalChunks > MAX_TOTAL_CHUNKS) {
+      throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
+    }
 
     // Đảm bảo kênh Realtime đã sẵn sàng
     if (!this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
@@ -399,31 +822,50 @@ export class P2PClient {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // 1. Gửi chunk_start
-    this.broadcast('chunk_start', {
+    // 1. Gửi chunk_start (V2 Schema - ZERO PHI in outer header)
+    const startPayload = {
+      type: 'TransferStart',
+      v: 2,
       transferId,
       totalChunks,
-      totalSize: totalBytes,
+      encryptedBytes: payloadToSend.length,
+      totalSize: payloadToSend.length,
+      totalBytes: payloadToSend.length,
+      contentType: mimeType,
       mimeType,
-      filename,
+      filename: `camsync_${transferId}.jpg`,
+      generation: this.generation,
+      sid: this.sessionId,
+      sessionId: this.sessionId,
+      encrypted: isEncrypted,
+      iv: encryptionIv,
       meta: {
-        ...metadata,
-        sessionId: this.sessionId,
         device: this.getDeviceMetadata(),
+        encrypted: isEncrypted,
+        iv: encryptionIv,
         timestamp: Date.now()
       }
-    });
+    };
+    this.broadcast('chunk_start', startPayload);
 
     if (typeof onProgress === 'function') onProgress(30);
 
     // 2. Gửi từng chunk_data
     for (let i = 0; i < totalChunks; i++) {
-      const chunk = rawBase64.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
-      this.broadcast('chunk_data', {
+      const chunk = payloadToSend.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
+      const chunkPacket = {
+        type: 'TransferChunk',
+        v: 2,
+        sid: this.sessionId,
         transferId,
+        index: i,
         chunkIndex: i,
-        data: chunk
-      });
+        data: chunk,
+        chunk,
+        encrypted: isEncrypted,
+        iv: encryptionIv
+      };
+      this.broadcast('chunk_data', chunkPacket);
 
       if (typeof onProgress === 'function') {
         const pct = 30 + Math.round(((i + 1) / totalChunks) * 60);
@@ -437,9 +879,13 @@ export class P2PClient {
 
     // 3. Đệm 20ms để socket buffer xả hết trước khi gửi chunk_complete
     await new Promise(r => setTimeout(r, 20));
-    this.broadcast('chunk_complete', {
+    const endPacket = {
+      type: 'TransferEnd',
+      v: 2,
+      sid: this.sessionId,
       transferId
-    });
+    };
+    this.broadcast('chunk_complete', endPacket);
 
     // 4. Chờ transfer_ack từ máy tính (Fail-Closed: Timeout hoặc Error ACK đều coi là thất bại)
     return new Promise((resolve) => {
@@ -447,27 +893,51 @@ export class P2PClient {
         this.onTransferAck = null;
         resolve({
           success: false,
+          status: 'HIS_UNKNOWN',
           method: 'realtime_broadcast',
           timeout: true,
-          error: 'Hết thời gian chờ xác nhận từ máy HIS'
+          error: 'Hết thời gian chờ xác nhận từ máy HIS',
+          reason: 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
+          retry: false
         });
-      }, 8000);
+      }, 25000);
 
       this.onTransferAck = (ackData) => {
         if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
+          // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
+          if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
+            if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
+            return; // Tiếp tục chờ ACK cuối cùng
+          }
+
           clearTimeout(ackTimeout);
           this.onTransferAck = null;
-          if (ackData && ackData.status === 'error') {
+
+          if (ackData && ackData.status === 'HIS_UNKNOWN') {
             resolve({
               success: false,
+              status: 'HIS_UNKNOWN',
               method: 'realtime_broadcast',
-              error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
+              reason: ackData.reason || null,
+              retry: false,
+              ack: ackData
+            });
+          } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
+            resolve({
+              success: false,
+              status: ackData.status || 'HIS_REJECTED',
+              method: 'realtime_broadcast',
+              error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              reason: ackData.reason || null,
+              retry: ackData.retry !== undefined ? ackData.retry : false,
               ack: ackData
             });
           } else {
             if (typeof onProgress === 'function') onProgress(100);
             resolve({
               success: true,
+              status: ackData?.status || 'HIS_COMMITTED',
               method: 'realtime_broadcast',
               ack: ackData
             });
@@ -488,19 +958,79 @@ export class P2PClient {
       reader.readAsDataURL(blob);
     });
 
-    const totalLength = base64Data.length;
+    const commaIdx = base64Data.indexOf(',');
+    const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
+    const mimeType = blob.type || 'image/jpeg';
+    const transferId = metadata.transferId || generateSecureToken();
+
+    let payloadToSend = rawBase64;
+    let isEncrypted = false;
+    let encryptionIv = null;
+
+    if (this.cryptoKey) {
+      // Pack clinical metadata INSIDE the encrypted container - ZERO PHI in outer headers (F12, R3)
+      const container = JSON.stringify({
+        image: rawBase64,
+        mimeType,
+        meta: {
+          ...metadata,
+          patientId: this.patientInfo?.id || null,
+          orderId: this.patientInfo?.orderId || null,
+          fingerprint: this.patientInfo?.fingerprint || null,
+          device: this.getDeviceMetadata(),
+          timestamp: Date.now()
+        }
+      });
+
+      const aadHeader = {
+        v: 2,
+        sid: this.sessionId,
+        transferId,
+        contentType: mimeType
+      };
+
+      try {
+        const encResult = await encryptAesGcmPayload(this.cryptoKey, container, aadHeader);
+        if (encResult.encrypted) {
+          payloadToSend = encResult.data;
+          isEncrypted = true;
+          encryptionIv = encResult.iv;
+        }
+      } catch (err) {
+        console.warn('[CamSync Mobile] Lỗi mã hóa WebRTC E2EE:', err);
+        throw err;
+      }
+    } else {
+      isEncrypted = false;
+    }
+
+    const totalLength = payloadToSend.length;
     const totalChunks = Math.ceil(totalLength / CHUNK_SIZE);
-    const transferId = generateSecureToken();
+
+    if (totalChunks > MAX_TOTAL_CHUNKS) {
+      throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
+    }
 
     this.conn.send({
       type: 'CHUNK_START',
+      v: 2,
       transferId,
       totalChunks,
+      encryptedBytes: totalLength,
       totalBytes: totalLength,
+      totalSize: totalLength,
+      contentType: mimeType,
+      mimeType,
+      filename: `camsync_${transferId}.jpg`,
+      generation: this.generation,
+      sid: this.sessionId,
+      sessionId: this.sessionId,
+      encrypted: isEncrypted,
+      iv: encryptionIv,
       meta: {
-        ...metadata,
-        sessionId: this.sessionId,
         device: this.getDeviceMetadata(),
+        encrypted: isEncrypted,
+        iv: encryptionIv,
         timestamp: Date.now()
       }
     });
@@ -510,12 +1040,18 @@ export class P2PClient {
         throw new Error('Kết nối WebRTC bị gián đoạn');
       }
 
-      const chunk = base64Data.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const chunk = payloadToSend.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
       this.conn.send({
         type: 'CHUNK_DATA',
+        v: 2,
+        sid: this.sessionId,
         transferId,
         index: i,
-        chunk
+        chunkIndex: i,
+        chunk,
+        data: chunk,
+        encrypted: isEncrypted,
+        iv: encryptionIv
       });
 
       if (typeof onProgress === 'function') {
@@ -530,6 +1066,8 @@ export class P2PClient {
 
     this.conn.send({
       type: 'CHUNK_COMPLETE',
+      v: 2,
+      sid: this.sessionId,
       transferId
     });
 
@@ -538,25 +1076,48 @@ export class P2PClient {
         this.onTransferAck = null;
         resolve({
           success: false,
+          status: 'HIS_UNKNOWN',
           method: 'webrtc_chunked',
           timeout: true,
-          error: 'Hết thời gian chờ xác nhận từ máy HIS qua P2P'
+          error: 'Hết thời gian chờ xác nhận từ máy HIS qua P2P',
+          reason: 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
+          retry: false
         });
-      }, 5000);
+      }, 25000);
 
       this.onTransferAck = (ackData) => {
+        // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
+        if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
+          if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
+          return; // Tiếp tục chờ ACK cuối cùng
+        }
+
         clearTimeout(ackTimeout);
         this.onTransferAck = null;
-        if (ackData && ackData.status === 'error') {
+        if (ackData && ackData.status === 'HIS_UNKNOWN') {
           resolve({
             success: false,
+            status: 'HIS_UNKNOWN',
             method: 'webrtc_chunked',
-            error: ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+            error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
+            reason: ackData.reason || null,
+            retry: false,
+            ack: ackData
+          });
+        } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
+          resolve({
+            success: false,
+            status: ackData.status || 'HIS_REJECTED',
+            method: 'webrtc_chunked',
+            error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+            reason: ackData.reason || null,
+            retry: ackData.retry !== undefined ? ackData.retry : false,
             ack: ackData
           });
         } else {
           resolve({
             success: true,
+            status: ackData?.status || 'HIS_COMMITTED',
             method: 'webrtc_chunked',
             ack: ackData
           });
@@ -566,13 +1127,23 @@ export class P2PClient {
   }
 
   destroy() {
+    this.isSessionIntentionallyClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.closeRealtime();
     if (this.p2pRetryTimer) clearTimeout(this.p2pRetryTimer);
     if (this.conn) {
       try { this.conn.close(); } catch (e) {}
+      this.conn = null;
     }
     if (this.peer) {
       try { this.peer.destroy(); } catch (e) {}
+      this.peer = null;
     }
+    this.cryptoKey = null;
+    this.encryptionKeyHex = null;
+    this.patientInfo = null;
   }
 }
