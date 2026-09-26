@@ -789,6 +789,7 @@
     p2p.connect();
 
     // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ)
+    const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
     const tabDocument = document.getElementById('tabDocument');
     const iconDocMode = document.getElementById('iconDocMode');
     const docScreen = document.getElementById('docScreen');
@@ -797,6 +798,11 @@
       exitCropMode();
       currentSpecialty = spec;
       triggerHaptic('tap');
+
+      document.body.classList.remove('doc-editing');
+      if (globalSpecialtyBar) {
+        globalSpecialtyBar.style.display = 'flex';
+      }
 
       // Deactivate all tabs
       tabEcg.classList.remove('active');
@@ -864,6 +870,19 @@
 
       currentFilter = 'normal';
       document.querySelectorAll('.enhancer-btn').forEach(b => b.classList.remove('active'));
+
+      // Khi chuyển đổi giữa ECG và Siêu Âm ngay trong Studio, đồng bộ preset và render lại
+      if (document.body.classList.contains('in-editor')) {
+        const activePresetGroup = spec === 'ecg' ? groupEcgPresets : groupUsPresets;
+        const defaultPreset = spec === 'ecg' ? 'ecg-strip' : 'us-convex';
+        activePresetGroup.querySelectorAll('.preset-pill').forEach(pill => {
+          pill.classList.toggle('active', pill.dataset.preset === defaultPreset);
+        });
+        if (editor.originalImage) {
+          editor.render();
+          editor.updateCropBoxUI();
+        }
+      }
     }
 
     tabEcg.addEventListener('click', () => switchSpecialty('ecg'));
@@ -1073,6 +1092,7 @@
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
       document.body.classList.remove('in-editor');
+      if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'flex';
       hideErrorBanner();
       hideWarningBanner();
       btnSendToHis.disabled = false;
@@ -1176,6 +1196,7 @@
           editorScreen.style.display = 'none';
           captureScreen.style.display = 'flex';
           document.body.classList.remove('in-editor');
+          if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'flex';
           btnSendToHis.disabled = false;
           btnSendText.textContent = 'Gửi Lên HIS';
 
@@ -1573,8 +1594,6 @@
       docEditToolbar.style.display = 'none';
     }
 
-    const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
-
     function enterPerspectiveMode() {
       if (docSelectedIndex < 0) return;
       activeEditMode = 'perspective';
@@ -1587,6 +1606,7 @@
       if (docCropHint) docCropHint.textContent = 'Kéo 4 góc theo mép giấy tờ';
       if (btnCropApply) btnCropApply.textContent = 'Áp dụng nắn';
       docScreen.classList.add('is-editing');
+      document.body.classList.add('doc-editing');
       if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'none';
       requestAnimationFrame(() => {
         setupOverlayPosition();
@@ -1601,6 +1621,7 @@
       if (docCropHint) docCropHint.textContent = 'Kéo góc để chọn vùng cắt';
       if (btnCropApply) btnCropApply.textContent = 'Áp dụng cắt';
       docScreen.classList.add('is-editing');
+      document.body.classList.add('doc-editing');
       if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'none';
       requestAnimationFrame(() => {
         setupOverlayPosition();
@@ -1613,7 +1634,8 @@
       activeDragHandle = null;
       activeDragCorner = -1;
       docScreen.classList.remove('is-editing');
-      if (globalSpecialtyBar && !document.body.classList.contains('in-editor')) {
+      document.body.classList.remove('doc-editing');
+      if (globalSpecialtyBar) {
         globalSpecialtyBar.style.display = 'flex';
       }
       docCropOverlay.style.display = 'none';
