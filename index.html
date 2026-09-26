@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.supabase.co https://*.supabase.co wss://*.peerjs.com https://*.peerjs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -42,6 +43,19 @@
       <span id="errorBannerText">Lỗi nạp ảnh lên HIS</span>
     </div>
     <button type="button" id="btnDismissError" class="btn-dismiss-error" aria-label="Đóng">&times;</button>
+  </div>
+
+  <!-- Amber Warning Banner (HIS_UNKNOWN Alert) -->
+  <div id="warningBanner" class="warning-banner" style="display: none;">
+    <div class="warning-banner-content">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <span id="warningBannerText">Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại</span>
+    </div>
+    <button type="button" id="btnDismissWarning" class="btn-dismiss-warning" aria-label="Đóng">&times;</button>
   </div>
 
   <!-- Specialty Mode Selector (ECG vs Ultrasound) -->
@@ -279,7 +293,7 @@
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>
-    <span id="toastText">Đã gửi thành công lên máy tính!</span>
+    <span id="toastText">Đã lưu vào HIS thành công!</span>
   </div>
 
   <!-- Loading Overlay (Chuyển đổi HEIC sang JPEG) -->
@@ -359,18 +373,36 @@
       if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
-    // Hỗ trợ trích xuất session_id từ URL hash fragment #session=<id> hoặc search query
+    // Hỗ trợ trích xuất session_id, key & gen từ URL hash fragment #session=<id>&key=<key>&gen=<gen> hoặc search query
     let initialSessionId = null;
+    let initialCryptoKey = null;
+    let initialGeneration = null;
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
       initialSessionId = hashParams.get('session');
+      initialCryptoKey = hashParams.get('key');
+      const genParam = hashParams.get('gen');
+      if (genParam !== null && genParam !== '') {
+        const parsedGen = parseInt(genParam, 10);
+        if (!isNaN(parsedGen)) initialGeneration = parsedGen;
+      }
     }
     if (!initialSessionId && window.location.search) {
       const searchParams = new URLSearchParams(window.location.search);
       initialSessionId = searchParams.get('session');
+      if (!initialCryptoKey) {
+        initialCryptoKey = searchParams.get('key');
+      }
+      if (initialGeneration === null) {
+        const genParam = searchParams.get('gen');
+        if (genParam !== null && genParam !== '') {
+          const parsedGen = parseInt(genParam, 10);
+          if (!isNaN(parsedGen)) initialGeneration = parsedGen;
+        }
+      }
     }
 
-    // Làm sạch thanh địa chỉ ngay lập tức để triệt tiêu rò rỉ session ID
+    // Làm sạch thanh địa chỉ ngay lập tức để triệt tiêu rò rỉ session ID & cryptographic key
     if (window.location.hash || window.location.search) {
       try {
         window.history.replaceState(null, '', window.location.pathname);
@@ -382,6 +414,9 @@
 
     const p2p = new P2PClient({
       sessionId: initialSessionId || undefined,
+      cryptoKey: initialCryptoKey || undefined,
+      encryptionKeyHex: initialCryptoKey || undefined,
+      generation: initialGeneration !== null ? initialGeneration : undefined,
       onStatusChange: (connected, text) => {
         statusText.textContent = text;
         if (connected) {
@@ -451,7 +486,7 @@
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());
     btnTriggerGallery.addEventListener('click', () => galleryInput.click());
 
-    // Tự động chuyển đổi HEIC sang JPEG
+    // Tự động chuyển đổi HEIC sang JPEG siêu tốc trên điện thoại (Apple Silicon / Android)
     async function convertHeicToJpegIfNecessary(file) {
       if (!file) return file;
       const fileName = file.name || '';
@@ -462,7 +497,54 @@
 
       if (!isHeic) return file;
 
-      showLoading('Đang đổi ảnh iPhone sang JPEG...');
+      showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
+      
+      // 1. Tận dụng phần cứng iOS Safari giải mã HEIC tức thì qua Image/Canvas
+      try {
+        let bitmap = null;
+        if (typeof createImageBitmap === 'function') {
+          try {
+            bitmap = await createImageBitmap(file);
+          } catch (_) {}
+        }
+
+        if (!bitmap) {
+          bitmap = await new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+              URL.revokeObjectURL(url);
+              resolve(img);
+            };
+            img.onerror = (e) => {
+              URL.revokeObjectURL(url);
+              reject(e);
+            };
+            img.src = url;
+          });
+        }
+
+        if (bitmap && bitmap.width > 0 && bitmap.height > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0);
+
+          const jpegBlob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, 'image/jpeg', 0.92);
+          });
+
+          if (jpegBlob) {
+            const cleanName = (fileName || 'photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
+            return new File([jpegBlob], cleanName, { type: 'image/jpeg' });
+          }
+        }
+      } catch (nativeErr) {
+        console.warn('[Mobile] Native HEIC decode fallback:', nativeErr);
+      }
+
+      // 2. Dự phòng qua thư viện heic2any Web Worker nếu trình duyệt không có giải mã native
       try {
         if (typeof window.heic2any === 'function') {
           const res = await window.heic2any({
@@ -471,14 +553,15 @@
             quality: 0.92
           });
           const blob = Array.isArray(res) ? res[0] : res;
-          const cleanName = (fileName || 'iphone_photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
+          const cleanName = (fileName || 'photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
           return new File([blob], cleanName, { type: 'image/jpeg' });
         }
       } catch (err) {
-        console.warn('[Mobile] Lỗi heic2any:', err);
+        console.warn('[Mobile] heic2any fallback error:', err);
       } finally {
         hideLoading();
       }
+
       return file;
     }
 
@@ -504,7 +587,7 @@
         setTimeout(() => editor.render(), 60);
       } catch (err) {
         hideLoading();
-        alert('Không thể tải ảnh: ' + (err.message || err));
+        showErrorBanner('Không thể tải ảnh: ' + (err.message || err));
       }
     }
 
@@ -603,6 +686,10 @@
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
       document.body.classList.remove('in-editor');
+      hideErrorBanner();
+      hideWarningBanner();
+      btnSendToHis.disabled = false;
+      btnSendText.textContent = 'Gửi Lên HIS';
     });
 
     statusBadge.addEventListener('click', () => {
@@ -641,44 +728,75 @@
         const filename = `${prefix}_${Date.now()}.jpg`;
 
         hideErrorBanner();
+        hideWarningBanner();
 
         const res = await p2p.sendImage(blob, {
           name: filename,
           type: 'image/jpeg',
           specialty: currentSpecialty
-        }, (pct) => {
+        }, (pct, statusMsg) => {
           uploadPctBadge.textContent = `${pct}%`;
-          uploadMeta.textContent = `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
+          if (pct >= 90) {
+            uploadTitle.textContent = 'Đang lưu vào máy chủ HIS...';
+            uploadMeta.textContent = statusMsg || 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...';
+          } else {
+            uploadTitle.textContent = 'Đang truyền ảnh lên HIS...';
+            uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
+          }
         });
 
-        // Rào chắn xác thực kết quả: chỉ báo thành công khi res.success === true
-        if (!res || !res.success) {
-          throw new Error(res?.error || 'Không nhận được xác nhận từ máy tính HIS');
+        // Xử lý trung thực theo trạng thái xác thực HIS:
+        if (res && res.status === 'HIS_UNKNOWN') {
+          uploadProgressModal.style.display = 'none';
+          showWarningBanner(res.reason || res.error || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại');
+          btnSendToHis.disabled = true; // Vô hiệu hóa retry để ngăn ghi trùng lặp
+          btnSendText.textContent = 'Chưa xác định lưu';
+          return;
         }
 
+        if (!res || res.status === 'HIS_REJECTED' || !res.success) {
+          uploadProgressModal.style.display = 'none';
+          showErrorBanner(res?.reason || res?.error || 'Máy chủ HIS từ chối lưu ảnh.');
+          btnSendToHis.disabled = false;
+          btnSendText.textContent = 'Gửi Lên HIS';
+          return;
+        }
+
+        // Positively guard HIS_COMMITTED (eliminate negative fall-through)
+        const isCommitted = res && (res.status === 'HIS_COMMITTED' || (res.success && (!res.status || res.status === 'success')));
+        if (!isCommitted) {
+          uploadProgressModal.style.display = 'none';
+          showWarningBanner(res?.reason || res?.error || 'Chưa nhận được xác nhận lưu trữ từ máy chủ HIS');
+          return;
+        }
+
+        // CHỈ khi res.status === 'HIS_COMMITTED':
         // Phản hồi rung haptic
         if (navigator.vibrate) {
           try { navigator.vibrate([40, 60, 40]); } catch (e) {}
         }
 
         uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = '✅ Đã nạp thành công!';
-        uploadMeta.textContent = 'Ảnh đã xuất hiện trên màn hình HIS máy tính';
+        uploadTitle.textContent = '✅ Đã lưu vào HIS!';
+        uploadMeta.textContent = 'Ảnh đã được máy chủ HIS lưu trữ thành công';
+        if (toastText) toastText.textContent = 'Đã lưu vào HIS thành công!';
 
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
           toast.classList.add('visible');
+          // Chuyển ngay về màn hình chụp để thao tác liền mạch, thuận tiện
+          cameraInput.value = '';
+          galleryInput.value = '';
+          editorScreen.style.display = 'none';
+          captureScreen.style.display = 'flex';
+          document.body.classList.remove('in-editor');
+          btnSendToHis.disabled = false;
+          btnSendText.textContent = 'Gửi Lên HIS';
+
           setTimeout(() => {
             toast.classList.remove('visible');
-            cameraInput.value = '';
-            galleryInput.value = '';
-            editorScreen.style.display = 'none';
-            captureScreen.style.display = 'flex';
-            document.body.classList.remove('in-editor');
-            btnSendToHis.disabled = false;
-            btnSendText.textContent = 'Gửi Lên HIS';
-          }, 1400);
-        }, 800);
+          }, 1500);
+        }, 500);
 
       } catch (err) {
         uploadProgressModal.style.display = 'none';
@@ -687,6 +805,20 @@
         btnSendText.textContent = 'Gửi Lên HIS';
       }
     });
+
+    function showWarningBanner(message) {
+      const banner = document.getElementById('warningBanner');
+      const text = document.getElementById('warningBannerText');
+      if (banner && text) {
+        text.textContent = message;
+        banner.style.display = 'flex';
+      }
+    }
+
+    function hideWarningBanner() {
+      const banner = document.getElementById('warningBanner');
+      if (banner) banner.style.display = 'none';
+    }
 
     function showErrorBanner(message) {
       const banner = document.getElementById('errorBanner');
@@ -703,6 +835,11 @@
     }
 
     document.getElementById('btnDismissError')?.addEventListener('click', hideErrorBanner);
+    document.getElementById('btnDismissWarning')?.addEventListener('click', hideWarningBanner);
+
+    window.addEventListener('beforeunload', () => {
+      try { p2p.destroy(); } catch (e) {}
+    });
   </script>
 </body>
 </html>
