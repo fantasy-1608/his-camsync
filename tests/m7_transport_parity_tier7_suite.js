@@ -436,6 +436,8 @@ function createParityEnvironment(options = {}) {
   const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
   code = code.replace('let activeSessionId = null;', 'let activeSessionId = null; window.__getActiveSessionId = () => activeSessionId;');
   code = code.replace('let activeClinicalSession = null;', 'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;');
@@ -803,7 +805,7 @@ async function runParitySuite() {
     await new Promise(r => setTimeout(r, 20));
 
     const afterFiles = env.fileUpload.files.length;
-    const successAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === tid && (m.status === 'success' || m.success === true));
+    const successAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === tid && m.status === 'HIS_UNKNOWN' && m.success === false);
 
     const passed = prematureFiles === 0 && isWaiting && afterFiles === 1 && !!successAck;
     reporter.record(
@@ -891,7 +893,7 @@ async function runParitySuite() {
 
     const injected = env.fileUpload.files.length === 1;
     const injectedName = env.fileUpload.files[0]?.name;
-    const successAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === tid && (m.status === 'success' || m.success === true));
+    const successAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === tid && m.status === 'HIS_UNKNOWN' && m.success === false);
 
     const passed = injected && !!successAck;
     reporter.record(
@@ -1086,7 +1088,7 @@ async function runParitySuite() {
     const successAck = conn.sent.find(m =>
       m.type === 'TRANSFER_ACK' &&
       m.transferId === tid &&
-      (m.status === 'success' || m.success === true)
+      m.status === 'HIS_UNKNOWN' && m.success === false
     );
 
     const passed = injectedFiles === 1 && !!successAck;
@@ -1122,6 +1124,7 @@ async function runParitySuite() {
     // Attempt SYNC_IMAGE with matching patientId
     conn.simulateData({
       type: 'SYNC_IMAGE',
+      transferId: 'tx_sync_valid_01',
       image: b64,
       meta: { patientId: '12345' }
     });

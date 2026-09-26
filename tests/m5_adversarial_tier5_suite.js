@@ -383,6 +383,8 @@ function createContentScriptEnvironment(options = {}) {
   const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
   // Inject hooks to directly inspect internal variables for empirical testing
   code = code.replace(
     'const activeChunkTransfers = {};',
@@ -609,7 +611,7 @@ async function runAdversarialSuite() {
       m.event === 'broadcast' &&
       m.payload?.event === 'transfer_ack' &&
       m.payload?.payload?.transferId === tid &&
-      (m.payload?.payload?.status === 'HIS_COMMITTED' || m.payload?.payload?.status === 'success')
+      m.payload?.payload?.status === 'HIS_UNKNOWN' && m.payload?.payload?.success === false
     );
 
     reporter.record(
@@ -744,7 +746,7 @@ async function runAdversarialSuite() {
       m.event === 'broadcast' &&
       m.payload?.event === 'transfer_ack' &&
       m.payload?.payload?.transferId === tid &&
-      m.payload?.payload?.status === 'error' &&
+      m.payload?.payload?.status === 'HIS_UNKNOWN' &&
       m.payload?.payload?.error === 'missing_chunks'
     );
 
@@ -776,7 +778,7 @@ async function runAdversarialSuite() {
       m.event === 'broadcast' &&
       m.payload?.event === 'transfer_ack' &&
       m.payload?.payload?.transferId === tid &&
-      m.payload?.payload?.status === 'error'
+      m.payload?.payload?.status === 'HIS_UNKNOWN'
     );
 
     const passed = env.fileUpload.files.length === 0 && !!errorAck;
@@ -990,7 +992,7 @@ async function runAdversarialSuite() {
 
   // TC-ADV-3.5: P2PClient ACK timeout fail-closed
   {
-    const client = new P2PClient({ sessionId: generateSecureToken() });
+    const client = new P2PClient({ sessionId: generateSecureToken(), generation: 1 });
     client.realtimeWs = {
       readyState: 1,
       send: () => {}

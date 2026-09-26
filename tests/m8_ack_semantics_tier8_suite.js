@@ -424,6 +424,8 @@ function createAckEnvironment(options = {}) {
   const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
   code = code.replace('let activeSessionId = null;', 'let activeSessionId = null; window.__getActiveSessionId = () => activeSessionId;');
   code = code.replace('let activeClinicalSession = null;', 'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;');
@@ -491,7 +493,7 @@ async function runAckSemanticsSuite() {
   // =========================================================================
   // SUITE 1: Injection Success -> Positive ACK Parity (P0-4)
   // =========================================================================
-  reporter.group('SUITE 1: Positive ACK & photoCount Verification (P0-4)');
+  reporter.group('SUITE 1: No server readback means HIS_UNKNOWN (P0-4)');
 
   // TC-ACK-1.1: WebRTC successful transfer -> ACK { success: true }, photoCount: 1
   {
@@ -526,17 +528,17 @@ async function runAckSemanticsSuite() {
     const ackReceived = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
 
     const passed = ackReceived &&
-                   ackReceived.success === true &&
-                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
-                   ackReceived.photoCount === 1 &&
-                   env.getPhotoCount() === 1 &&
+                   ackReceived.success === false &&
+                   ackReceived.status === 'HIS_UNKNOWN' &&
+                   ackReceived.photoCount === 0 &&
+                   env.getPhotoCount() === 0 &&
                    env.fileUpload.files.length === 1 &&
                    env.getUploadClickCount() === 1 &&
-                   env.getReceivedPhotos().length === 1;
+                   env.getReceivedPhotos().length === 0;
 
     reporter.record(
       'TC-ACK-1.1',
-      'WebRTC: successful injection dispatches positive ACK with photoCount=1 and updates gallery',
+      'WebRTC: attachment without HIS readback returns UNKNOWN and keeps committed count at zero',
       passed,
       `ACK: status=${ackReceived?.status}, success=${ackReceived?.success}, count=${ackReceived?.photoCount}, DOM files=${env.fileUpload.files.length}`
     );
@@ -575,16 +577,16 @@ async function runAckSemanticsSuite() {
     const ackPayload = ackSent?.payload?.payload;
 
     const passed = ackPayload &&
-                   (ackPayload.status === 'HIS_COMMITTED' || ackPayload.status === 'success') &&
-                   ackPayload.success === true &&
-                   ackPayload.photoCount === 1 &&
-                   env.getPhotoCount() === 1 &&
+                   ackPayload.status === 'HIS_UNKNOWN' &&
+                   ackPayload.success === false &&
+                   ackPayload.photoCount === 0 &&
+                   env.getPhotoCount() === 0 &&
                    env.fileUpload.files.length === 1 &&
                    env.getUploadClickCount() === 1;
 
     reporter.record(
       'TC-ACK-1.2',
-      'Realtime: successful injection dispatches positive transfer_ack with photoCount=1 and updates gallery',
+      'Realtime fixture: attachment without HIS readback returns UNKNOWN',
       passed,
       `ACK: status=${ackPayload?.status}, success=${ackPayload?.success}, count=${ackPayload?.photoCount}`
     );
@@ -631,15 +633,17 @@ async function runAckSemanticsSuite() {
     const acks = conn.sent.filter(m => m.type === 'TRANSFER_ACK');
 
     const passed = acks.length === 2 &&
-                   acks[0].photoCount === 1 &&
-                   acks[1].photoCount === 2 &&
-                   env.getPhotoCount() === 2 &&
+                   acks[0].status === 'HIS_UNKNOWN' &&
+                   acks[1].status === 'HIS_UNKNOWN' &&
+                   acks[0].photoCount === 0 &&
+                   acks[1].photoCount === 0 &&
+                   env.getPhotoCount() === 0 &&
                    env.fileUpload.files.length === 1 && // DataTransfer overrides files per shot
                    env.getUploadClickCount() === 2;
 
     reporter.record(
       'TC-ACK-1.3',
-      'Sequential multi-photo injection increments photoCount monotonically (1 -> 2)',
+      'Sequential attachments without HIS readback do not increment committed photoCount',
       passed,
       `Ack 1 count=${acks[0]?.photoCount}, Ack 2 count=${acks[1]?.photoCount}, Total photos=${env.getPhotoCount()}`
     );
@@ -683,13 +687,13 @@ async function runAckSemanticsSuite() {
     await new Promise(r => setTimeout(r, 100));
 
     const finalAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
-    const confirmedAfterPersistence = finalAck && finalAck.success === true && (finalAck.status === 'HIS_COMMITTED' || finalAck.status === 'success');
+    const confirmedAfterPersistence = finalAck && finalAck.success === false && finalAck.status === 'HIS_UNKNOWN';
 
     const passed = clickHappened && noPrematureSuccess && confirmedAfterPersistence;
 
     reporter.record(
       'TC-ACK-1.4',
-      'No-Speculative-Success Invariant: btnUpload.click() alone transitions to HIS_UPLOAD_PENDING, ACK deferred until awaitPersisted',
+      'DOM preview and Upload click cannot produce a positive HIS ACK',
       passed,
       `Click count=${env.getUploadClickCount()}, Premature ACK=${prematureAck ? prematureAck.status : 'NONE'}, Final ACK=${finalAck?.status}`
     );
@@ -838,6 +842,25 @@ async function runAckSemanticsSuite() {
   // =========================================================================
   // SUITE 3: Checkpoint #4 Rejection -> Negative ACK & Clean Teardown
   // =========================================================================
+  {
+    const env = createAckEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: TEST - Tuổi: 45' });
+    const { peer } = await env.openModal();
+    const conn = peer.connectSimulatedPhone();
+    await new Promise(r => setTimeout(r, 10));
+    env.btnUpload.disabled = true;
+    const raw = createSyntheticJpeg(128).toString('base64');
+    const transferId = 'tx_disabled_upload';
+    conn.simulateData({ type: 'CHUNK_START', transferId, totalChunks: 1,
+      totalBytes: raw.length, meta: { patientId: '889900' } });
+    conn.simulateData({ type: 'CHUNK_DATA', transferId, index: 0, chunk: raw });
+    conn.simulateData({ type: 'CHUNK_COMPLETE', transferId });
+    await new Promise(r => setTimeout(r, 20));
+    const ack = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
+    reporter.record('TC-ACK-2.4', 'Disabled HIS Upload button blocks click and positive ACK',
+      env.getUploadClickCount() === 0 && ack?.success === false && ack?.status !== 'HIS_COMMITTED',
+      `Clicks=${env.getUploadClickCount()}, ACK=${ack?.status}`);
+  }
+
   reporter.group('SUITE 3: Checkpoint #4 Last Barrier Rejection -> Negative ACK (P0-1, P0-4)');
 
   // TC-ACK-3.1: Patient context mutated right before injection (Checkpoint #4) via WebRTC
@@ -870,7 +893,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error') &&
+                   (ackReceived.status === 'HIS_UNKNOWN' || ackReceived.status === 'HIS_REJECTED') &&
                    (ackReceived.error === 'PATIENT_CHANGED' || ackReceived.error === 'PATIENT_MISMATCH') &&
                    env.fileUpload.value === '' &&
                    env.getPhotoCount() === 0;
@@ -914,7 +937,7 @@ async function runAckSemanticsSuite() {
     const ackPayload = ackSent?.payload?.payload;
 
     const passed = ackPayload &&
-                   (ackPayload.status === 'HIS_REJECTED' || ackPayload.status === 'error') &&
+                   (ackPayload.status === 'HIS_UNKNOWN' || ackPayload.status === 'HIS_REJECTED') &&
                    ackPayload.success === false &&
                    (ackPayload.error === 'PATIENT_CHANGED' || ackPayload.error === 'PATIENT_MISMATCH') &&
                    env.fileUpload.value === '' &&
@@ -991,6 +1014,7 @@ async function runAckSemanticsSuite() {
 
     conn.simulateData({
       type: 'SYNC_IMAGE',
+      transferId: 'tx_sync_missing_dom',
       image: dataUrl,
       meta: { patientId: '889900' }
     });
@@ -1000,7 +1024,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   ackReceived.status === 'error' &&
+                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'HIS_UNKNOWN') &&
                    ackReceived.error === 'ELEMENTS_NOT_FOUND' &&
                    env.getPhotoCount() === 0;
 
@@ -1020,7 +1044,7 @@ async function runAckSemanticsSuite() {
   // TC-ACK-5.1: Mobile sendImageViaCloud parses error ACK and extracts reason
   {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
-    const runnableCode = mobileCode.replace(/\bexport\s+/g, '') + '; globalThis.P2PClient = P2PClient;';
+    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */') + '; globalThis.P2PClient = P2PClient;';
 
     class MobileMockWebSocket extends EventEmitter {
       static OPEN = 1;
@@ -1037,6 +1061,11 @@ async function runAckSemanticsSuite() {
           if (parsed.payload?.event === 'chunk_complete') {
             const transferId = parsed.payload.payload.transferId;
             setTimeout(() => {
+              const spoofed = { data: JSON.stringify({ event: 'broadcast', payload: {
+                event: 'transfer_ack', payload: { transferId, sid: 'wrong_session', generation: 1,
+                  status: 'HIS_COMMITTED', success: true }
+              } }) };
+              if (this.onmessage) this.onmessage(spoofed);
               const eventData = {
                 data: JSON.stringify({
                   event: 'broadcast',
@@ -1044,6 +1073,8 @@ async function runAckSemanticsSuite() {
                     event: 'transfer_ack',
                     payload: {
                       transferId,
+                      sid: 'test_session_id',
+                      generation: 1,
                       status: 'error',
                       success: false,
                       error: 'ELEMENTS_NOT_FOUND',
@@ -1092,7 +1123,7 @@ async function runAckSemanticsSuite() {
     vm.runInContext(runnableCode, mobileContext);
 
     const P2PClient = mobileContext.P2PClient;
-    const client = new P2PClient({ sessionId: 'test_session_id' });
+    const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
     client.patientInfo = { id: '889900', orderId: 'CD889900' };
 
     const syntheticBlob = {
@@ -1122,7 +1153,7 @@ async function runAckSemanticsSuite() {
   // TC-ACK-5.2: Mobile sendImageViaWebRTC parses error ACK and extracts reason
   {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
-    const runnableCode = mobileCode.replace(/\bexport\s+/g, '') + '; globalThis.P2PClient = P2PClient;';
+    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */') + '; globalThis.P2PClient = P2PClient;';
 
     class SimulatedConn extends EventEmitter {
       constructor() {
@@ -1132,9 +1163,13 @@ async function runAckSemanticsSuite() {
       send(data) {
         if (data.type === 'CHUNK_COMPLETE') {
           setTimeout(() => {
+            this.emit('data', { type: 'TRANSFER_ACK', transferId: data.transferId,
+              sid: 'wrong_session', generation: 1, status: 'HIS_COMMITTED', success: true });
             this.emit('data', {
               type: 'TRANSFER_ACK',
               transferId: data.transferId,
+              sid: 'test_session_id',
+              generation: 1,
               status: 'error',
               success: false,
               error: 'PATIENT_CHANGED',
@@ -1177,7 +1212,7 @@ async function runAckSemanticsSuite() {
     vm.runInContext(runnableCode, mobileContext);
 
     const P2PClient = mobileContext.P2PClient;
-    const client = new P2PClient({ sessionId: 'test_session_id' });
+    const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
     client.patientInfo = { id: '889900', orderId: 'CD889900' };
     client.conn = new SimulatedConn();
 
@@ -1259,7 +1294,7 @@ async function runAckSemanticsSuite() {
     vm.runInContext(quickTimeoutCode, mobileContext);
 
     const P2PClient = mobileContext.P2PClient;
-    const client = new P2PClient({ sessionId: 'test_session_id' });
+    const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
     client.patientInfo = { id: '889900' };
 
     const syntheticBlob = {

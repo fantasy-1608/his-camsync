@@ -67,19 +67,29 @@
    * @param {object} data  - Dữ liệu kèm theo (đã pseudonymized, KHÔNG chứa raw PHI)
    */
   async function log(event, data = {}) {
-    const sanitizedData = { ...data };
-    if (sanitizedData.sid) {
-      sanitizedData.sid = hashSid(sanitizedData.sid);
+    const sanitizedData = {};
+    // Persist only bounded operational categories. Never persist IDs, filenames,
+    // free text reasons, QR material, payloads or caller supplied objects.
+    const enumFields = ['status', 'code', 'subCode', 'transport', 'phase'];
+    for (const key of enumFields) {
+      const value = data?.[key];
+      if (typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(value)) {
+        sanitizedData[key] = value;
+      }
+    }
+    for (const key of ['n', 'count']) {
+      const value = data?.[key];
+      if (Number.isSafeInteger(value) && value >= 0 && value <= 10000) sanitizedData[key] = value;
     }
 
     const entry = {
       ts: new Date().toISOString(),
-      ev: event,
+      ev: typeof event === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(event) ? event : 'INVALID_EVENT',
       ...sanitizedData
     };
 
     // Console output (luôn có, hỗ trợ debug trực tiếp)
-    console.log(`[CamSync Audit] ${event}`, JSON.stringify(sanitizedData));
+    console.log(`[CamSync Audit] ${entry.ev}`, JSON.stringify(sanitizedData));
 
     // Persistent storage (chrome.storage.local circular buffer)
     try {

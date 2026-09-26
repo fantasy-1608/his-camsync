@@ -71,120 +71,95 @@
         } catch (e) {}
       }
 
-      let patientId = null;
-      let patientName = null;
-      let patientAge = '';
-      let encounterId = null;
-      let orderId = null;
-      let accessionNumber = null;
+      const invalid = (reason, patientId = null, encounterId = null) => ({
+        valid: false,
+        reason,
+        patient: { id: patientId, name: null, age: '' },
+        encounter: { id: encounterId, orderId: null },
+        hisContext: null,
+        fingerprint: null
+      });
+      const validId = (value) => {
+        const id = typeof value === 'string' ? value.trim() : '';
+        return /^[A-Za-z0-9][A-Za-z0-9_.\/-]*$/.test(id) ? id : null;
+      };
+      const collectFields = (doc, ids) => ids.map((id) => validId(doc.getElementById?.(id)?.value)).filter(Boolean);
+      const collectText = (text, pattern) => Array.from(text.matchAll(pattern), (match) => validId(match[1])).filter(Boolean);
+      const unique = (values) => [...new Set(values)];
 
-      for (const targetDoc of docsToScan) {
-        if (!targetDoc) continue;
+      // An upload iframe must prove its own patient and encounter. IDs from its parent
+      // banner and a different child form are never combined into a synthetic context.
+      const uploadDocs = docsToScan.filter((doc) => doc?.getElementById?.('btnUpload'));
+      const candidates = uploadDocs.length ? uploadDocs : docsToScan;
+      const complete = [];
+      const partial = [];
+      for (const targetDoc of candidates) {
+        if (!targetDoc?.body) continue;
+        const bannerEl = ['tabTTBN', 'patientInfo', 'thongtinbenhnhan', 'patientBanner']
+          .map((id) => targetDoc.getElementById?.(id)).find(Boolean);
+        const bannerText = String(bannerEl?.innerText || bannerEl?.textContent || targetDoc.body.innerText || targetDoc.body.textContent || '');
+        const patients = unique([
+          ...collectFields(targetDoc, ['maBenhNhan', 'txtMaBN', 'patientId']),
+          ...collectText(bannerText, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+        ]);
+        const encounters = unique([
+          ...collectFields(targetDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId']),
+          ...collectText(bannerText, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+        ]);
+        const orders = unique([
+          ...collectFields(targetDoc, ['maPhieuChiDinh', 'soPhieu', 'txtMaPhieu', 'orderId', 'hdfSoPhieu']),
+          ...collectText(bannerText, /(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+        ]);
 
-        // 1. Quét container Banner bệnh nhân chuyên biệt (ưu tiên cao)
-        const bannerEl = targetDoc.getElementById ? (
-          targetDoc.getElementById('tabTTBN') ||
-          targetDoc.getElementById('patientInfo') ||
-          targetDoc.getElementById('thongtinbenhnhan') ||
-          targetDoc.getElementById('patientBanner')
-        ) : null;
-
-        const bannerText = bannerEl?.innerText || targetDoc.body?.innerText || '';
-        const m = bannerText.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)\s*-\s*Tên\s*(?:bệnh\s*nhân|BN):\s*([^-\n]+)(?:\s*-\s*Tuổi:\s*([0-9]+\s*Tuổi|[0-9]+))?/i) ||
-                  bannerText.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)/i);
-        if (m) {
-          patientId = m[1].trim();
-          if (m[2]) patientName = m[2].trim();
-          if (m[3]) patientAge = m[3].trim();
+        if (patients.length > 1 || encounters.length > 1 || orders.length > 1) {
+          return invalid('Thông tin bệnh nhân, lượt khám hoặc phiếu chỉ định trên HIS không thống nhất');
         }
-
-        // 2. Tìm từ input/form field chuẩn của VNPT HIS
-        if (!patientId && targetDoc.getElementById) {
-          const idInput = targetDoc.getElementById('maBenhNhan') ||
-                          targetDoc.getElementById('txtMaBN') ||
-                          targetDoc.getElementById('patientId');
-          if (idInput && idInput.value && idInput.value.trim()) {
-            patientId = idInput.value.trim();
-          }
+        if (targetDoc.getElementById?.('UploadController') && !orders.length) {
+          return invalid('Không xác định được phiếu chỉ định của biểu mẫu tải ảnh');
         }
-
-        // 3. Tìm thông tin chỉ định / lượt khám (Encounter / Order)
-        if (targetDoc.getElementById) {
-          const orderInput = targetDoc.getElementById('maPhieuChiDinh') ||
-                             targetDoc.getElementById('soPhieu') ||
-                             targetDoc.getElementById('txtMaPhieu') ||
-                             targetDoc.getElementById('orderId') ||
-                             targetDoc.getElementById('hdfSoPhieu');
-          if (orderInput && orderInput.value && orderInput.value.trim()) {
-            orderId = orderInput.value.trim();
-          }
-
-          const encounterInput = targetDoc.getElementById('soVaoVien') ||
-                                 targetDoc.getElementById('maVaoVien') ||
-                                 targetDoc.getElementById('maLuotKham') ||
-                                 targetDoc.getElementById('txtSoVaoVien') ||
-                                 targetDoc.getElementById('txtMaBA') ||
-                                 targetDoc.getElementById('encounterId') ||
-                                 targetDoc.getElementById('hdfIDMauBenhPham') ||
-                                 targetDoc.getElementById('hdfIDKetQuaCLS') ||
-                                 targetDoc.getElementById('hdfIDDichVuKB');
-          if (encounterInput && encounterInput.value && encounterInput.value.trim()) {
-            encounterId = encounterInput.value.trim();
-          }
+        partial.push({ patientId: patients[0] || null, encounterId: encounters[0] || null });
+        if (patients.length && encounters.length) {
+          const nameMatch = bannerText.match(/Tên\s*(?:bệnh\s*nhân|BN):\s*([^-\n]+)/i);
+          const ageMatch = bannerText.match(/Tuổi:\s*([0-9]+)/i);
+          complete.push({
+            patientId: patients[0], encounterId: encounters[0], orderId: orders[0] || null,
+            patientName: nameMatch?.[1]?.trim() || null, patientAge: ageMatch?.[1] || ''
+          });
         }
-
-        // Bóc tách bổ sung từ URL tham số nếu mở trong popup/dialog
-        if (!encounterId && targetDoc.location && targetDoc.location.search) {
-          try {
-            const urlParams = new URLSearchParams(targetDoc.location.search);
-            const idmbp = urlParams.get('idmaubenhpham') || urlParams.get('idketquacls') || urlParams.get('iddichvukb');
-            if (idmbp && idmbp.trim()) {
-              encounterId = idmbp.trim();
-            }
-          } catch (e) {}
-        }
-
-        // Regex bóc tách bổ sung từ banner text
-        if (!encounterId) {
-          const encMatch = bannerText.match(/(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Mã\s*BA|Số\s*BA|Mã\s*hồ\s*sơ|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
-                           bannerText.match(/\b(?:LK|VV|ENC):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
-          if (encMatch) encounterId = encMatch[1].trim();
-        }
-
-        if (!orderId) {
-          const orderMatch = bannerText.match(/(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
-                             bannerText.match(/\b(?:ORD|PCD):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
-          if (orderMatch) orderId = orderMatch[1].trim();
-        }
-
-        if (patientId && encounterId) break;
       }
-
-      patientId = patientId && patientId.trim() && patientId.trim() !== '-' ? patientId.trim() : null;
-      encounterId = encounterId && encounterId.trim() && encounterId.trim() !== '-' ? encounterId.trim() : null;
-      orderId = orderId && orderId.trim() && orderId.trim() !== '-' ? orderId.trim() : null;
-
-      // KHÓA BẮT BUỘC: Cả patientId VÀ encounterId phải cùng tồn tại (F01, F02, R1)
-      const isValid = Boolean(patientId && encounterId);
-
+      if (!complete.length) {
+        const observed = partial[0] || {};
+        return invalid('Không tìm thấy mã bệnh nhân và mã lượt khám cùng trong biểu mẫu HIS đang thao tác', observed.patientId, observed.encounterId);
+      }
+      const selected = complete[0];
+      if (complete.some((ctx) => ctx.patientId !== selected.patientId || ctx.encounterId !== selected.encounterId || ctx.orderId !== selected.orderId)) {
+        return invalid('Có nhiều biểu mẫu HIS với ngữ cảnh lâm sàng khác nhau');
+      }
+      for (const otherDoc of docsToScan) {
+        if (candidates.includes(otherDoc) || !otherDoc?.body) continue;
+        const banner = ['tabTTBN', 'patientInfo', 'thongtinbenhnhan', 'patientBanner']
+          .map((id) => otherDoc.getElementById?.(id)).find(Boolean);
+        const text = String(banner?.innerText || banner?.textContent || '');
+        const otherPatients = unique([
+          ...collectFields(otherDoc, ['maBenhNhan', 'txtMaBN', 'patientId']),
+          ...collectText(text, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+        ]);
+        const otherEncounters = unique(collectFields(otherDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId']));
+        if (otherPatients.some((id) => id !== selected.patientId) ||
+            otherEncounters.some((id) => id !== selected.encounterId)) {
+          return invalid('Ngữ cảnh biểu mẫu tải ảnh khác ngữ cảnh HIS chính');
+        }
+      }
       return {
-        valid: isValid,
-        patient: {
-          id: patientId,
-          name: patientName,
-          age: patientAge
-        },
-        encounter: {
-          id: encounterId,
-          orderId: orderId,
-          accessionNumber: accessionNumber
-        },
+        valid: true,
+        patient: { id: selected.patientId, name: selected.patientName, age: selected.patientAge },
+        encounter: { id: selected.encounterId, orderId: selected.orderId, accessionNumber: null },
         hisContext: {
           pathname: typeof window !== 'undefined' ? window.location.pathname : '',
           title: typeof document !== 'undefined' ? document.title : '',
           module: 'RIS_PACS_VNPT'
         },
-        fingerprint: isValid ? computeContextFingerprint(patientId, encounterId, orderId, activeSessionId || null) : null
+        fingerprint: computeContextFingerprint(selected.patientId, selected.encounterId, selected.orderId, activeSessionId || null)
       };
     } catch (e) {
       console.warn('[CamSync] Lỗi bóc tách ngữ cảnh lâm sàng:', e);
@@ -215,6 +190,9 @@
 
     // Xử lý khi ngữ cảnh hiện tại thiếu thông tin bắt buộc
     if (!current || !current.valid) {
+      if (current?.reason && /không thống nhất|khác ngữ cảnh|nhiều biểu mẫu/.test(current.reason)) {
+        return { valid: false, code: 'CONTEXT_INVALID', reason: current.reason };
+      }
       if (activeClinicalSession) {
         // Nếu bệnh nhân trên DOM thay đổi so với phiên, ưu tiên cảnh báo PATIENT_CHANGED
         if (current?.patient?.id && activeClinicalSession.patient?.id &&
@@ -222,7 +200,7 @@
           return {
             valid: false,
             code: 'PATIENT_CHANGED',
-            reason: `Bệnh nhân trên HIS (${current.patient.id}) không khớp với phiên làm việc (${activeClinicalSession.patient.id})`
+            reason: 'Bệnh nhân trên HIS không khớp với phiên làm việc'
           };
         }
       }
@@ -279,7 +257,7 @@
         return {
           valid: false,
           code: 'PATIENT_CHANGED',
-          reason: `Bệnh nhân trên HIS (${current.patient.id}) không khớp với phiên làm việc (${activeClinicalSession.patient.id})`
+          reason: 'Bệnh nhân trên HIS không khớp với phiên làm việc'
         };
       }
 
@@ -292,14 +270,13 @@
         return {
           valid: false,
           code: 'ENCOUNTER_CHANGED',
-          reason: `Lượt khám trên HIS (${current.encounter?.id || 'rỗng'}) không khớp với phiên làm việc (${sessionEncounterId})`
+          reason: 'Lượt khám trên HIS không khớp với phiên làm việc'
         };
       }
 
       // Checkpoint so sánh phiếu chỉ định (nếu có trong snapshot lúc mở QR)
       const sessionOrderId = activeClinicalSession.encounter?.orderId;
-      if (sessionOrderId && current.encounter?.orderId &&
-          current.encounter.orderId !== sessionOrderId) {
+      if (sessionOrderId && current.encounter?.orderId !== sessionOrderId) {
         return {
           valid: false,
           code: 'ORDER_CHANGED',
@@ -312,7 +289,7 @@
         return {
           valid: false,
           code: 'PAYLOAD_PATIENT_MISMATCH',
-          reason: `Mã bệnh nhân gửi từ điện thoại (${expectedPatientId}) không khớp với phiên HIS (${activeClinicalSession.patient.id})`
+          reason: 'Mã bệnh nhân gửi từ điện thoại không khớp với phiên HIS'
         };
       }
     } else {

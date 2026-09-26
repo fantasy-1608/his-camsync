@@ -77,6 +77,7 @@ export function loadProductionDesktopModules(options = {}) {
       elements['maLuotKham'] = { value: options.encounterId || 'LK889900' };
     }
   }
+  if (options.orderId) elements['orderId'] = { value: options.orderId };
 
   const mockStorageStore = options.storageStore || {};
 
@@ -143,7 +144,8 @@ export function loadProductionDesktopModules(options = {}) {
     setTimeout,
     clearTimeout,
     setInterval,
-    clearInterval
+    clearInterval,
+    AbortController
   };
   sandbox.window = sandbox;
 

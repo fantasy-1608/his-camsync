@@ -72,7 +72,7 @@ function getPatientInfoFromDOM() {
 
     // Kiểm tra tính hợp lệ của thế hệ phiên (Generation Check - F03, F04)
     if (!activeClinicalSession || activeClinicalSession.state !== 'ACTIVE') {
-      console.warn(`[CamSync] Bỏ qua gói tin ${transferId}: không có phiên hoạt động`);
+      console.warn('[CamSync] Bỏ qua gói tin: không có phiên hoạt động');
       if (sendAck) {
         try { sendAck(false, 'SESSION_INACTIVE', { reason: 'Phiên kết nối không ở trạng thái hoạt động' }); } catch (e) {}
       } else if (transport === 'realtime') {
@@ -84,7 +84,7 @@ function getPatientInfoFromDOM() {
     // 1. Kiểm tra session ID (Session Binding - R1, P0-01)
     const incomingSid = data.sid || meta?.sid || data.sessionId || meta?.sessionId;
     if (incomingSid && incomingSid !== activeClinicalSession.sessionId) {
-      console.warn(`[CamSync] Bỏ qua gói tin sai phiên (${incomingSid} != ${activeClinicalSession.sessionId}) cho ${transferId}`);
+      console.warn('[CamSync] Bỏ qua gói tin sai phiên');
       if (sendAck) {
         try { sendAck(false, 'SESSION_MISMATCH', { reason: 'Gói tin không thuộc phiên làm việc hiện tại' }); } catch (e) {}
       } else if (transport === 'realtime') {
@@ -99,7 +99,7 @@ function getPatientInfoFromDOM() {
                        (incomingGen === undefined && activeClinicalSession.generation > 1);
 
     if (isStaleGen) {
-      console.warn(`[CamSync] Bỏ qua callback thế hệ cũ (${incomingGen} != ${activeClinicalSession.generation}) cho ${transferId}`);
+      console.warn('[CamSync] Bỏ qua callback thế hệ cũ');
       if (sendAck) {
         try { sendAck(false, 'STALE_GENERATION', { reason: 'Gói tin từ phiên cũ bị loại bỏ' }); } catch (e) {}
       } else if (transport === 'realtime') {
@@ -129,7 +129,7 @@ function getPatientInfoFromDOM() {
 
     // RÀO CHẮN MÃ HÓA ĐẦU CUỐI E2EE & GATE G1: Kiểm tra trạng thái mã hóa
     if (encrypted === false) {
-      console.warn(`[CamSync Gate G1] Chặn gói tin unencrypted (encrypted: false) cho ${transferId}`);
+      console.warn('[CamSync Gate G1] Chặn gói tin chưa mã hóa');
       const errPayload = {
         v: 2,
         sid: activeClinicalSession?.sessionId,
@@ -203,7 +203,7 @@ function getPatientInfoFromDOM() {
           }
         }
       } catch (decryptErr) {
-        console.error(`[CamSync E2EE] Giải mã AES-GCM thất bại cho ${transferId}:`, decryptErr);
+        console.error('[CamSync E2EE] Giải mã AES-GCM thất bại');
         const errPayload = {
           v: 2,
           sid: activeClinicalSession?.sessionId,
@@ -277,7 +277,7 @@ function getPatientInfoFromDOM() {
       if (imageBytes && typeof validateImageMagicBytes === 'function') {
         const magicCheck = validateImageMagicBytes(imageBytes);
         if (!magicCheck.valid) {
-          console.warn(`[CamSync] Magic bytes validation failed cho ${transferId}:`, magicCheck.reason);
+          console.warn('[CamSync] Định dạng ảnh không hợp lệ');
           const errPayload = {
             v: 2,
             sid: activeClinicalSession?.sessionId,
@@ -306,7 +306,7 @@ function getPatientInfoFromDOM() {
       if (imageBytes && typeof extractImageDimensions === 'function' && typeof isWithinImageLimits === 'function') {
         const dims = extractImageDimensions(imageBytes);
         if (dims.valid && !isWithinImageLimits(dims.width, dims.height)) {
-          console.warn(`[CamSync] Pixel bomb detected cho ${transferId}: ${dims.width}x${dims.height}`);
+          console.warn('[CamSync] Kích thước ảnh vượt giới hạn');
           const errPayload = {
             v: 2,
             sid: activeClinicalSession?.sessionId,
@@ -331,10 +331,10 @@ function getPatientInfoFromDOM() {
 
     const dataUrl = fullBase64.startsWith('data:') ? fullBase64 : `data:${finalMimeType};base64,${cleanB64}`;
     const injectRes = await handleIncomingImageData(dataUrl, finalMeta, { transferId, sendAck, transport, incomingPatientId: decryptedPatientId || incomingPatientId });
-    const isSuccess = typeof injectRes === 'boolean' ? injectRes : (injectRes?.status === 'HIS_COMMITTED' || (injectRes?.success && injectRes?.status !== 'HIS_UNKNOWN' && injectRes?.status !== 'HIS_REJECTED'));
+    const isSuccess = injectRes?.status === 'HIS_COMMITTED' && injectRes?.success === true;
 
     if (!isSuccess) {
-      console.warn(`[CamSync] Nạp ảnh thất bại cho ${transferId}:`, injectRes?.reason);
+      console.warn('[CamSync] Nạp ảnh thất bại');
       const errorCode = injectRes?.code || 'injection_failed';
       const ackPayload = {
         v: 2,
@@ -360,6 +360,7 @@ function getPatientInfoFromDOM() {
     const committedAck = {
       v: 2,
       sid: activeClinicalSession?.sessionId,
+      generation: activeClinicalSession?.generation,
       transferId,
       status: 'HIS_COMMITTED',
       success: true,
@@ -622,7 +623,7 @@ function getPatientInfoFromDOM() {
       }
     }
 
-    if (!fileInput || !btnUpload) {
+    if (!fileInput || !btnUpload || fileInput.ownerDocument !== btnUpload.ownerDocument || fileInput.disabled || btnUpload.disabled) {
       console.warn('[CamSync] Không tìm thấy phần tử upload trên trang');
       return {
         success: false,
@@ -680,19 +681,16 @@ function getPatientInfoFromDOM() {
       }
 
       showToast(`Đang nạp ảnh lên HIS...`);
-      if (adapter && typeof adapter.beginUpload === 'function') {
-        adapter.beginUpload();
-      } else {
-        btnUpload.click();
-      }
+      btnUpload.click();
+      if (adapter) adapter._uploadInitiated = true;
       return { success: true, initiated: true, status: 'HIS_UPLOAD_PENDING' };
     } catch (err) {
-      console.error('[CamSync] Lỗi trong quá trình nạp tệp vào HIS:', err);
+      console.error('[CamSync] Lỗi trong quá trình nạp tệp vào HIS:');
       return {
         success: false,
         initiated: false,
         code: 'INJECTION_EXCEPTION',
-        reason: err.message || 'Lỗi thao tác DOM'
+        reason: 'Lỗi thao tác DOM'
       };
     }
   }
@@ -1361,15 +1359,6 @@ function getPatientInfoFromDOM() {
 
     // Tạo Session ID và Khóa mã hóa E2EE 256-bit cố định cho ca bệnh này
     
-    // P4: Consent Notice — ghi nhận đồng ý lâm sàng liền mạch (1 lần mỗi ca trực)
-    const CONSENT_KEY = 'camsync_consent_shift';
-    const lastConsent = sessionStorage.getItem(CONSENT_KEY);
-    const consentAge = lastConsent ? (Date.now() - parseInt(lastConsent, 10)) : Infinity;
-    if (consentAge > 8 * 60 * 60 * 1000) { // > 8 giờ (hết ca trực)
-      sessionStorage.setItem(CONSENT_KEY, String(Date.now()));
-      audit.log('consent_granted', { pid: audit.hashId(clinicalContext.patient.id) });
-    }
-
     activeSessionId = generateSecureSessionId();
     const encryptionKeyHex = generateEncryptionKeyHex();
     const sessionGen = ++currentSessionGeneration;
@@ -1883,6 +1872,9 @@ function getPatientInfoFromDOM() {
    * Khởi tạo kết nối Supabase Realtime Broadcast qua WebSocket (RAM-to-RAM, Zero-Retention on Cloud)
    */
   function initRealtimeBroadcast(sessionId) {
+    // Public anon channels are not approved for clinical relay. No code path
+    // sets this state until private authorization is implemented and audited.
+    if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;
     closeRealtimeBroadcast();
     if (!sessionId || typeof WebSocket === 'undefined') return;
     isSessionIntentionallyClosed = false;
@@ -1896,7 +1888,7 @@ function getPatientInfoFromDOM() {
 
       realtimeWs.onopen = () => {
         if (!realtimeWs) return;
-        console.log('[CamSync Realtime] Connected, joining topic:', topic);
+        console.log('[CamSync Realtime] Đã kết nối');
         // Tham gia channel
         realtimeWs.send(JSON.stringify({
           topic,
@@ -1939,7 +1931,7 @@ function getPatientInfoFromDOM() {
 
           handleRealtimeBroadcastMessage(subEvent, subPayload, topic);
         } catch (err) {
-          console.warn('[CamSync Realtime] Parse error:', err);
+          console.warn('[CamSync Realtime] Parse error:');
         }
       };
 
@@ -1965,7 +1957,7 @@ function getPatientInfoFromDOM() {
         console.warn('[CamSync Realtime] WebSocket error:', err);
       };
     } catch (err) {
-      console.warn('[CamSync Realtime] Initialization error:', err);
+      console.warn('[CamSync Realtime] Initialization error:');
     }
   }
 
@@ -2043,8 +2035,10 @@ function getPatientInfoFromDOM() {
       const ackSender = (success, error, extra = {}) => {
         const ackData = {
           v: 2,
+          sid: activeClinicalSession?.sessionId,
+          generation: activeClinicalSession?.generation,
           transferId,
-          status: extra.status || (success ? 'HIS_COMMITTED' : 'error'),
+          status: extra.status || (success ? 'HIS_COMMITTED' : 'HIS_UNKNOWN'),
           retry: extra.retry !== undefined ? extra.retry : false,
           success: !!success,
           error: error || null,
@@ -2111,13 +2105,17 @@ function getPatientInfoFromDOM() {
       return false;
     }
     const topic = `realtime:camsync:${activeSessionId}`;
+    const messagePayload = (event === 'transfer_ack' || event === 'TransferAck')
+      ? { ...payload, sid: activeClinicalSession?.sessionId,
+          generation: activeClinicalSession?.generation }
+      : payload;
     realtimeWs.send(JSON.stringify({
       topic,
       event: 'broadcast',
       payload: {
         type: 'broadcast',
         event,
-        payload
+        payload: messagePayload
       },
       ref: String(++realtimeRefCounter)
     }));
@@ -2219,7 +2217,7 @@ function getPatientInfoFromDOM() {
   function abortClinicalSession(code, reason) {
     if (!activeClinicalSession && !activeSessionId) return;
 
-    console.warn(`[CamSync] abortClinicalSession kích hoạt: code=${code}, reason=${reason}`);
+    console.warn('[CamSync] Hủy phiên lâm sàng');
 
     // Dọn dẹp toàn bộ tài nguyên qua teardownSession
     teardownSession({ action: 'ABORT', code, reason, notifyMobile: true });
@@ -2434,9 +2432,11 @@ function getPatientInfoFromDOM() {
                 try {
                   const ackMsg = {
                     type: 'TRANSFER_ACK',
+                    sid: activeClinicalSession?.sessionId,
+                    generation: activeClinicalSession?.generation,
                     v: 2,
                     transferId: payload.transferId,
-                    status: extra.status || (success ? 'HIS_COMMITTED' : 'error'),
+                    status: extra.status || (success ? 'HIS_COMMITTED' : 'HIS_UNKNOWN'),
                     retry: extra.retry !== undefined ? extra.retry : false,
                     success: !!success,
                     error: error || null,
@@ -2489,6 +2489,9 @@ function getPatientInfoFromDOM() {
                 try {
                   conn.send({
                     type: 'TRANSFER_ACK',
+                    sid: activeClinicalSession?.sessionId,
+                    generation: activeClinicalSession?.generation,
+                    transferId: payload.transferId,
                     status: 'error',
                     success: false,
                     error: clinicalCheck.code || 'clinical_context_mismatch',
@@ -2507,6 +2510,9 @@ function getPatientInfoFromDOM() {
                 try {
                   conn.send({
                     type: 'TRANSFER_ACK',
+                    sid: activeClinicalSession?.sessionId,
+                    generation: activeClinicalSession?.generation,
+                    transferId: payload.transferId,
                     status: 'HIS_REJECTED',
                     success: false,
                     error: 'DECRYPTION_FAILED',
@@ -2557,6 +2563,9 @@ function getPatientInfoFromDOM() {
                   try {
                     conn.send({
                       type: 'TRANSFER_ACK',
+                      sid: activeClinicalSession?.sessionId,
+                      generation: activeClinicalSession?.generation,
+                      transferId: payload.transferId,
                       status: 'HIS_REJECTED',
                       success: false,
                       error: 'DECRYPTION_FAILED',
@@ -2586,6 +2595,9 @@ function getPatientInfoFromDOM() {
                   try {
                     conn.send({
                       type: 'TRANSFER_ACK',
+                      sid: activeClinicalSession?.sessionId,
+                      generation: activeClinicalSession?.generation,
+                      transferId: payload.transferId,
                       status: 'HIS_REJECTED',
                       success: false,
                       error: 'INVALID_IMAGE_MAGIC_BYTES',
@@ -2603,6 +2615,9 @@ function getPatientInfoFromDOM() {
                   try {
                     conn.send({
                       type: 'TRANSFER_ACK',
+                      sid: activeClinicalSession?.sessionId,
+                      generation: activeClinicalSession?.generation,
+                      transferId: payload.transferId,
                       status: 'HIS_REJECTED',
                       success: false,
                       error: 'PIXEL_BOMB_DETECTED',
@@ -2622,8 +2637,10 @@ function getPatientInfoFromDOM() {
                   try {
                     conn.send({
                       type: 'TRANSFER_ACK',
+                      sid: activeClinicalSession?.sessionId,
+                      generation: activeClinicalSession?.generation,
                       transferId: payload.transferId,
-                      status: success ? 'HIS_COMMITTED' : (ackPayload?.status || 'error'),
+                      status: success && ackPayload?.status === 'HIS_COMMITTED' ? 'HIS_COMMITTED' : (ackPayload?.status || 'HIS_UNKNOWN'),
                       success,
                       photoCount: success ? (ackPayload?.photoCount || photoCount) : photoCount,
                       error: success ? null : (errCode || ackPayload?.code || ackPayload?.error || 'injection_failed'),
@@ -2634,12 +2651,14 @@ function getPatientInfoFromDOM() {
                 },
                 incomingPatientId: finalMeta?.patientId || incomingPatientId
               });
-              const isSuccess = typeof injectRes === 'boolean' ? injectRes : (injectRes?.status === 'HIS_COMMITTED' || (injectRes?.success && injectRes?.status !== 'HIS_UNKNOWN' && injectRes?.status !== 'HIS_REJECTED'));
+              const isSuccess = injectRes?.status === 'HIS_COMMITTED' && injectRes?.success === true;
               try {
                 conn.send({
                   type: 'TRANSFER_ACK',
+                  sid: activeClinicalSession?.sessionId,
+                  generation: activeClinicalSession?.generation,
                   transferId: payload.transferId,
-                  status: isSuccess ? 'HIS_COMMITTED' : (injectRes?.status === 'HIS_UNKNOWN' ? 'HIS_UNKNOWN' : 'error'),
+                  status: isSuccess ? 'HIS_COMMITTED' : (injectRes?.status === 'HIS_REJECTED' ? 'HIS_REJECTED' : 'HIS_UNKNOWN'),
                   success: isSuccess,
                   photoCount: isSuccess ? (injectRes?.photoCount || photoCount) : photoCount,
                   error: isSuccess ? null : (injectRes?.code || injectRes?.error || 'injection_failed'),
@@ -2662,6 +2681,9 @@ function getPatientInfoFromDOM() {
 
   function handleIncomingImageData(base64Image, meta = {}, context = {}) {
     const { transferId, sendAck, transport, incomingPatientId } = context;
+    if (typeof transferId !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(transferId)) {
+      return Promise.resolve({ success: false, status: 'HIS_REJECTED', code: 'TRANSFER_ID_REQUIRED', retry: false });
+    }
     const sm = new TransferStateMachine(transferId || `tx_${Date.now()}`, 'INITIAL');
     sm.transition('TRANSFER_VERIFIED');
 
@@ -2699,13 +2721,11 @@ function getPatientInfoFromDOM() {
     const filename = meta.name || `${prefix}_${Date.now()}.jpg`;
 
     // === RÀO CHẮN IDEMPOTENT DEDUPLICATION CHỐNG GHI TRÙNG LẶP ===
-    const dedupKey = transferId || filename;
-    const existingRecord = (transferId && recentUploadedTokens.get(transferId)) ||
-                           (filename && recentUploadedTokens.get(filename));
+    const existingRecord = transferId && recentUploadedTokens.get(transferId);
 
     if (existingRecord) {
       if (existingRecord.state === 'COMMITTED') {
-        console.warn(`[CamSync Idempotency] Bỏ qua yêu cầu tải ảnh trùng lặp (${filename || transferId}) đã lưu thành công trên HIS.`);
+        console.warn('[CamSync Idempotency] Bỏ qua yêu cầu tải ảnh trùng lặp đã xác nhận');
         const cachedRes = {
           success: true,
           status: 'HIS_COMMITTED',
@@ -2717,9 +2737,17 @@ function getPatientInfoFromDOM() {
         return p;
       }
       if (existingRecord.state === 'IN_FLIGHT' && existingRecord.promise) {
-        console.warn(`[CamSync Idempotency] Yêu cầu nạp ảnh (${filename || transferId}) đang được xử lý trong tiến trình khác. Chờ kết quả hiện tại.`);
+        console.warn('[CamSync Idempotency] Yêu cầu nạp ảnh đang được xử lý');
         return existingRecord.promise;
       }
+      if (existingRecord.state === 'UNKNOWN') {
+        return Promise.resolve({ success: false, status: 'HIS_UNKNOWN', retry: false,
+          reason: 'Cần đối chiếu ảnh trên HIS trước khi gửi lại' });
+      }
+    }
+    if (recentUploadedTokens.size >= 100) {
+      abortClinicalSession('TRANSFER_LIMIT', 'Phiên có quá nhiều ảnh; hãy đối chiếu HIS và mở phiên mới');
+      return Promise.resolve({ success: false, status: 'HIS_UNKNOWN', retry: false });
     }
 
     const approxKB = Math.round((base64Image.length * 0.75) / 1024);
@@ -2728,14 +2756,14 @@ function getPatientInfoFromDOM() {
     try {
       file = dataURLtoFile(base64Image, filename);
     } catch (err) {
-      console.error('[CamSync] Lỗi chuyển đổi dataURLtoFile:', err);
+      console.error('[CamSync] Lỗi chuyển đổi dataURLtoFile:');
       showToast('⚠️ Không thể chuyển đổi tệp ảnh lâm sàng');
       sm.transition('HIS_REJECTED');
       const errRes = {
         success: false,
         status: 'HIS_REJECTED',
         code: 'FILE_CONVERSION_ERROR',
-        reason: err.message || 'Lỗi chuyển đổi tệp',
+        reason: 'Lỗi chuyển đổi tệp',
         retry: false
       };
       const p = Promise.resolve(errRes);
@@ -2789,6 +2817,7 @@ function getPatientInfoFromDOM() {
         reason: errorReason,
         retry: false
       };
+      if (transferId) recentUploadedTokens.set(transferId, { state: 'UNKNOWN', timestamp: Date.now() });
       if (sendAck) {
         try { sendAck(false, errorCode, unknownRes); } catch (e) {}
       } else if (transport === 'realtime') {
@@ -2856,6 +2885,7 @@ function getPatientInfoFromDOM() {
           reason: errorReason,
           retry: false
         };
+        if (transferId) recentUploadedTokens.set(transferId, { state: 'UNKNOWN', timestamp: Date.now() });
         if (sendAck) {
           try { sendAck(false, errorCode, unknownRes); } catch (e) {}
         } else if (transport === 'realtime') {
@@ -2952,7 +2982,6 @@ function getPatientInfoFromDOM() {
           filename
         };
         if (transferId) recentUploadedTokens.set(transferId, commitRecord);
-        if (filename) recentUploadedTokens.set(filename, commitRecord);
 
         return {
           success: true,
@@ -2963,7 +2992,6 @@ function getPatientInfoFromDOM() {
       }
 
       if (transferId) recentUploadedTokens.delete(transferId);
-      if (filename) recentUploadedTokens.delete(filename);
 
       if (persistResult === 'REJECTED') {
         sm.transition('HIS_REJECTED');
@@ -2992,6 +3020,7 @@ function getPatientInfoFromDOM() {
         reason: unknownReason,
         retry: false
       };
+      if (transferId) recentUploadedTokens.set(transferId, { state: 'UNKNOWN', timestamp: Date.now() });
       if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
         unifiedTransferReceiver.setTransferState(transferId, 'UNKNOWN', unknownFinal);
       }
@@ -3010,12 +3039,6 @@ function getPatientInfoFromDOM() {
       filename
     };
     if (transferId) recentUploadedTokens.set(transferId, inFlightRecord);
-    if (filename) recentUploadedTokens.set(filename, inFlightRecord);
-
-    if (recentUploadedTokens.size > 50) {
-      const oldestKey = recentUploadedTokens.keys().next().value;
-      if (oldestKey) recentUploadedTokens.delete(oldestKey);
-    }
 
     return asyncPromise;
   }

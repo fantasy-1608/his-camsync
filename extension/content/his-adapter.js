@@ -53,16 +53,10 @@
       '#patientId'
     ]),
     ENCOUNTER_ID_INPUTS: Object.freeze([
-      '#hdfIDMauBenhPham',
-      'input[name="hdfIDMauBenhPham"]',
-      '#idmaubenhpham',
-      '#hdfIDKetQuaCLS',
-      '#hdfIDDichVuKB',
       '#maLuotKham',
       '#soVaoVien',
       '#maVaoVien',
       '#txtSoVaoVien',
-      '#txtMaBA',
       '#encounterId'
     ]),
     ORDER_ID_INPUTS: Object.freeze([
@@ -208,6 +202,10 @@
       this._lastAttachedFile = null;
       this._uploadInitiated = false;
       this._simulatedFailure = options.simulateFailure || null;
+      // The production adapter has no verified HIS readback until HIS supplies
+      // and approves a server-record integration for the supported screen.
+      this._verifyServerRecord = typeof options.verifyServerRecord === 'function'
+        ? options.verifyServerRecord : null;
       this._persistedEvidence = new Map();
       this._pendingPersistResolvers = new Set();
       this._activeObservers = new Set();
@@ -345,8 +343,6 @@
       let parsed = null;
       if (clinical && typeof clinical.getClinicalContextFromDOM === 'function') {
         parsed = clinical.getClinicalContextFromDOM(() => doc);
-      } else {
-        parsed = this._parseContextInternal(doc);
       }
 
       if (!parsed || !parsed.valid || !parsed.patient?.id || !parsed.encounter?.id) {
@@ -377,7 +373,7 @@
 
       if (current.patientId !== expected.patientId) return false;
       if (current.encounterId !== expected.encounterId) return false;
-      if (expected.orderId && current.orderId && current.orderId !== expected.orderId) {
+      if (expected.orderId && current.orderId !== expected.orderId) {
         return false;
       }
       return true;
@@ -437,7 +433,7 @@
       } catch (err) {
         return {
           success: false,
-          error: 'INJECTION_EXCEPTION: ' + (err.message || 'Lỗi thao tác DOM')
+          error: 'INJECTION_EXCEPTION'
         };
       }
     }
@@ -474,7 +470,7 @@
       } catch (err) {
         return {
           initiated: false,
-          error: 'CLICK_EXCEPTION: ' + (err.message || 'Lỗi kích hoạt click')
+          error: 'CLICK_EXCEPTION'
         };
       }
     }
@@ -486,320 +482,56 @@
      * @returns {Promise<'COMMITTED' | 'REJECTED' | 'UNKNOWN'>}
      */
     async awaitPersisted(evidence, timeoutMs = 15000) {
-      if (typeof timeoutMs !== 'number' || timeoutMs <= 0) {
-        return 'UNKNOWN';
-      }
-
-      if (this._simulatedFailure === 'REJECTED') return 'REJECTED';
-      if (this._simulatedFailure === 'TIMEOUT' || this._simulatedFailure === 'UNKNOWN') return 'UNKNOWN';
-
-      if (!this._uploadInitiated) {
-        return 'UNKNOWN';
-      }
-
-      if (!evidence || !evidence.transferId) {
-        return 'UNKNOWN';
-      }
-
-      // Idempotency: multiple validations for same transferId confirm exactly once
-      if (this._persistedEvidence.has(evidence.transferId)) {
-        return 'COMMITTED';
-      }
-
-      if (!evidence.expectedContext || !evidence.expectedContext.patientId) {
-        return 'UNKNOWN';
-      }
+      if (!this._uploadInitiated || !evidence?.transferId ||
+          !evidence.expectedContext?.patientId || !evidence.expectedContext?.encounterId ||
+          !Number.isFinite(timeoutMs) || timeoutMs <= 0) return 'UNKNOWN';
 
       const expected = evidence.expectedContext;
-      const startTime = Date.now();
-      const doc = this._getDoc();
+      if (!(await this.compareContext(expected))) return 'UNKNOWN';
+      if (this._simulatedFailure === 'REJECTED') return 'REJECTED';
+      if (this._simulatedFailure) return 'UNKNOWN';
 
-      return new Promise((resolve) => {
-        let isDone = false;
-        let pollTimer = null;
-        let observer = null;
-
-        const cleanup = () => {
-          isDone = true;
-          if (pollTimer) {
-            clearInterval(pollTimer);
-            this._activeTimers.delete(pollTimer);
-            pollTimer = null;
-          }
-          if (observer) {
-            try { observer.disconnect(); } catch (e) {}
-            this._activeObservers.delete(observer);
-            observer = null;
-          }
-        };
-
-        const finish = (res) => {
-          if (isDone) return;
-          this._pendingPersistResolvers.delete(finish);
-          cleanup();
-          if (res === 'COMMITTED') {
-            this._persistedEvidence.set(evidence.transferId, {
-              ...evidence,
-              savedAt: Date.now()
-            });
-          }
-          resolve(res);
-        };
-        this._pendingPersistResolvers.add(finish);
-
-        const thisRef = this;
-        function extractContainerText(c) {
-          if (!c) return '';
-          const html = c.innerHTML || '';
-          const txt = c.innerText || c.textContent || '';
-          let inputVals = '';
-          try {
-            const inputs = c.querySelectorAll ? c.querySelectorAll('input') : [];
-            for (let i = 0; i < inputs.length; i++) {
-              inputVals += ' ' + (inputs[i].value || '');
-            }
-          } catch (e) {}
-          let imgAttrs = '';
-          try {
-            const imgs = c.querySelectorAll ? c.querySelectorAll('img') : [];
-            for (let i = 0; i < imgs.length; i++) {
-              imgAttrs += ' ' + (imgs[i].alt || '') + ' ' + (imgs[i].src || '');
-            }
-          } catch (e) {}
-          return `${txt} ${html} ${inputVals} ${imgAttrs}`;
-        }
-
-        const baseToken = evidence.fileToken ? evidence.fileToken.replace(/\.[^/.]+$/, '') : '';
-        const tokenList = [evidence.fileToken, baseToken, evidence.transferId].filter(Boolean);
-
-        // Map each container to its initial evidence text and child count
-        const initialEvidence = new Map();
-        function recordContainerInitial(c) {
-          if (c && !initialEvidence.has(c)) {
-            initialEvidence.set(c, {
-              text: extractContainerText(c),
-              count: c.children?.length || 0
-            });
-          }
-        }
-
-        function scanInitial(targetDoc) {
-          if (!targetDoc) return;
-          for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
-            try {
-              const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
-              for (let i = 0; i < els.length; i++) recordContainerInitial(els[i]);
-            } catch (e) {}
-          }
-        }
-
-        scanInitial(doc);
-        const container = resolveElement(VNPT_SELECTORS.PERSISTENCE_CONTAINERS, doc);
-        if (container) recordContainerInitial(container);
-        try {
-          const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
-          for (const f of iframes) {
-            try {
-              const fd = f.contentDocument || f.contentWindow?.document;
-              if (fd) scanInitial(fd);
-            } catch (e) {}
-          }
-        } catch (e) {}
-
-        const checkCondition = async () => {
-          if (isDone) return;
-
-          // 1. Check timeout
-          if (Date.now() - startTime >= timeoutMs) {
-            finish('UNKNOWN');
-            return;
-          }
-
-          // 2. Barrier Check: Verify active context hasn't mutated while waiting (Checkpoint 3)
-          const isContextValid = await thisRef.compareContext(expected);
-          if (!isContextValid) {
-            finish('UNKNOWN');
-            return;
-          }
-
-          // 3. Negative check: Rejection alerts in HIS
-          const rejEl = resolveElement(VNPT_SELECTORS.REJECTION_INDICATORS, doc);
-          if (rejEl) {
-            const txt = (rejEl.innerText || rejEl.textContent || '').toLowerCase();
-            if (txt.includes('thất bại') || txt.includes('lỗi') || txt.includes('error') || txt.includes('dung lượng') || txt.includes('quá lớn')) {
-              finish('REJECTED');
-              return;
-            }
-          }
-
-          // 4. Positive check: Evidence in persistence containers
-          function evaluateContainer(c) {
-            if (!c) return false;
-            const currentFull = extractContainerText(c);
-            const currentCount = c.children?.length || 0;
-            const prev = initialEvidence.get(c);
-
-            for (const tok of tokenList) {
-              if (currentFull.includes(tok)) {
-                if (!prev || !prev.text.includes(tok) || currentCount > prev.count) {
-                  return true;
-                }
-                // Unique timestamped filename token (e.g. ECG_..._179...) is authentic evidence
-                if (/_\d{10,}/.test(tok)) {
-                  return true;
-                }
-              }
-            }
-
-            if (thisRef._lastAttachedFile?.name) {
-              const baseAttached = thisRef._lastAttachedFile.name.replace(/\.[^/.]+$/, '');
-              if ((currentFull.includes(thisRef._lastAttachedFile.name) || (baseAttached && currentFull.includes(baseAttached))) &&
-                  (!prev || (!prev.text.includes(thisRef._lastAttachedFile.name) && !prev.text.includes(baseAttached)))) {
-                return true;
-              }
-            }
-
-            if (prev && currentCount > prev.count && evidence.fileSize && currentFull.includes(String(evidence.fileSize))) {
-              return true;
-            }
-            return false;
-          }
-
-          function checkDocContainers(targetDoc) {
-            if (!targetDoc) return false;
-            for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
-              try {
-                const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
-                for (let i = 0; i < els.length; i++) {
-                  if (evaluateContainer(els[i])) return true;
-                }
-              } catch (e) {}
-            }
-            return false;
-          }
-
-          if (checkDocContainers(doc)) {
-            finish('COMMITTED');
-            return;
-          }
-          if (container && evaluateContainer(container)) {
-            finish('COMMITTED');
-            return;
-          }
-          try {
-            const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
-            for (const f of iframes) {
-              try {
-                const fd = f.contentDocument || f.contentWindow?.document;
-                if (fd && checkDocContainers(fd)) {
-                  finish('COMMITTED');
-                  return;
-                }
-              } catch (e) {}
-            }
-          } catch (e) {}
-
-          // In mock/test environments without live DOM file grid:
-          // If simulateCommit flag or mock server persist evidence is provided
-          if (evidence.simulateCommit || (doc && doc.__simulatePersistenceCommit)) {
-            finish('COMMITTED');
-            return;
-          }
-        };
-
-        // Scoped mutation observer for fast response
-        try {
-          if (typeof MutationObserver !== 'undefined') {
-            const observeDoc = (targetDoc) => {
-              if (!targetDoc) return;
-              for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
-                try {
-                  const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
-                  for (let i = 0; i < els.length; i++) {
-                    const obs = new MutationObserver(() => { checkCondition(); });
-                    obs.observe(els[i], { childList: true, subtree: true, attributes: true });
-                    this._activeObservers.add(obs);
-                  }
-                } catch (e) {}
-              }
-            };
-            observeDoc(doc);
-            if (container) {
-              const obs = new MutationObserver(() => { checkCondition(); });
-              obs.observe(container, { childList: true, subtree: true, attributes: true });
-              this._activeObservers.add(obs);
-            }
-            const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
-            for (const f of iframes) {
-              try {
-                const fd = f.contentDocument || f.contentWindow?.document;
-                if (fd) observeDoc(fd);
-              } catch (e) {}
-            }
-          }
-        } catch (e) {}
-
-        // Fast-responsive polling interval (40ms)
-        pollTimer = setInterval(checkCondition, 40);
-        this._activeTimers.add(pollTimer);
-
-        // Immediate first check
-        checkCondition();
-      });
-    }
-
-    // -----------------------------------------------------------------------
-    // Internal Fallback Parser
-    // -----------------------------------------------------------------------
-    _parseContextInternal(doc) {
-      if (!doc || !doc.body) return null;
-      let patientId = null;
-      let patientName = null;
-      let patientAge = '';
-      let encounterId = null;
-      let orderId = null;
-
-      const bannerEl = resolveElement(VNPT_SELECTORS.PATIENT_BANNER, doc);
-      const text = bannerEl?.innerText || bannerEl?.textContent || doc.body?.innerText || doc.body?.textContent || '';
-
-      const pMatch = text.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)\s*-\s*Tên\s*(?:bệnh\s*nhân|BN):\s*([^-\n]+)(?:\s*-\s*Tuổi:\s*([0-9]+\s*Tuổi|[0-9]+))?/i) ||
-                    text.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)/i);
-      if (pMatch) {
-        patientId = pMatch[1].trim();
-        if (pMatch[2]) patientName = pMatch[2].trim();
-        if (pMatch[3]) patientAge = pMatch[3].trim();
+      // No DOM preview, filename, toast, or input value is server persistence.
+      // HIS must supply a readback callback with a uniquely identified saved
+      // record before this adapter can ever return COMMITTED.
+      if (!this._verifyServerRecord) return 'UNKNOWN';
+      const controller = new AbortController();
+      let timer;
+      try {
+        const timeout = new Promise((resolve) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            resolve(null);
+          }, timeoutMs);
+        });
+        const record = await Promise.race([
+          Promise.resolve().then(() => this._verifyServerRecord({
+            transferId: evidence.transferId,
+            fileToken: evidence.fileToken,
+            expectedContext: Object.freeze({ ...expected }),
+            signal: controller.signal
+          })).catch(() => null),
+          timeout
+        ]);
+        if (!(await this.compareContext(expected))) return 'UNKNOWN';
+        if (!record || record.source !== 'HIS_SERVER' ||
+            record.transferId !== evidence.transferId ||
+            record.patientId !== expected.patientId ||
+            record.encounterId !== expected.encounterId ||
+            (expected.orderId && record.orderId !== expected.orderId) ||
+            typeof record.fileId !== 'string' || !record.fileId.trim() ||
+            record.fileToken !== evidence.fileToken) return 'UNKNOWN';
+        if (record.status === 'REJECTED') return 'REJECTED';
+        if (record.status !== 'COMMITTED') return 'UNKNOWN';
+        this._persistedEvidence.set(evidence.transferId, {
+          fileId: record.fileId, patientId: record.patientId,
+          encounterId: record.encounterId, orderId: record.orderId
+        });
+        return 'COMMITTED';
+      } finally {
+        clearTimeout(timer);
+        controller.abort();
       }
-
-      if (!patientId) {
-        const idInput = resolveElement(VNPT_SELECTORS.PATIENT_ID_INPUTS, doc);
-        if (idInput && idInput.value) patientId = idInput.value.trim();
-      }
-
-      const encInput = resolveElement(VNPT_SELECTORS.ENCOUNTER_ID_INPUTS, doc);
-      if (encInput && encInput.value) encounterId = encInput.value.trim();
-
-      if (!encounterId) {
-        const encMatch = text.match(/(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Mã\s*BA|Số\s*BA|Mã\s*hồ\s*sơ|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
-                         text.match(/\b(?:LK|VV|ENC):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
-        if (encMatch) encounterId = encMatch[1].trim();
-      }
-
-      const ordInput = resolveElement(VNPT_SELECTORS.ORDER_ID_INPUTS, doc);
-      if (ordInput && ordInput.value) orderId = ordInput.value.trim();
-
-      if (!orderId) {
-        const ordMatch = text.match(/(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
-                         text.match(/\b(?:ORD|PCD):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
-        if (ordMatch) orderId = ordMatch[1].trim();
-      }
-
-      const valid = Boolean(patientId && encounterId);
-      return {
-        valid,
-        patient: { id: patientId, name: patientName, age: patientAge },
-        encounter: { id: encounterId, orderId },
-        hisContext: { pathname: typeof window !== 'undefined' ? window.location?.pathname : '' }
-      };
     }
 
     // -----------------------------------------------------------------------

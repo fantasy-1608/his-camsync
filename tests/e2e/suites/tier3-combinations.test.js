@@ -110,7 +110,7 @@ describe('Tier 3: Cross-Feature Combinations Suite', () => {
 
     const entries = await desktop.audit.getEntries();
     assert.strictEqual(entries[0].ev, 'HIS_UNKNOWN');
-    assert.strictEqual(entries[0].patientRef, '24***23');
+    assert.strictEqual(entries[0].patientRef, undefined);
   });
 
   test('TC-C03: Duplicate transfer with different encryption key (F12 + F13 + F16)', async () => {
@@ -241,7 +241,8 @@ describe('Tier 3: Cross-Feature Combinations Suite', () => {
   test('TC-C08: End-to-End full pipeline integration (F01 through F21)', async () => {
     // 1. Desktop opens session on HIS
     const desktop = loadProductionDesktopModules({
-      patientText: 'Mã bệnh nhân: 887766 - Tên bệnh nhân: NGUYEN VAN CHINH - Mã lượt khám: ENC_C08'
+      patientText: 'Mã bệnh nhân: 887766 - Tên bệnh nhân: NGUYEN VAN CHINH - Mã lượt khám: ENC_C08',
+      orderId: 'ORD_C08'
     });
     await desktop.audit.clear();
 
@@ -316,7 +317,7 @@ describe('Tier 3: Cross-Feature Combinations Suite', () => {
 
     const entries = await desktop.audit.getEntries();
     assert.strictEqual(entries[0].ev, 'HIS_COMMITTED');
-    assert.strictEqual(entries[0].patientRef, '88***66');
+    assert.strictEqual(entries[0].patientRef, undefined);
   });
 
 });
