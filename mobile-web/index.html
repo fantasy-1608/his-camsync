@@ -5,7 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
-  <link rel="stylesheet" href="css/style.css?v=2.0.2">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/><circle cx='12' cy='13' r='4'/></svg>">
+  <link rel="stylesheet" href="css/style.css?v=2.0.3">
 </head>
 <body>
   <!-- Header -->
@@ -64,30 +65,30 @@
 
   <!-- Main View -->
   <main class="main-view">
+    <!-- Specialty Segmented Bar (Luôn hiển thị ở chế độ Chụp ECG, Siêu Âm và Scan Tài Liệu) -->
+    <div class="specialty-segmented-bar" id="globalSpecialtyBar">
+      <button type="button" class="spec-tab-btn active" id="tabEcg" data-specialty="ecg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <span>Điện Tâm Đồ (ECG)</span>
+      </button>
+      <button type="button" class="spec-tab-btn" id="tabUltrasound" data-specialty="ultrasound">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+        </svg>
+        <span>Siêu Âm / CĐHA</span>
+      </button>
+      <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        <span>Tài Liệu</span>
+      </button>
+    </div>
+
     <!-- Screen 1: Chụp ảnh / Khởi đầu -->
     <section id="captureScreen" class="screen capture-screen">
-      <!-- Specialty Segmented Bar -->
-      <div class="specialty-segmented-bar">
-        <button type="button" class="spec-tab-btn active" id="tabEcg" data-specialty="ecg">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <span>Điện Tâm Đồ (ECG)</span>
-        </button>
-        <button type="button" class="spec-tab-btn" id="tabUltrasound" data-specialty="ultrasound">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-          </svg>
-          <span>Siêu Âm / CĐHA</span>
-        </button>
-        <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
-          <span>Tài Liệu</span>
-        </button>
-      </div>
-
       <!-- Center Guidance Card -->
       <div class="capture-guide-card">
         <div class="guide-icon-circle" id="guideIcon">
@@ -307,6 +308,14 @@
           </svg>
           <p class="guide-title" style="font-size: 16px; margin-bottom: 6px;">Chụp Giấy Tờ & Tài Liệu</p>
           <p class="guide-desc">Chụp từng trang giấy tờ (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.</p>
+          <div style="margin-top: 18px;">
+            <button type="button" class="btn-shutter-main" id="btnDocEmptyCapture" style="margin: 0 auto; width: 62px; height: 62px;" aria-label="Chụp ảnh tài liệu mới">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -785,7 +794,9 @@
     const docScreen = document.getElementById('docScreen');
 
     function switchSpecialty(spec) {
+      exitCropMode();
       currentSpecialty = spec;
+      triggerHaptic('tap');
 
       // Deactivate all tabs
       tabEcg.classList.remove('active');
@@ -1414,6 +1425,12 @@
       exitCropMode();
       docSelectedIndex = idx;
       renderDocThumbnails();
+      requestAnimationFrame(() => {
+        const activeItem = docThumbnailStrip?.querySelector(`.doc-thumb-item[data-idx="${idx}"]`);
+        if (activeItem) {
+          activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      });
     }
 
     function removeDocPage(idx) {
@@ -1469,6 +1486,8 @@
     }
 
     // Camera & Gallery triggers
+    const btnDocEmptyCapture = document.getElementById('btnDocEmptyCapture');
+    btnDocEmptyCapture?.addEventListener('click', () => { triggerHaptic('tap'); docCameraInput.click(); });
     btnDocCapture?.addEventListener('click', () => { triggerHaptic('tap'); docCameraInput.click(); });
     btnDocAddPage?.addEventListener('click', () => { triggerHaptic('tap'); docCameraInput.click(); });
     btnDocGallery?.addEventListener('click', () => { triggerHaptic('tap'); docGalleryInput.click(); });
@@ -1554,6 +1573,8 @@
       docEditToolbar.style.display = 'none';
     }
 
+    const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
+
     function enterPerspectiveMode() {
       if (docSelectedIndex < 0) return;
       activeEditMode = 'perspective';
@@ -1565,8 +1586,12 @@
       ];
       if (docCropHint) docCropHint.textContent = 'Kéo 4 góc theo mép giấy tờ';
       if (btnCropApply) btnCropApply.textContent = 'Áp dụng nắn';
-      setupOverlayPosition();
-      drawEditCanvas();
+      docScreen.classList.add('is-editing');
+      if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'none';
+      requestAnimationFrame(() => {
+        setupOverlayPosition();
+        drawEditCanvas();
+      });
     }
 
     function enterCropMode() {
@@ -1575,14 +1600,22 @@
       cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
       if (docCropHint) docCropHint.textContent = 'Kéo góc để chọn vùng cắt';
       if (btnCropApply) btnCropApply.textContent = 'Áp dụng cắt';
-      setupOverlayPosition();
-      drawEditCanvas();
+      docScreen.classList.add('is-editing');
+      if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'none';
+      requestAnimationFrame(() => {
+        setupOverlayPosition();
+        drawEditCanvas();
+      });
     }
 
     function exitEditOverlay() {
       activeEditMode = null;
       activeDragHandle = null;
       activeDragCorner = -1;
+      docScreen.classList.remove('is-editing');
+      if (globalSpecialtyBar && !document.body.classList.contains('in-editor')) {
+        globalSpecialtyBar.style.display = 'flex';
+      }
       docCropOverlay.style.display = 'none';
       docCropConfirm.style.display = 'none';
       if (docPages.length > 0) docEditToolbar.style.display = 'flex';
@@ -1592,6 +1625,13 @@
     function exitCropMode() {
       exitEditOverlay();
     }
+
+    window.addEventListener('resize', () => {
+      if (activeEditMode) {
+        setupOverlayPosition();
+        drawEditCanvas();
+      }
+    });
 
     function drawEditCanvas() {
       const canvas = docCropCanvas;
@@ -1898,38 +1938,47 @@
       }
     }
 
-    // Touch listeners on canvas
+    // Touch listeners on canvas & window
     docCropCanvas?.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const rect = docCropCanvas.getBoundingClientRect();
       const touch = e.touches[0];
-      handleEditPointerDown(touch.clientX - rect.left, touch.clientY - rect.top);
+      if (touch) {
+        handleEditPointerDown(touch.clientX - rect.left, touch.clientY - rect.top);
+      }
     }, { passive: false });
 
-    docCropCanvas?.addEventListener('touchmove', (e) => {
-      e.preventDefault();
+    window.addEventListener('touchmove', (e) => {
+      if (!activeEditMode || (activeDragCorner < 0 && !activeDragHandle)) return;
       const rect = docCropCanvas.getBoundingClientRect();
       const touch = e.touches[0];
+      if (!touch) return;
       handleEditPointerMove(touch.clientX - rect.left, touch.clientY - rect.top);
     }, { passive: false });
 
-    docCropCanvas?.addEventListener('touchend', handleEditPointerUp);
+    window.addEventListener('touchend', () => {
+      if (activeDragCorner >= 0 || activeDragHandle !== null) {
+        handleEditPointerUp();
+      }
+    });
 
-    // Mouse fallback
+    // Mouse fallback with window tracking
     let mouseIsDown = false;
     docCropCanvas?.addEventListener('mousedown', (e) => {
       mouseIsDown = true;
       const rect = docCropCanvas.getBoundingClientRect();
       handleEditPointerDown(e.clientX - rect.left, e.clientY - rect.top);
     });
-    docCropCanvas?.addEventListener('mousemove', (e) => {
-      if (!mouseIsDown) return;
+    window.addEventListener('mousemove', (e) => {
+      if (!mouseIsDown || !activeEditMode) return;
       const rect = docCropCanvas.getBoundingClientRect();
       handleEditPointerMove(e.clientX - rect.left, e.clientY - rect.top);
     });
-    docCropCanvas?.addEventListener('mouseup', () => {
-      mouseIsDown = false;
-      handleEditPointerUp();
+    window.addEventListener('mouseup', () => {
+      if (mouseIsDown) {
+        mouseIsDown = false;
+        handleEditPointerUp();
+      }
     });
 
     btnDocPerspective?.addEventListener('click', enterPerspectiveMode);

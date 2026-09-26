@@ -386,6 +386,12 @@ body {
   display: flex;
   gap: 4px;
   box-shadow: var(--shadow-sm);
+  margin: 6px 12px 2px 12px;
+  flex-shrink: 0;
+}
+
+body.in-editor .specialty-segmented-bar {
+  display: none !important;
 }
 
 .spec-tab-btn {
@@ -1344,6 +1350,46 @@ body {
 
 .doc-crop-apply:active {
   background: var(--accent-blue-hover);
+}
+
+/* Document Mode Edit / Warp Mode Immersion */
+#docScreen.is-editing {
+  overflow: hidden;
+}
+
+#docScreen.is-editing .doc-thumbnail-strip,
+#docScreen.is-editing .doc-preset-selector,
+#docScreen.is-editing .doc-page-counter,
+#docScreen.is-editing .doc-actions-container {
+  display: none !important;
+}
+
+#docScreen.is-editing .doc-preview-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
+}
+
+#docScreen.is-editing .doc-preview-img-wrap {
+  max-height: clamp(340px, 64vh, 600px);
+  flex: 1;
+}
+
+#docScreen.is-editing .doc-preview-img {
+  max-height: clamp(330px, 62vh, 580px);
+}
+
+#docScreen.is-editing .doc-crop-confirm {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  padding-top: 10px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  background: var(--bg-surface);
 }
 
 /* Thumbnail drag & rotation badge */
