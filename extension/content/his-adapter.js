@@ -110,25 +110,35 @@
     const doc = customDoc || (typeof document !== 'undefined' ? document : getRootDocument());
     if (!doc) return null;
 
-    // 1. Nếu có iframe con chứa UploadController hoặc btnUpload (dialog CDHA), ưu tiên quét trong iframe trước
+    // 1. Nếu có iframe con chứa UploadController hoặc btnUpload (dialog CDHA), ưu tiên quét trong iframe trước (ưu tiên iframe visible)
     try {
       const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+      const matchedFrames = [];
       for (const frame of iframes) {
         try {
           const fDoc = frame.contentDocument || frame.contentWindow?.document;
           if (fDoc && (fDoc.getElementById('UploadController') || fDoc.getElementById('btnUpload'))) {
-            for (const sel of selectorList) {
-              if (sel.startsWith('#') && !sel.includes(' ') && fDoc.getElementById) {
-                const el = fDoc.getElementById(sel.slice(1));
-                if (el) return el;
-              }
-              if (fDoc.querySelector) {
-                const el = fDoc.querySelector(sel);
-                if (el) return el;
-              }
-            }
+            const btn = fDoc.getElementById('btnUpload');
+            const isVisible = Boolean(
+              (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0)) ||
+              (frame.offsetWidth > 0 && frame.offsetHeight > 0)
+            );
+            matchedFrames.push({ fDoc, isVisible });
           }
         } catch (frameErr) {}
+      }
+      matchedFrames.sort((a, b) => (b.isVisible ? 1 : 0) - (a.isVisible ? 1 : 0));
+      for (const { fDoc } of matchedFrames) {
+        for (const sel of selectorList) {
+          if (sel.startsWith('#') && !sel.includes(' ') && fDoc.getElementById) {
+            const el = fDoc.getElementById(sel.slice(1));
+            if (el) return el;
+          }
+          if (fDoc.querySelector) {
+            const el = fDoc.querySelector(sel);
+            if (el) return el;
+          }
+        }
       }
     } catch (e) {}
 
@@ -207,16 +217,26 @@
     _getDoc() {
       if (this._customDoc) return this._customDoc;
       if (typeof document !== 'undefined') {
-        // 1. Quét tìm iframe dialog CDHA chứa UploadController hoặc btnUpload
+        // 1. Quét tìm iframe dialog CDHA chứa UploadController hoặc btnUpload (ưu tiên iframe visible)
         try {
           const iframes = document.querySelectorAll ? document.querySelectorAll('iframe') : [];
+          const matchedDocs = [];
           for (const frame of iframes) {
             try {
               const fd = frame.contentDocument || frame.contentWindow?.document;
               if (fd && (fd.getElementById('UploadController') || fd.getElementById('btnUpload'))) {
-                return fd;
+                const btn = fd.getElementById('btnUpload');
+                const isVisible = Boolean(
+                  (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0)) ||
+                  (frame.offsetWidth > 0 && frame.offsetHeight > 0)
+                );
+                matchedDocs.push({ doc: fd, isVisible });
               }
             } catch (fe) {}
+          }
+          if (matchedDocs.length > 0) {
+            const active = matchedDocs.find(m => m.isVisible) || matchedDocs[matchedDocs.length - 1];
+            return active.doc;
           }
         } catch (e) {}
 
@@ -527,9 +547,64 @@
         };
         this._pendingPersistResolvers.add(finish);
 
+        const thisRef = this;
+        function extractContainerText(c) {
+          if (!c) return '';
+          const html = c.innerHTML || '';
+          const txt = c.innerText || c.textContent || '';
+          let inputVals = '';
+          try {
+            const inputs = c.querySelectorAll ? c.querySelectorAll('input') : [];
+            for (let i = 0; i < inputs.length; i++) {
+              inputVals += ' ' + (inputs[i].value || '');
+            }
+          } catch (e) {}
+          let imgAttrs = '';
+          try {
+            const imgs = c.querySelectorAll ? c.querySelectorAll('img') : [];
+            for (let i = 0; i < imgs.length; i++) {
+              imgAttrs += ' ' + (imgs[i].alt || '') + ' ' + (imgs[i].src || '');
+            }
+          } catch (e) {}
+          return `${txt} ${html} ${inputVals} ${imgAttrs}`;
+        }
+
+        const baseToken = evidence.fileToken ? evidence.fileToken.replace(/\.[^/.]+$/, '') : '';
+        const tokenList = [evidence.fileToken, baseToken, evidence.transferId].filter(Boolean);
+
+        // Map each container to its initial evidence text and child count
+        const initialEvidence = new Map();
+        function recordContainerInitial(c) {
+          if (c && !initialEvidence.has(c)) {
+            initialEvidence.set(c, {
+              text: extractContainerText(c),
+              count: c.children?.length || 0
+            });
+          }
+        }
+
+        function scanInitial(targetDoc) {
+          if (!targetDoc) return;
+          for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
+            try {
+              const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
+              for (let i = 0; i < els.length; i++) recordContainerInitial(els[i]);
+            } catch (e) {}
+          }
+        }
+
+        scanInitial(doc);
         const container = resolveElement(VNPT_SELECTORS.PERSISTENCE_CONTAINERS, doc);
-        const initialText = container ? (container.innerText || container.innerHTML || '') : '';
-        const initialChildrenCount = container ? (container.children?.length || 0) : 0;
+        if (container) recordContainerInitial(container);
+        try {
+          const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+          for (const f of iframes) {
+            try {
+              const fd = f.contentDocument || f.contentWindow?.document;
+              if (fd) scanInitial(fd);
+            } catch (e) {}
+          }
+        } catch (e) {}
 
         const checkCondition = async () => {
           if (isDone) return;
@@ -541,7 +616,7 @@
           }
 
           // 2. Barrier Check: Verify active context hasn't mutated while waiting (Checkpoint 3)
-          const isContextValid = await this.compareContext(expected);
+          const isContextValid = await thisRef.compareContext(expected);
           if (!isContextValid) {
             finish('UNKNOWN');
             return;
@@ -557,36 +632,72 @@
             }
           }
 
-          // 4. Positive check: Evidence in persistence container
-          const currentContainer = resolveElement(VNPT_SELECTORS.PERSISTENCE_CONTAINERS, doc);
-          if (currentContainer) {
-            const currentText = currentContainer.innerText || currentContainer.innerHTML || '';
-            const currentCount = currentContainer.children?.length || 0;
+          // 4. Positive check: Evidence in persistence containers
+          function evaluateContainer(c) {
+            if (!c) return false;
+            const currentFull = extractContainerText(c);
+            const currentCount = c.children?.length || 0;
+            const prev = initialEvidence.get(c);
 
-            const baseToken = evidence.fileToken ? evidence.fileToken.replace(/\.[^/.]+$/, '') : '';
-            if (evidence.fileToken && (currentText.includes(evidence.fileToken) || (baseToken && currentText.includes(baseToken) && (!initialText || !initialText.includes(baseToken))))) {
-              finish('COMMITTED');
-              return;
-            }
-            if (evidence.transferId && currentText.includes(evidence.transferId)) {
-              finish('COMMITTED');
-              return;
-            }
-            if (this._lastAttachedFile?.name) {
-              const baseAttached = this._lastAttachedFile.name.replace(/\.[^/.]+$/, '');
-              if ((currentText.includes(this._lastAttachedFile.name) || (baseAttached && currentText.includes(baseAttached))) &&
-                  (!initialText.includes(this._lastAttachedFile.name) && (!baseAttached || !initialText.includes(baseAttached)))) {
-                finish('COMMITTED');
-                return;
+            for (const tok of tokenList) {
+              if (currentFull.includes(tok)) {
+                if (!prev || !prev.text.includes(tok) || currentCount > prev.count) {
+                  return true;
+                }
+                // Unique timestamped filename token (e.g. ECG_..._179...) is authentic evidence
+                if (/_\d{10,}/.test(tok)) {
+                  return true;
+                }
               }
             }
-            if (currentCount > initialChildrenCount &&
-                evidence.fileSize &&
-                currentText.includes(String(evidence.fileSize))) {
-              finish('COMMITTED');
-              return;
+
+            if (thisRef._lastAttachedFile?.name) {
+              const baseAttached = thisRef._lastAttachedFile.name.replace(/\.[^/.]+$/, '');
+              if ((currentFull.includes(thisRef._lastAttachedFile.name) || (baseAttached && currentFull.includes(baseAttached))) &&
+                  (!prev || (!prev.text.includes(thisRef._lastAttachedFile.name) && !prev.text.includes(baseAttached)))) {
+                return true;
+              }
             }
+
+            if (prev && currentCount > prev.count && evidence.fileSize && currentFull.includes(String(evidence.fileSize))) {
+              return true;
+            }
+            return false;
           }
+
+          function checkDocContainers(targetDoc) {
+            if (!targetDoc) return false;
+            for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
+              try {
+                const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
+                for (let i = 0; i < els.length; i++) {
+                  if (evaluateContainer(els[i])) return true;
+                }
+              } catch (e) {}
+            }
+            return false;
+          }
+
+          if (checkDocContainers(doc)) {
+            finish('COMMITTED');
+            return;
+          }
+          if (container && evaluateContainer(container)) {
+            finish('COMMITTED');
+            return;
+          }
+          try {
+            const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+            for (const f of iframes) {
+              try {
+                const fd = f.contentDocument || f.contentWindow?.document;
+                if (fd && checkDocContainers(fd)) {
+                  finish('COMMITTED');
+                  return;
+                }
+              } catch (e) {}
+            }
+          } catch (e) {}
 
           // In mock/test environments without live DOM file grid:
           // If simulateCommit flag or mock server persist evidence is provided
@@ -597,15 +708,36 @@
         };
 
         // Scoped mutation observer for fast response
-        if (container && typeof MutationObserver !== 'undefined') {
-          try {
-            observer = new MutationObserver(() => {
-              checkCondition();
-            });
-            observer.observe(container, { childList: true, subtree: true });
-            this._activeObservers.add(observer);
-          } catch (e) {}
-        }
+        try {
+          if (typeof MutationObserver !== 'undefined') {
+            const observeDoc = (targetDoc) => {
+              if (!targetDoc) return;
+              for (const sel of VNPT_SELECTORS.PERSISTENCE_CONTAINERS) {
+                try {
+                  const els = targetDoc.querySelectorAll ? targetDoc.querySelectorAll(sel) : [];
+                  for (let i = 0; i < els.length; i++) {
+                    const obs = new MutationObserver(() => { checkCondition(); });
+                    obs.observe(els[i], { childList: true, subtree: true, attributes: true });
+                    this._activeObservers.add(obs);
+                  }
+                } catch (e) {}
+              }
+            };
+            observeDoc(doc);
+            if (container) {
+              const obs = new MutationObserver(() => { checkCondition(); });
+              obs.observe(container, { childList: true, subtree: true, attributes: true });
+              this._activeObservers.add(obs);
+            }
+            const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+            for (const f of iframes) {
+              try {
+                const fd = f.contentDocument || f.contentWindow?.document;
+                if (fd) observeDoc(fd);
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
 
         // Fast-responsive polling interval (40ms)
         pollTimer = setInterval(checkCondition, 40);

@@ -2615,11 +2615,30 @@ function getPatientInfoFromDOM() {
               }
 
               const dataUrl = imagePayload.startsWith('data:') ? imagePayload : `data:${finalMimeType};base64,${cleanB64}`;
-              const injectRes = await handleIncomingImageData(dataUrl, finalMeta, { incomingPatientId: finalMeta?.patientId || incomingPatientId });
+              const injectRes = await handleIncomingImageData(dataUrl, finalMeta, {
+                transferId: payload.transferId,
+                transport: 'webrtc',
+                sendAck: (success, errCode, ackPayload) => {
+                  try {
+                    conn.send({
+                      type: 'TRANSFER_ACK',
+                      transferId: payload.transferId,
+                      status: success ? 'HIS_COMMITTED' : (ackPayload?.status || 'error'),
+                      success,
+                      photoCount: success ? (ackPayload?.photoCount || photoCount) : photoCount,
+                      error: success ? null : (errCode || ackPayload?.code || ackPayload?.error || 'injection_failed'),
+                      reason: success ? null : (ackPayload?.reason || 'Lỗi nạp tệp vào HIS'),
+                      retry: ackPayload?.retry !== undefined ? ackPayload.retry : false
+                    });
+                  } catch (e) {}
+                },
+                incomingPatientId: finalMeta?.patientId || incomingPatientId
+              });
               const isSuccess = typeof injectRes === 'boolean' ? injectRes : (injectRes?.status === 'HIS_COMMITTED' || (injectRes?.success && injectRes?.status !== 'HIS_UNKNOWN' && injectRes?.status !== 'HIS_REJECTED'));
               try {
                 conn.send({
                   type: 'TRANSFER_ACK',
+                  transferId: payload.transferId,
                   status: isSuccess ? 'HIS_COMMITTED' : (injectRes?.status === 'HIS_UNKNOWN' ? 'HIS_UNKNOWN' : 'error'),
                   success: isSuccess,
                   photoCount: isSuccess ? (injectRes?.photoCount || photoCount) : photoCount,

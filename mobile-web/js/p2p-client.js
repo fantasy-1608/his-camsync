@@ -869,7 +869,7 @@ export class P2PClient {
 
       if (typeof onProgress === 'function') {
         const pct = 30 + Math.round(((i + 1) / totalChunks) * 60);
-        onProgress(pct);
+        onProgress(pct, `Đang truyền ảnh (${pct}%)...`);
       }
 
       if (i % 4 === 0) {
@@ -886,6 +886,11 @@ export class P2PClient {
       transferId
     };
     this.broadcast('chunk_complete', endPacket);
+
+    // Báo trạng thái 95%: Toàn bộ dữ liệu ảnh đã chuyển qua Cloud Relay, đang chờ máy chủ HIS xác nhận lưu
+    if (typeof onProgress === 'function') {
+      onProgress(95, 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...');
+    }
 
     // 4. Chờ transfer_ack từ máy tính (Fail-Closed: Timeout hoặc Error ACK đều coi là thất bại)
     return new Promise((resolve) => {
@@ -934,7 +939,7 @@ export class P2PClient {
               ack: ackData
             });
           } else {
-            if (typeof onProgress === 'function') onProgress(100);
+            if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
             resolve({
               success: true,
               status: ackData?.status || 'HIS_COMMITTED',
@@ -1055,8 +1060,8 @@ export class P2PClient {
       });
 
       if (typeof onProgress === 'function') {
-        const pct = Math.round(((i + 1) / totalChunks) * 100);
-        onProgress(pct);
+        const pct = Math.round(((i + 1) / totalChunks) * 90);
+        onProgress(pct, `Đang truyền ảnh (${pct}%)...`);
       }
 
       if (i % 4 === 0) {
@@ -1070,6 +1075,10 @@ export class P2PClient {
       sid: this.sessionId,
       transferId
     });
+
+    if (typeof onProgress === 'function') {
+      onProgress(95, 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...');
+    }
 
     return new Promise((resolve) => {
       const ackTimeout = setTimeout(() => {
@@ -1086,41 +1095,44 @@ export class P2PClient {
       }, 25000);
 
       this.onTransferAck = (ackData) => {
-        // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
-        if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
-          if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
-          return; // Tiếp tục chờ ACK cuối cùng
-        }
+        if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
+          // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
+          if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
+            if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
+            return; // Tiếp tục chờ ACK cuối cùng
+          }
 
-        clearTimeout(ackTimeout);
-        this.onTransferAck = null;
-        if (ackData && ackData.status === 'HIS_UNKNOWN') {
-          resolve({
-            success: false,
-            status: 'HIS_UNKNOWN',
-            method: 'webrtc_chunked',
-            error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
-            reason: ackData.reason || null,
-            retry: false,
-            ack: ackData
-          });
-        } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
-          resolve({
-            success: false,
-            status: ackData.status || 'HIS_REJECTED',
-            method: 'webrtc_chunked',
-            error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
-            reason: ackData.reason || null,
-            retry: ackData.retry !== undefined ? ackData.retry : false,
-            ack: ackData
-          });
-        } else {
-          resolve({
-            success: true,
-            status: ackData?.status || 'HIS_COMMITTED',
-            method: 'webrtc_chunked',
-            ack: ackData
-          });
+          clearTimeout(ackTimeout);
+          this.onTransferAck = null;
+          if (ackData && ackData.status === 'HIS_UNKNOWN') {
+            resolve({
+              success: false,
+              status: 'HIS_UNKNOWN',
+              method: 'webrtc_chunked',
+              error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
+              reason: ackData.reason || null,
+              retry: false,
+              ack: ackData
+            });
+          } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
+            resolve({
+              success: false,
+              status: ackData.status || 'HIS_REJECTED',
+              method: 'webrtc_chunked',
+              error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
+              reason: ackData.reason || null,
+              retry: ackData.retry !== undefined ? ackData.retry : false,
+              ack: ackData
+            });
+          } else {
+            if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
+            resolve({
+              success: true,
+              status: ackData?.status || 'HIS_COMMITTED',
+              method: 'webrtc_chunked',
+              ack: ackData
+            });
+          }
         }
       };
     });
