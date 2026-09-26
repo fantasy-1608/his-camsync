@@ -734,9 +734,15 @@
           name: filename,
           type: 'image/jpeg',
           specialty: currentSpecialty
-        }, (pct) => {
+        }, (pct, statusMsg) => {
           uploadPctBadge.textContent = `${pct}%`;
-          uploadMeta.textContent = `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
+          if (pct >= 90) {
+            uploadTitle.textContent = 'Đang lưu vào máy chủ HIS...';
+            uploadMeta.textContent = statusMsg || 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...';
+          } else {
+            uploadTitle.textContent = 'Đang truyền ảnh lên HIS...';
+            uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
+          }
         });
 
         // Xử lý trung thực theo trạng thái xác thực HIS:
@@ -778,17 +784,19 @@
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
           toast.classList.add('visible');
+          // Chuyển ngay về màn hình chụp để thao tác liền mạch, thuận tiện
+          cameraInput.value = '';
+          galleryInput.value = '';
+          editorScreen.style.display = 'none';
+          captureScreen.style.display = 'flex';
+          document.body.classList.remove('in-editor');
+          btnSendToHis.disabled = false;
+          btnSendText.textContent = 'Gửi Lên HIS';
+
           setTimeout(() => {
             toast.classList.remove('visible');
-            cameraInput.value = '';
-            galleryInput.value = '';
-            editorScreen.style.display = 'none';
-            captureScreen.style.display = 'flex';
-            document.body.classList.remove('in-editor');
-            btnSendToHis.disabled = false;
-            btnSendText.textContent = 'Gửi Lên HIS';
-          }, 1400);
-        }, 800);
+          }, 1500);
+        }, 500);
 
       } catch (err) {
         uploadProgressModal.style.display = 'none';
