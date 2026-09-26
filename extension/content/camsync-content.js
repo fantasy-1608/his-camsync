@@ -612,12 +612,43 @@ function getPatientInfoFromDOM() {
     
     // Nếu là file PDF, áp dụng luồng xử lý riêng cho Phiếu Scan
     if (isPdf) {
-      if (!window.location.href.includes('NTU01H102_ThemPhieuKySo')) {
-        console.warn('[CamSync] Frame hiện tại không phải form Phiếu Scan (NTU01H102_ThemPhieuKySo)');
+      // Tìm iframe Phiếu Scan (NTU01H102_ThemPhieuKySo) trong tất cả các frame
+      let phieuScanDoc = null;
+      
+      // Kiểm tra frame hiện tại
+      if (window.location.href.includes('NTU01H102_ThemPhieuKySo')) {
+        phieuScanDoc = document;
+      } else {
+        // Tìm trong tất cả iframe con (3 tầng sâu: page → divDlgBAifmView → divDlgThemPhieuifmView)
+        const searchIframes = (doc, depth = 0) => {
+          if (depth > 5 || !doc) return null;
+          try {
+            const iframes = doc.querySelectorAll('iframe');
+            for (const frame of iframes) {
+              try {
+                const fd = frame.contentDocument || frame.contentWindow?.document;
+                if (!fd) continue;
+                const frameUrl = frame.src || fd.location?.href || '';
+                if (frameUrl.includes('NTU01H102_ThemPhieuKySo')) {
+                  return fd;
+                }
+                // Tìm tiếp trong iframe con
+                const deeper = searchIframes(fd, depth + 1);
+                if (deeper) return deeper;
+              } catch (e) {} // cross-origin
+            }
+          } catch (e) {}
+          return null;
+        };
+        phieuScanDoc = searchIframes(document);
+      }
+      
+      if (!phieuScanDoc) {
+        console.warn('[CamSync] Không tìm thấy form Phiếu Scan (NTU01H102_ThemPhieuKySo) trong bất kỳ iframe nào');
         return { success: false, initiated: false, code: 'WRONG_FRAME', reason: 'Vui lòng mở form Thêm Phiếu Scan để lưu PDF' };
       }
       
-      const pdfInput = document.getElementById('fileUpload');
+      const pdfInput = phieuScanDoc.getElementById('fileUpload');
       if (!pdfInput) {
         return { success: false, initiated: false, code: 'ELEMENTS_NOT_FOUND', reason: 'Không tìm thấy #fileUpload trên form Phiếu Scan' };
       }
