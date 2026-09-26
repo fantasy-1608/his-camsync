@@ -109,6 +109,144 @@ function compressImage(img, preset = 'document', rotation = 0) {
   return { dataUrl, width: outW, height: outH };
 }
 
+// Khởi tạo Web Worker cho xử lý nén ảnh nền (0% giật lag giao diện)
+let compressionWorker = null;
+let workerJobCounter = 0;
+const workerCallbacks = new Map();
+
+function initWorkerIfSupported() {
+  if (compressionWorker) return compressionWorker;
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
+    return null;
+  }
+  try {
+    const workerScript = `
+      self.onmessage = async (e) => {
+        const { id, blob, rotation, maxWidthPx, maxHeightPx, quality, grayscale } = e.data;
+        try {
+          const bmp = await createImageBitmap(blob);
+          const imgW = bmp.width;
+          const imgH = bmp.height;
+
+          const rot = ((rotation % 360) + 360) % 360;
+          const swapped = (rot === 90 || rot === 270);
+          const srcW = swapped ? imgH : imgW;
+          const srcH = swapped ? imgW : imgH;
+
+          let scale = 1;
+          if (srcW > maxWidthPx || srcH > maxHeightPx) {
+            scale = Math.min(maxWidthPx / srcW, maxHeightPx / srcH);
+          }
+          const outW = Math.round(srcW * scale);
+          const outH = Math.round(srcH * scale);
+
+          const canvas = new OffscreenCanvas(outW, outH);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, outW, outH);
+
+          if (rot) {
+            ctx.save();
+            ctx.translate(outW / 2, outH / 2);
+            ctx.rotate(rot * Math.PI / 180);
+            const drawW = swapped ? outH : outW;
+            const drawH = swapped ? outW : outH;
+            ctx.drawImage(bmp, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          } else {
+            ctx.drawImage(bmp, 0, 0, outW, outH);
+          }
+          bmp.close();
+
+          if (grayscale) {
+            const imageData = ctx.getImageData(0, 0, outW, outH);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+              const enhanced = gray < 128 ? Math.max(0, gray * 0.85) : Math.min(255, gray * 1.1);
+              data[i] = enhanced;
+              data[i + 1] = enhanced;
+              data[i + 2] = enhanced;
+            }
+            ctx.putImageData(imageData, 0, 0);
+          }
+
+          const outBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            self.postMessage({ id, success: true, dataUrl: reader.result, width: outW, height: outH });
+          };
+          reader.onerror = () => {
+            self.postMessage({ id, success: false, error: 'FileReader failed' });
+          };
+          reader.readAsDataURL(outBlob);
+        } catch (err) {
+          self.postMessage({ id, success: false, error: err.message || String(err) });
+        }
+      };
+    `;
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    compressionWorker = new Worker(url);
+    compressionWorker.onmessage = (e) => {
+      const { id, success, dataUrl, width, height, error } = e.data;
+      const cb = workerCallbacks.get(id);
+      if (cb) {
+        workerCallbacks.delete(id);
+        if (success) cb.resolve({ dataUrl, width, height });
+        else cb.reject(new Error(error));
+      }
+    };
+    compressionWorker.onerror = (err) => {
+      console.warn('[PDFBuilder] Worker error, falling back to main-thread canvas:', err);
+    };
+    return compressionWorker;
+  } catch (e) {
+    console.warn('[PDFBuilder] Failed to initialize worker, fallback to main thread:', e);
+    return null;
+  }
+}
+
+/**
+ * Xử lý nén ảnh bất đồng bộ qua Web Worker nếu có thể, fallback sang Main Thread
+ */
+async function compressImageAsync(fileOrBlob, preset = 'document', rotation = 0) {
+  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.document;
+  const dpi = config.dpi;
+  const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);
+  const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi);
+
+  const worker = initWorkerIfSupported();
+  if (worker && fileOrBlob instanceof Blob) {
+    return new Promise((resolve, reject) => {
+      const id = ++workerJobCounter;
+      workerCallbacks.set(id, { resolve, reject });
+      worker.postMessage({
+        id,
+        blob: fileOrBlob,
+        rotation,
+        maxWidthPx,
+        maxHeightPx,
+        quality: config.quality,
+        grayscale: config.grayscale
+      });
+    }).catch(async (err) => {
+      console.warn('[PDFBuilder] Worker processing failed, using fallback:', err);
+      const img = await loadImageFromFile(fileOrBlob);
+      return compressImage(img, preset, rotation);
+    });
+  }
+
+  // Fallback đồng bộ trên Main Thread
+  let img;
+  if (fileOrBlob instanceof Blob) {
+    img = await loadImageFromFile(fileOrBlob);
+  } else {
+    img = fileOrBlob;
+  }
+  return compressImage(img, preset, rotation);
+}
+
 /**
  * Load File object thành HTMLImageElement
  * @param {File | Blob} file
@@ -146,10 +284,10 @@ function loadImageFromDataUrl(dataUrl) {
 
 /**
  * Xây dựng PDF từ danh sách ảnh
- * @param {Array<{file?: File, dataUrl?: string}>} pages - Mỗi trang chứa file hoặc dataUrl
+ * @param {Array<{file?: File, dataUrl?: string, rotation?: number}>} pages
  * @param {object} options
  * @param {string} options.preset - 'document' | 'color'
- * @param {string} [options.filename] - Tên file PDF (mặc định 'scan_camsync.pdf')
+ * @param {string} [options.filename] - Tên file PDF
  * @param {function} [options.onProgress] - Callback(pageIndex, totalPages)
  * @returns {Promise<{blob: Blob, filename: string, pageCount: number, sizeKB: number}>}
  */
@@ -179,18 +317,12 @@ export async function buildPdf(pages, options = {}) {
   for (let i = 0; i < pages.length; i++) {
     onProgress(i, pages.length);
 
-    // Load image
-    let img;
-    if (pages[i].file) {
-      img = await loadImageFromFile(pages[i].file);
-    } else if (pages[i].dataUrl) {
-      img = await loadImageFromDataUrl(pages[i].dataUrl);
-    } else {
-      throw new Error(`Trang ${i + 1}: Thiếu dữ liệu ảnh`);
-    }
-
-    // Nén ảnh theo preset (có hỗ trợ xoay)
-    const compressed = compressImage(img, preset, pages[i].rotation || 0);
+    // Nén ảnh bất đồng bộ qua Web Worker chạy ngầm (hoặc fallback Canvas nếu máy cũ)
+    const compressed = await compressImageAsync(
+      pages[i].file || pages[i].dataUrl,
+      preset,
+      pages[i].rotation || 0
+    );
 
     // Tính kích thước fit vào trang A4 (giữ tỉ lệ, có margin 5mm)
     const margin = 5;
