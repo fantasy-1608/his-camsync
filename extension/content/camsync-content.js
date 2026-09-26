@@ -892,6 +892,9 @@ function getPatientInfoFromDOM() {
   /**
    * Inject nút "Nhập từ ĐT" vào form Phiếu Scan (NTU01H102_ThemPhieuKySo)
    * Nút nằm cạnh nút "Scan" hiện có, cho phép nhận PDF từ điện thoại qua CamSync
+   *
+   * LƯU Ý: Form Phiếu Scan nằm trong iframe 3 tầng sâu. Content script ở iframe
+   * không có patient context → phải gửi postMessage lên frame cha để mở QR modal.
    */
   function injectPhieuScanButton() {
     // Tránh inject trùng
@@ -899,7 +902,6 @@ function getPatientInfoFromDOM() {
 
     // Tìm nút Scan hoặc thanh nút action ở đáy form
     const btnScan = document.querySelector('button[id*="Scan"], .btn[onclick*="scan"], #btnScan');
-    // Fallback: tìm thanh nút cuối form (chứa Lưu, Scan, Đóng)
     const btnLuu = document.querySelector('#btnLuu, button[id*="btnLuu"]');
     const targetBtn = btnScan || btnLuu;
     if (!targetBtn || !targetBtn.parentNode) return;
@@ -912,10 +914,20 @@ function getPatientInfoFromDOM() {
     btn.innerHTML = '<span class="glyphicon glyphicon-phone" aria-hidden="true"></span> Nhập từ ĐT';
     btn.title = 'Chụp giấy tờ từ điện thoại, chuyển PDF đính kèm vào phiếu';
     btn.addEventListener('click', () => {
-      openQrModal();
+      // Gửi message lên frame cha (nơi có patient context) để mở QR modal
+      try {
+        const msg = { type: 'CAMSYNC_OPEN_QR', source: 'phieu-scan' };
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, '*');
+        }
+        if (window.top && window.top !== window && window.top !== window.parent) {
+          window.top.postMessage(msg, '*');
+        }
+      } catch (e) {
+        console.warn('[CamSync] Không gửi được message lên frame cha:', e);
+      }
     });
 
-    // Chèn nút vào thanh action, trước nút Đóng (nếu có)
     const btnClose = document.querySelector('#btnClose, button[id*="btnDong"], button[onclick*="close"]');
     if (btnClose && btnClose.parentNode === targetBtn.parentNode) {
       btnClose.parentNode.insertBefore(btn, btnClose);
@@ -923,6 +935,15 @@ function getPatientInfoFromDOM() {
       targetBtn.parentNode.appendChild(btn);
     }
   }
+
+  // Lắng nghe message từ iframe con (Phiếu Scan) yêu cầu mở QR modal
+  window.addEventListener('message', (evt) => {
+    try {
+      if (evt.data && evt.data.type === 'CAMSYNC_OPEN_QR' && evt.data.source === 'phieu-scan') {
+        openQrModal();
+      }
+    } catch (e) {}
+  });
 
   function injectSyncButton() {
     const adapter = getHisAdapter();
