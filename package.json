@@ -12,7 +12,8 @@
     "test:m4": "node tests/m4_challenger_idempotency_realtime_suite.js",
     "test:safety": "node tests/hospital-safety.test.js",
     "check:syntax": "node --check extension/content/clinical-guard.js && node --check extension/content/his-adapter.js && node --check extension/content/camsync-content.js && node --check extension/content/audit-logger.js && node --check mobile-web/js/p2p-client.js && node --check server/server.js",
-    "test:all": "node tests/hospital-safety.test.js && node tests/run_all_hardening_tiers.js && node tests/e2e/run_all_tests.js && node tests/m4_challenger_idempotency_realtime_suite.js"
+    "test:all": "node tests/hospital-safety.test.js && node tests/run_all_hardening_tiers.js && node tests/e2e/run_all_tests.js && node tests/m4_challenger_idempotency_realtime_suite.js",
+    "pack:extension": "cd extension && zip -r -X ../camsync-extension-v1.4.2.zip . -x '*.DS_Store'"
   },
   "keywords": [
     "vnpt-his",

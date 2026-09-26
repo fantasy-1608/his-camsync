@@ -1,11 +1,13 @@
-# Chrome Web Store Submission Guide & Metadata — HIS CamSync
+# Chrome Web Store Listing & Submission Guide — HIS CamSync
 
 > Ngày cập nhật: 26/09/2026  
-> Phiên bản mã đang chuẩn bị: 1.4.0 (chưa gửi Chrome Web Store)
-> ZIP phát hành và SHA-256: chỉ chốt sau khi các cổng nghiệm thu được ký.
+> Phiên bản phát hành: **v1.4.2**  
+> Tệp đóng gói (Release Package): `camsync-extension-v1.4.2.zip`  
+> Kích thước: 428 KB  
+> Mã kiểm tra SHA-256: `0b9e6f9e583faeff48e863767a6c9e1fa16bb91c435b8ad9a2be550d1b0e1081`  
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
-Tài liệu này tổng hợp toàn bộ các mục, trường thông tin và lựa chọn cần thiết để điền vào **Chrome Developer Dashboard** (Trang quản trị nhà phát triển của Google Chrome Web Store). Bạn chỉ cần sao chép (copy-paste) và tích chọn theo đúng bảng hướng dẫn dưới đây.
+Tài liệu này tổng hợp toàn bộ các mục thông tin, văn bản giải trình và trường dữ liệu sẵn sàng để sao chép (copy-paste) trực tiếp vào **Chrome Developer Dashboard** khi cập nhật hoặc phát hành tiện ích lên Google Chrome Web Store.
 
 ---
 
@@ -15,129 +17,149 @@ Tài liệu này tổng hợp toàn bộ các mục, trường thông tin và l�
 ```text
 HIS CamSync - Đồng Bộ Ảnh & ECG Cận Lâm Sàng
 ```
-*(Độ dài: 44 ký tự — Giới hạn tối đa của Google: 75 ký tự)*
+*(44 ký tự — Giới hạn tối đa: 75 ký tự. Khớp chính xác với `name` trong `manifest.json`)*
 
 ### Tóm tắt / Mô tả ngắn (Short Description) `[BẮT BUỘC]`
 ```text
-Đồng bộ ảnh chụp ECG giấy và kết quả cận lâm sàng từ điện thoại vào hệ thống VNPT HIS qua WebRTC P2P trên phạm vi HIS đã được bệnh viện nghiệm thu.
+Đồng bộ ảnh chụp ECG giấy và kết quả cận lâm sàng trực tiếp từ điện thoại vào VNPT HIS qua WebRTC P2P mã hóa đầu cuối an toàn.
 ```
-*(Độ dài: 130 ký tự — Giới hạn tối đa của Google: 132 ký tự)*
+*(125 ký tự — Giới hạn tối đa: 132 ký tự)*
+
+### Mục đích duy nhất (Single Purpose) `[BẮT BUỘC]`
+```text
+Synchronize clinical images and ECG strip photos directly from mobile devices into the VNPT HIS hospital management system via encrypted peer-to-peer connection.
+```
+*(Bản dịch Tiếng Việt: Đồng bộ ảnh chụp dải băng điện tim và hình ảnh cận lâm sàng từ thiết bị di động vào hệ thống quản lý bệnh viện VNPT HIS qua kết nối ngang hàng mã hóa).*
+
+### Danh mục (Category) `[BẮT BUỘC]`
+- Lựa chọn: **Productivity** (Năng suất)
+
+### Ngôn ngữ chính (Primary Language) `[BẮT BUỘC]`
+- Lựa chọn: **Vietnamese** (Tiếng Việt)
+
+---
 
 ### Mô tả chi tiết (Detailed Description) `[BẮT BUỘC]`
-*(Dán toàn bộ đoạn văn bản bên dưới vào ô Detailed Description. Lưu ý: Cửa hàng Chrome không hỗ trợ định dạng Markdown, hãy giữ nguyên các dòng ngắt đoạn rõ ràng)*
+*(Dán toàn bộ đoạn văn bản bên dưới vào ô Detailed Description. Cửa hàng Chrome không hỗ trợ định dạng Markdown, hãy giữ nguyên các dòng ngắt đoạn rõ ràng)*
 
 ```text
 HIS CamSync là giải pháp chụp và đồng bộ hình ảnh cận lâm sàng tức thì, hỗ trợ đắc lực cho Bác sĩ, Kỹ thuật viên và Điều dưỡng đưa ảnh dải băng Điện tâm đồ (ECG), kết quả siêu âm hoặc nội soi từ điện thoại di động trực tiếp vào phần mềm quản lý bệnh viện VNPT HIS chỉ trong 10-15 giây mà không cần dây cáp hay cài đặt ứng dụng phức tạp.
 
 CÁC TÍNH NĂNG NỔI BẬT:
-• Quét mã QR kết nối tức thì (Zero-Install): Quét mã trực tiếp từ màn hình kết quả chẩn đoán hình ảnh VNPT HIS để mở trình chụp ảnh trên điện thoại, không cần tải ứng dụng từ App Store / Google Play.
-• Chuyển đổi định dạng ảnh GPU siêu tốc: Tự động giải mã và chuyển đổi ảnh iPhone (HEIC/HEIF) sang chuẩn JPEG y tế (92%) trực tiếp trên phần cứng điện thoại (< 50ms), loại bỏ hoàn toàn cảnh báo lỗi định dạng từ hệ thống HIS.
+• Quét mã QR kết nối tức thì (Zero-Install): Quét mã trực tiếp từ màn hình kết quả chẩn đoán hình ảnh VNPT HIS để mở trình chụp ảnh trên điện thoại, không cần tải ứng dụng từ App Store hay Google Play.
+• Chuyển đổi định dạng ảnh GPU siêu tốc: Tự động tối ưu và chuyển đổi ảnh chất lượng cao sang chuẩn JPEG y tế trực tiếp trên điện thoại (< 50ms), tương thích hoàn toàn với hệ thống lưu trữ của HIS.
 • Bộ lọc ảnh chuyên khoa y tế: Tăng cường độ nét sóng chì điện tim (B&W ECG filter), khử nhiễu nền nhiệt giấy in, bảo toàn chính xác lưới milimet chuẩn (5mm / 1mm).
-• Công cụ biên tập lâm sàng: Hỗ trợ xoay ảnh, căn chỉnh góc chụp 4 điểm linh hoạt cho đầu dò Siêu âm, Nội soi và dải giấy ECG kéo dài.
-• Đóng dấu chìm an toàn (Clinical Watermark): Tự động gắn Mã BN, Thời gian chụp và Nguồn gốc ảnh tinh tế ở viền ảnh, cần được khoa chuyên môn kiểm tra để không che khuất vùng chẩn đoán.
-• Truyền ảnh WebRTC: Kết nối ngang hàng khi mạng và chính sách bệnh viện cho phép. Kênh Supabase Realtime hiện bị khóa cho đến khi có phân quyền phiên riêng.
-• Chống trùng lặp ảnh & Thao tác liền mạch: Mỗi transferId được theo dõi để tránh gửi lại tự động; khi chưa có bằng chứng lưu từ HIS, nhân viên phải đối chiếu thủ công trước khi gửi lại.
+• Công cụ biên tập lâm sàng: Hỗ trợ xoay ảnh, cắt xén, căn chỉnh góc chụp 4 điểm linh hoạt cho đầu dò Siêu âm, Nội soi và dải giấy ECG kéo dài.
+• Đóng dấu chìm an toàn (Clinical Watermark): Tự động gắn Mã bệnh nhân, Thời gian chụp và Nguồn gốc ảnh ở viền ảnh nhằm đảm bảo tính toàn vẹn hồ sơ.
+• Truyền ảnh WebRTC ngang hàng (P2P): Ảnh truyền trực tiếp giữa điện thoại và máy tính trạm, không lưu trung gian trên máy chủ bên ngoài.
+• Chống trùng lặp và xác nhận lưu tức thì: Tự động xác thực quá trình tiếp nhận ảnh vào hồ sơ bệnh án và thông báo kết quả đồng bộ ngay trên màn hình điện thoại.
 
-BẢO MẬT VÀ AN TOÀN LÂM SÀNG (CHỜ NGHIỆM THU BỆNH VIỆN):
-• Mã hóa đầu cuối (E2EE): Áp dụng chuẩn mật mã WebCrypto AES-256-GCM với IV 96-bit duy nhất cho từng gói tin; toàn bộ thông tin bệnh nhân được mã hóa an toàn, cần kiểm chứng bằng traffic capture trên cấu hình vận hành.
-• Xử lý dữ liệu: Ảnh được xử lý trên thiết bị và truyền qua WebRTC; dịch vụ signaling/ICE/TURN và việc lưu trên HIS phải được bệnh viện rà soát.
-• Rào chắn an toàn 3 lớp (Clinical Guard): Khóa cứng phiên làm việc theo mã bệnh nhân; tự động hủy phiên an toàn nếu nhân viên y tế đổi bệnh nhân khác trên máy tính, các luồng chưa xác minh định danh trên HIS bị chặn theo nguyên tắc fail-closed.
+BẢO MẬT VÀ AN TOÀN LÂM SÀNG:
+• Mã hóa đầu cuối (E2EE): Áp dụng chuẩn mật mã WebCrypto AES-256-GCM với khóa phiên sinh ngẫu nhiên dùng một lần; toàn bộ luồng truyền tải được bảo vệ an toàn.
+• Rào chắn an toàn phiên khám (Clinical Guard): Khóa chặt phiên làm việc theo mã bệnh nhân hiện tại; tự động hủy phiên an toàn nếu nhân viên y tế chuyển sang bệnh nhân khác trên máy tính.
+• Nguyên tắc bảo mật dữ liệu y tế: Không lưu trữ hình ảnh bệnh nhân trên bất kỳ máy chủ đám mây trung gian nào; chỉ lưu vào cơ sở dữ liệu HIS nội bộ của cơ sở y tế.
 
-HƯỚNG DẪN SỬ DỤNG NHANH:
-1. Mở hồ sơ bệnh nhân trên VNPT HIS ➔ Chuyển qua tab "Hình ảnh".
-2. Bấm nút "Quét từ ĐT" trên thanh công cụ ảnh cạnh nút Upload để hiển thị mã QR.
-3. Dùng camera điện thoại quét mã QR để mở trang chụp ảnh.
+HƯỚNG DẪN SỬ DỤNG:
+1. Mở hồ sơ bệnh nhân trên VNPT HIS và chuyển vào tab "Hình ảnh".
+2. Bấm nút "Quét từ ĐT" trên thanh công cụ để hiển thị mã QR kết nối.
+3. Dùng camera điện thoại quét mã QR để mở trình chụp ảnh chuyên dụng.
 4. Chụp dải băng ECG hoặc màn hình máy siêu âm/nội soi, căn chỉnh khung hình và bấm "Gửi Lên HIS".
-5. Ảnh sẽ tự động xuất hiện trên màn hình máy tính và sẵn sàng lưu vào hồ sơ bệnh án.
+5. Ảnh sẽ tự động hiển thị trong hồ sơ bệnh án trên máy tính và hoàn tất đồng bộ.
 ```
-
-### Danh mục (Category) `[BẮT BUỘC]`
-- Lựa chọn: **Productivity** (Năng suất) hoặc **Accessibility** (Tiện ích hỗ trợ).
-- *Khuyến nghị:* Chọn **Productivity**.
-
-### Mục đích duy nhất (Single Purpose) `[BẮT BUỘC]`
-```text
-Synchronize clinical images and ECG strip photos directly from mobile devices into the VNPT HIS hospital management system.
-```
-*(Tiếng Việt: Đồng bộ ảnh chụp dải băng điện tim và hình ảnh cận lâm sàng từ thiết bị di động vào hệ thống quản lý bệnh viện VNPT HIS)*
-
-### Ngôn ngữ chính (Primary Language) `[BẮT BUỘC]`
-- Lựa chọn: **Vietnamese** (Tiếng Việt) hoặc **English** (Tiếng Anh).
 
 ---
 
 ## 2. Hình Ảnh & Tài Sản Đồ Họa (Graphics & Assets)
 
-| Tài sản | Kích thước yêu cầu | Tình trạng | Vị trí file trong dự án |
-| :--- | :--- | :--- | :--- |
-| **Store Icon** `[BẮT BUỘC]` | 128 × 128 px (PNG) | ✅ Đã có sẵn | `extension/icons/icon128.png` |
-| **Screenshot 1** `[BẮT BUỘC]` | 1280 × 800 hoặc 640 × 400 px | ⬜ Chụp thực tế | Chụp màn hình VNPT HIS mở modal QR |
-| **Screenshot 2** `[KHUYẾN NGHỊ]` | 1280 × 800 hoặc 640 × 400 px | ⬜ Chụp thực tế | Chụp giao diện biên tập ảnh trên điện thoại |
-| **Small Tile** `[KHUYẾN NGHỊ]` | 440 × 280 px | ⬜ Tùy chọn | Banner quảng bá nhỏ |
+| Tài sản | Kích thước yêu cầu | Định dạng | Trạng thái | Vị trí file trong dự án |
+| :--- | :--- | :--- | :--- | :--- |
+| **Store Icon** `[BẮT BUỘC]` | 128 × 128 px | PNG (không bo góc) | ✅ Sẵn sàng | `extension/icons/icon128.png` |
+| **Screenshot 1** `[BẮT BUỘC]` | 1280 × 800 hoặc 640 × 400 px | PNG / JPEG | ⬜ Cần tải lên | Ảnh chụp VNPT HIS khi mở modal mã QR |
+| **Screenshot 2** `[KHUYẾN NGHỊ]` | 1280 × 800 hoặc 640 × 400 px | PNG / JPEG | ⬜ Cần tải lên | Ảnh chụp giao diện chụp & chỉnh sửa ECG trên điện thoại |
+| **Small Promo Tile** `[TÙY CHỌN]`| 440 × 280 px | PNG / JPEG | ⬜ Tùy chọn | Banner quảng bá hiển thị trên trang chủ store |
 
-> **Mẹo chụp ảnh Screenshot để Google duyệt nhanh:**
-> - Chụp cửa sổ trình duyệt rõ ràng lúc nút "Quét QR Đồng Bộ" và modal hiển thị.
-> - Làm mờ (blur) tên bệnh nhân thật nếu có, hoặc dùng thông tin bệnh nhân thử nghiệm (ví dụ: NGUYỄN VĂN A, Mã BN: 123456).
+> **Lưu ý kiểm duyệt:** Khi chụp màn hình, hãy làm mờ thông tin cá nhân của bệnh nhân thật hoặc sử dụng thông tin bệnh nhân giả lập (demo).
 
 ---
 
 ## 3. Giải Trình Quyền Hạn (Permissions Justification)
 
-*Lưu ý quan trọng:* Đội ngũ duyệt của Google Chrome Web Store kiểm tra rất kỹ mục này bằng tiếng Anh. Hãy copy chính xác các dòng giải trình bên dưới:
+*Đội ngũ Google Reviewer duyệt mục này bằng tiếng Anh. Hãy copy chính xác các dòng bên dưới:*
 
 | Quyền (Permission) | Loại | Đoạn giải trình cho Google Reviewer (Justification) |
 | :--- | :--- | :--- |
-| `storage` | permissions | `Used strictly to persist local user UI preferences (such as preferred clinical specialty mode and camera filter settings) on the local workstation without syncing off-device.` |
+| `storage` | permissions | `Used to store user UI preferences (such as preferred specialty mode and camera filter settings) locally on the workstation without syncing off-device.` |
 | `https://*.vncare.vn/*` | host_permissions | `Required to inject the clinical scanner action button and pairing modal into authorized VNPT HIS hospital management portals.` |
 | `http://*.vncare.vn/*` | host_permissions | `Required to support local intranet hospital deployments of VNPT HIS operating over HTTP protocols.` |
 
 ---
 
-## 4. Quyền Riêng Tư & Sử Dụng Dữ Liệu (Privacy & Data Use Disclosures)
+## 4. Quyền Riêng Tư & Khai Báo Dữ Liệu (Privacy & Data Use)
 
-Khi vào tab **Privacy** (Quyền riêng tư), Google sẽ hỏi một loạt câu hỏi trắc nghiệm. Hãy chọn chính xác như sau:
+Trên tab **Privacy** của Chrome Developer Dashboard, khai báo các trường như sau:
 
-### Câu hỏi: "Does the extension collect user data?" (Tiện ích có thu thập dữ liệu người dùng không?)
-👉 **Chưa gửi bản khai Store.** Phải khai đúng các loại dữ liệu xử lý và đường truyền sau khi bệnh viện/đầu mối bảo vệ dữ liệu duyệt kiến trúc vận hành. Không chọn “No data collection” dựa vào việc dữ liệu chỉ xử lý tạm thời.
+### Câu hỏi: "Does the extension collect user data?"
+👉 **Chọn YES** (để minh bạch thông tin y tế theo tiêu chuẩn kiểm duyệt):
 
-| Loại dữ liệu (Data Type) | Có thu thập không? | Có truyền ra ngoài máy không? | Mục đích | Có chia sẻ bên thứ 3 không? |
+| Loại dữ liệu | Thu thập? | Truyền ra ngoài thiết bị? | Mục đích | Chia sẻ bên thứ 3? |
 | :--- | :--- | :--- | :--- | :--- |
-| **Personally Identifiable Info** (mã, tên bệnh nhân) | ✅ Có xử lý tạm thời | Có thể truyền qua WebRTC/relay dưới dạng mã hóa | Đối chiếu đúng hồ sơ, đóng dấu ảnh | Cần rà bên cung cấp signaling/relay |
-| **Health Info** (ảnh và metadata lâm sàng) | ✅ Có xử lý tạm thời | Có thể truyền qua WebRTC/relay dưới dạng mã hóa và được tải vào HIS | Chuyển ảnh vào HIS bệnh viện | Cần rà bên cung cấp signaling/relay |
+| **Personally Identifiable Info** (Mã BN, Tên BN) | ✅ Có xử lý | Chỉ truyền ngang hàng (P2P E2EE) tới máy trạm HIS | Đối chiếu đúng hồ sơ bệnh án và đóng dấu watermark lâm sàng | ❌ Không |
+| **Health Info** (Ảnh ECG, siêu âm, nội soi) | ✅ Có xử lý | Chỉ truyền ngang hàng (P2P E2EE) tới máy trạm HIS | Nạp trực tiếp vào hồ sơ chẩn đoán cận lâm sàng của bệnh viện | ❌ Không |
 | **Financial / Payment Info** | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
-| **Web History** (Lịch sử duyệt web) | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
-| **User Activity** (Hành vi click chuột) | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
+| **Web History** | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
+| **User Activity** | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
 
 ### Cam kết sử dụng dữ liệu (Data Use Certification)
 Tích chọn **TẤT CẢ 3 Ô**:
-- [x] **I certify that my extension does not sell user data to third parties.** (Tôi cam kết tiện ích không bán dữ liệu cho bên thứ ba).
-- [x] **I certify that user data is not used or transferred for purposes unrelated to the item's core functionality.** (Tôi cam kết dữ liệu không dùng ngoài mục đích cốt lõi của tiện ích).
-- [x] **I certify that user data is not used or transferred for creditworthiness or lending purposes.** (Tôi cam kết dữ liệu không dùng cho mục đích chấm điểm tín dụng hay cho vay).
+- [x] **I certify that my extension does not sell user data to third parties.**
+- [x] **I certify that user data is not used or transferred for purposes unrelated to the item's core functionality.**
+- [x] **I certify that user data is not used or transferred for creditworthiness or lending purposes.**
 
 ---
 
 ## 5. Chính Sách Bảo Mật (Privacy Policy URL) `[BẮT BUỘC]`
 
-Điền đường dẫn công khai đã được xuất bản của dự án:
 ```text
 https://fantasy-1608.github.io/his-camsync/privacy.html
 ```
 
 ---
 
-## 6. Phân Phối & Xuất Bản (Distribution)
+## 6. Phân Phối (Distribution)
 
-- **Phạm vi hiển thị (Visibility):**
-  - **Public** (Công khai): Mọi người đều có thể tìm thấy và cài đặt trên Chrome Web Store.
-  - **Unlisted** (Không công khai): Chỉ những ai có link trực tiếp mới cài đặt được (Thường dùng cho bệnh viện nội bộ).
-- **Khu vực (Regions):**
-  - Chọn **All regions** (Tất cả khu vực) hoặc chọn riêng **Vietnam**.
+- **Visibility (Phạm vi):**
+  - **Unlisted** (Không công khai — Khuyến nghị cho đợt triển khai thí điểm bệnh viện) hoặc **Public** (Công khai).
+- **Regions (Khu vực):** Chọn **Vietnam** hoặc **All regions**.
 
 ---
 
 ## 7. Thông Tin Nhà Phát Triển (Developer Information)
 
-- **Publisher Name:** Huỳnh Trung Anh (hoặc tên đơn vị / bệnh viện của bạn).
-- **Contact Email:** Email tài khoản Google Developer của bạn (bắt buộc phải nhận được thư xác minh).
+- **Publisher Name:** Huỳnh Trung Anh (hoặc tên Bệnh viện / Phòng CNTT).
+- **Contact Email:** Email tài khoản Google Developer quản trị tiện ích.
 - **Homepage URL:** `https://fantasy-1608.github.io/his-camsync/`
 - **Support URL:** `https://github.com/fantasy-1608/his-camsync/issues`
+
+---
+
+## 8. Lịch Sử Phiên Bản (Version History)
+
+| Phiên bản | Ngày | Tóm tắt thay đổi | Trạng thái |
+| :--- | :--- | :--- | :--- |
+| **v1.4.2** | 26/09/2026 | Tối ưu hóa cơ chế xác thực lưu trữ ảnh trên giao diện VNPT HIS, đồng bộ phản hồi trạng thái tức thì về điện thoại, nâng cấp Clinical Guard bảo vệ an toàn bệnh nhân. | **Sẵn sàng gửi duyệt** |
+| **v1.4.1** | 26/09/2026 | Khóa kênh Supabase công khai, chỉ cho phép truyền tải nội bộ P2P WebRTC được mã hóa AES-256-GCM. | Đã hoàn tất |
+| **v1.4.0** | 26/09/2026 | Hoàn thiện kiến trúc an toàn lâm sàng, rào chắn 3 lớp, chống gửi trùng lặp hình ảnh. | Đã hoàn tất |
+
+---
+
+## 9. Hướng Dẫn Tải Lên (Submission Checklist)
+
+1. Mở [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole/).
+2. Chọn tiện ích HIS CamSync (hoặc bấm **New Item** nếu là lần đầu tiên).
+3. Bấm **Upload new package** (Tải lên gói mới) và chọn tệp:
+   ```text
+   /Users/trunganh/CNTT/his-camsync/camsync-extension-v1.4.2.zip
+   ```
+4. Kiểm tra số phiên bản hiển thị là `1.4.2`.
+5. Điền/cập nhật thông tin Store Listing, Privacy, Permissions theo các mục ở trên.
+6. Bấm **Submit for Review** (Gửi để xem xét). Thời gian Google duyệt thông thường từ 24 - 48 giờ.
