@@ -715,12 +715,23 @@ export class P2PClient {
       throw new Error(`Kích thước ảnh (${mb}MB) vượt quá giới hạn an toàn 15MB`);
     }
 
+    // Định danh phiên truyền bất biến cho toàn bộ chu trình (chống ghi đúp)
+    const transferId = metadata.transferId || generateSecureToken();
+    const meta = { ...metadata, transferId };
+
     // 1. Nếu WebRTC DataChannel đang thông suốt (Wi-Fi), gửi P2P siêu tốc
     if (this.conn && this.conn.open) {
       try {
-        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...');
-        const res = await this.sendImageViaWebRTC(blob, metadata, onProgress);
+        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...', transferId);
+        const res = await this.sendImageViaWebRTC(blob, meta, onProgress);
         if (res && res.success) {
+          return res;
+        }
+        // RÀO CHẮN CHỐNG GHI ĐÚP LÂM SÀNG:
+        // Nếu kết quả trả về là HIS_UNKNOWN, máy chủ HIS có thể đã lưu hoặc đang lưu ảnh.
+        // Tuyệt đối KHÔNG tự động chuyển tiếp qua Cloud Relay để tránh ghi trùng lặp 2 ảnh!
+        if (res && res.status === 'HIS_UNKNOWN') {
+          console.warn('[CamSync] WebRTC trả về HIS_UNKNOWN: Không chuyển tiếp sang Cloud để bảo vệ tính toàn vẹn hồ sơ.');
           return res;
         }
         console.warn('[CamSync] P2P không thành công, tự động chuyển hướng qua Cloud Relay:', res?.error);
@@ -730,8 +741,8 @@ export class P2PClient {
     }
 
     // 2. Chuyển sang Supabase Cloud Relay (4G/5G/LAN)
-    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay...');
-    return await this.sendImageViaCloud(blob, metadata, onProgress);
+    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay...', transferId);
+    return await this.sendImageViaCloud(blob, meta, onProgress);
   }
 
   /**
@@ -754,7 +765,7 @@ export class P2PClient {
     const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
     const mimeType = blob.type || 'image/jpeg';
     const totalBytes = blob.size;
-    const transferId = generateSecureToken();
+    const transferId = metadata.transferId || generateSecureToken();
     const filename = metadata.name || `ECG_${Date.now()}.jpg`;
 
     let payloadToSend = rawBase64;
@@ -811,7 +822,7 @@ export class P2PClient {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // 1. Gửi chunk_start & TransferStart (V2 Schema - ZERO PHI in outer header)
+    // 1. Gửi chunk_start (V2 Schema - ZERO PHI in outer header)
     const startPayload = {
       type: 'TransferStart',
       v: 2,
@@ -835,12 +846,11 @@ export class P2PClient {
         timestamp: Date.now()
       }
     };
-    this.broadcast('TransferStart', startPayload);
     this.broadcast('chunk_start', startPayload);
 
     if (typeof onProgress === 'function') onProgress(30);
 
-    // 2. Gửi từng chunk_data & TransferChunk
+    // 2. Gửi từng chunk_data
     for (let i = 0; i < totalChunks; i++) {
       const chunk = payloadToSend.slice(i * CHUNK_CHARS, (i + 1) * CHUNK_CHARS);
       const chunkPacket = {
@@ -855,7 +865,6 @@ export class P2PClient {
         encrypted: isEncrypted,
         iv: encryptionIv
       };
-      this.broadcast('TransferChunk', chunkPacket);
       this.broadcast('chunk_data', chunkPacket);
 
       if (typeof onProgress === 'function') {
@@ -868,7 +877,7 @@ export class P2PClient {
       }
     }
 
-    // 3. Đệm 20ms để socket buffer xả hết trước khi gửi chunk_complete & TransferEnd
+    // 3. Đệm 20ms để socket buffer xả hết trước khi gửi chunk_complete
     await new Promise(r => setTimeout(r, 20));
     const endPacket = {
       type: 'TransferEnd',
@@ -876,7 +885,6 @@ export class P2PClient {
       sid: this.sessionId,
       transferId
     };
-    this.broadcast('TransferEnd', endPacket);
     this.broadcast('chunk_complete', endPacket);
 
     // 4. Chờ transfer_ack từ máy tính (Fail-Closed: Timeout hoặc Error ACK đều coi là thất bại)
@@ -953,7 +961,7 @@ export class P2PClient {
     const commaIdx = base64Data.indexOf(',');
     const rawBase64 = commaIdx >= 0 ? base64Data.slice(commaIdx + 1) : base64Data;
     const mimeType = blob.type || 'image/jpeg';
-    const transferId = generateSecureToken();
+    const transferId = metadata.transferId || generateSecureToken();
 
     let payloadToSend = rawBase64;
     let isEncrypted = false;

@@ -74,6 +74,8 @@
       '#orderId'
     ]),
     PERSISTENCE_CONTAINERS: Object.freeze([
+      '#list',
+      '#pictureToPrint',
       '#gridUploadResults',
       '#fileList',
       '#grdFileDinhKem',
@@ -561,7 +563,8 @@
             const currentText = currentContainer.innerText || currentContainer.innerHTML || '';
             const currentCount = currentContainer.children?.length || 0;
 
-            if (evidence.fileToken && currentText.includes(evidence.fileToken)) {
+            const baseToken = evidence.fileToken ? evidence.fileToken.replace(/\.[^/.]+$/, '') : '';
+            if (evidence.fileToken && (currentText.includes(evidence.fileToken) || (baseToken && currentText.includes(baseToken) && (!initialText || !initialText.includes(baseToken))))) {
               finish('COMMITTED');
               return;
             }
@@ -569,11 +572,13 @@
               finish('COMMITTED');
               return;
             }
-            if (this._lastAttachedFile?.name &&
-                currentText.includes(this._lastAttachedFile.name) &&
-                !initialText.includes(this._lastAttachedFile.name)) {
-              finish('COMMITTED');
-              return;
+            if (this._lastAttachedFile?.name) {
+              const baseAttached = this._lastAttachedFile.name.replace(/\.[^/.]+$/, '');
+              if ((currentText.includes(this._lastAttachedFile.name) || (baseAttached && currentText.includes(baseAttached))) &&
+                  (!initialText.includes(this._lastAttachedFile.name) && (!baseAttached || !initialText.includes(baseAttached)))) {
+                finish('COMMITTED');
+                return;
+              }
             }
             if (currentCount > initialChildrenCount &&
                 evidence.fileSize &&

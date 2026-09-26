@@ -53,6 +53,7 @@ function getPatientInfoFromDOM() {
   let onEscapeKeydownListener = null;
   const activeChunkTransfers = {};
   const processedTransferIds = new Set();
+  const recentUploadedTokens = new Map();
 
   
   
@@ -1346,6 +1347,7 @@ function getPatientInfoFromDOM() {
     closeQrModal();
     photoCount = 0;
     processedTransferIds.clear();
+    recentUploadedTokens.clear();
 
     // RÀO CHẮN LÂM SÀNG CHECKPOINT #1: Khóa cứng Clinical Context ngay khi mở QR
     // Bắt buộc phải có cả patientId VÀ encounterId (F01, F02, R1)
@@ -1750,6 +1752,7 @@ function getPatientInfoFromDOM() {
 
     unifiedTransferReceiver.purgeAll();
     processedTransferIds.clear();
+    recentUploadedTokens.clear();
 
     const targetDoc = getRootDocument();
     if (onEscapeKeydownListener && targetDoc && targetDoc.removeEventListener) {
@@ -2675,6 +2678,31 @@ function getPatientInfoFromDOM() {
     const isUltrasound = meta.specialty === 'ultrasound';
     const prefix = isUltrasound ? (patientId ? `SA_${patientId}` : 'SA') : (patientId ? `ECG_${patientId}` : 'ECG');
     const filename = meta.name || `${prefix}_${Date.now()}.jpg`;
+
+    // === RÀO CHẮN IDEMPOTENT DEDUPLICATION CHỐNG GHI TRÙNG LẶP ===
+    const dedupKey = transferId || filename;
+    const existingRecord = (transferId && recentUploadedTokens.get(transferId)) ||
+                           (filename && recentUploadedTokens.get(filename));
+
+    if (existingRecord) {
+      if (existingRecord.state === 'COMMITTED') {
+        console.warn(`[CamSync Idempotency] Bỏ qua yêu cầu tải ảnh trùng lặp (${filename || transferId}) đã lưu thành công trên HIS.`);
+        const cachedRes = {
+          success: true,
+          status: 'HIS_COMMITTED',
+          photoCount: existingRecord.photoCount || photoCount,
+          filename: existingRecord.filename || filename
+        };
+        const p = Promise.resolve(cachedRes);
+        Object.assign(p, cachedRes);
+        return p;
+      }
+      if (existingRecord.state === 'IN_FLIGHT' && existingRecord.promise) {
+        console.warn(`[CamSync Idempotency] Yêu cầu nạp ảnh (${filename || transferId}) đang được xử lý trong tiến trình khác. Chờ kết quả hiện tại.`);
+        return existingRecord.promise;
+      }
+    }
+
     const approxKB = Math.round((base64Image.length * 0.75) / 1024);
 
     let file;
@@ -2898,6 +2926,15 @@ function getPatientInfoFromDOM() {
           counterBadge.style.display = 'inline-block';
         }
 
+        const commitRecord = {
+          state: 'COMMITTED',
+          timestamp: Date.now(),
+          photoCount,
+          filename
+        };
+        if (transferId) recentUploadedTokens.set(transferId, commitRecord);
+        if (filename) recentUploadedTokens.set(filename, commitRecord);
+
         return {
           success: true,
           status: 'HIS_COMMITTED',
@@ -2905,6 +2942,9 @@ function getPatientInfoFromDOM() {
           filename
         };
       }
+
+      if (transferId) recentUploadedTokens.delete(transferId);
+      if (filename) recentUploadedTokens.delete(filename);
 
       if (persistResult === 'REJECTED') {
         sm.transition('HIS_REJECTED');
@@ -2943,6 +2983,21 @@ function getPatientInfoFromDOM() {
 
     asyncPromise.status = 'HIS_UPLOAD_PENDING';
     asyncPromise.initiated = true;
+
+    const inFlightRecord = {
+      state: 'IN_FLIGHT',
+      timestamp: Date.now(),
+      promise: asyncPromise,
+      filename
+    };
+    if (transferId) recentUploadedTokens.set(transferId, inFlightRecord);
+    if (filename) recentUploadedTokens.set(filename, inFlightRecord);
+
+    if (recentUploadedTokens.size > 50) {
+      const oldestKey = recentUploadedTokens.keys().next().value;
+      if (oldestKey) recentUploadedTokens.delete(oldestKey);
+    }
+
     return asyncPromise;
   }
 
