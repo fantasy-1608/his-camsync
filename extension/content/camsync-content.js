@@ -606,8 +606,20 @@ function getPatientInfoFromDOM() {
    */
   function injectFilesAndUpload(fileList, incomingPatientId) {
     const adapter = getHisAdapter();
-    const fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
+    let fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
     const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
+
+    // BẢO VỆ ĐỒNG BỘ DOCUMENT: fileInput BẮT BUỘC phải cùng document với btnUpload (trong dialog CDHA)
+    if (btnUpload && btnUpload.ownerDocument) {
+      const parentDoc = btnUpload.ownerDocument;
+      const pairedInput = (parentDoc.querySelector && parentDoc.querySelector('#UploadController #fileUpload')) ||
+                          (parentDoc.querySelector && parentDoc.querySelector('#UploadController input[type="file"]')) ||
+                          parentDoc.getElementById('fileUpload') ||
+                          (parentDoc.querySelector && parentDoc.querySelector('input[type="file"]'));
+      if (pairedInput) {
+        fileInput = pairedInput;
+      }
+    }
 
     if (!fileInput || !btnUpload) {
       console.warn('[CamSync] Không tìm thấy phần tử upload trên trang');
@@ -819,7 +831,10 @@ function getPatientInfoFromDOM() {
     if (btnUpload && !btnUpload.dataset.camsyncProtected) {
       btnUpload.dataset.camsyncProtected = 'true';
       btnUpload.addEventListener('click', (e) => {
-        if (!fileInput.files || fileInput.files.length === 0) {
+        const targetInput = btnUpload.ownerDocument?.getElementById('fileUpload') ||
+                            btnUpload.ownerDocument?.querySelector?.('#UploadController input[type="file"]') ||
+                            fileInput;
+        if (!targetInput || !targetInput.files || targetInput.files.length === 0) {
           e.stopImmediatePropagation();
           e.preventDefault();
           showToast('⚠️ Vui lòng chọn tệp ảnh trước khi bấm Upload!');

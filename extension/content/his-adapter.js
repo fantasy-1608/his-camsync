@@ -108,7 +108,29 @@
     const doc = customDoc || (typeof document !== 'undefined' ? document : getRootDocument());
     if (!doc) return null;
 
-    // 1. Quét document chính được chỉ định
+    // 1. Nếu có iframe con chứa UploadController hoặc btnUpload (dialog CDHA), ưu tiên quét trong iframe trước
+    try {
+      const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+      for (const frame of iframes) {
+        try {
+          const fDoc = frame.contentDocument || frame.contentWindow?.document;
+          if (fDoc && (fDoc.getElementById('UploadController') || fDoc.getElementById('btnUpload'))) {
+            for (const sel of selectorList) {
+              if (sel.startsWith('#') && !sel.includes(' ') && fDoc.getElementById) {
+                const el = fDoc.getElementById(sel.slice(1));
+                if (el) return el;
+              }
+              if (fDoc.querySelector) {
+                const el = fDoc.querySelector(sel);
+                if (el) return el;
+              }
+            }
+          }
+        } catch (frameErr) {}
+      }
+    } catch (e) {}
+
+    // 2. Quét document chính được chỉ định
     for (const sel of selectorList) {
       try {
         if (sel.startsWith('#') && !sel.includes(' ') && doc.getElementById) {
@@ -122,7 +144,7 @@
       } catch (e) {}
     }
 
-    // 2. Quét sâu vào các iframe con cùng nguồn (nếu có dialog CDHA mở dạng iframe)
+    // 3. Quét sâu vào tất cả các iframe con khác cùng nguồn
     try {
       const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
       for (const frame of iframes) {
@@ -183,7 +205,21 @@
     _getDoc() {
       if (this._customDoc) return this._customDoc;
       if (typeof document !== 'undefined') {
-        if (document.getElementById('UploadController') || document.getElementById('btnUpload')) {
+        // 1. Quét tìm iframe dialog CDHA chứa UploadController hoặc btnUpload
+        try {
+          const iframes = document.querySelectorAll ? document.querySelectorAll('iframe') : [];
+          for (const frame of iframes) {
+            try {
+              const fd = frame.contentDocument || frame.contentWindow?.document;
+              if (fd && (fd.getElementById('UploadController') || fd.getElementById('btnUpload'))) {
+                return fd;
+              }
+            } catch (fe) {}
+          }
+        } catch (e) {}
+
+        // 2. Nếu chính document hiện tại chứa UploadController hoặc btnUpload
+        if (document.getElementById && (document.getElementById('UploadController') || document.getElementById('btnUpload'))) {
           return document;
         }
       }
