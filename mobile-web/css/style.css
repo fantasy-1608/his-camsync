@@ -458,6 +458,10 @@ body.doc-editing .specialty-segmented-bar {
   max-width: 280px;
 }
 
+.guide-desc:empty {
+  display: none;
+}
+
 /* Bottom Action Area (Thumb Zone) */
 .capture-bottom-actions {
   display: flex;

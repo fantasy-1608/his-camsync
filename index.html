@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/><circle cx='12' cy='13' r='4'/></svg>">
-  <link rel="stylesheet" href="css/style.css?v=2.0.4">
+  <link rel="stylesheet" href="css/style.css?v=2.0.5">
 </head>
 <body>
   <!-- Header -->
@@ -21,7 +21,7 @@
     </div>
     <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để kết nối lại">
       <span class="status-dot"></span>
-      <span id="statusText">Đang tìm máy bàn...</span>
+      <span id="statusText">Đang tìm kết nối...</span>
     </div>
   </header>
 
@@ -77,7 +77,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
         </svg>
-        <span>Siêu Âm / CĐHA</span>
+        <span>Siêu Âm</span>
       </button>
       <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -102,10 +102,8 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
         </div>
-        <h2 class="guide-title" id="captureTitle">Chụp Dải Băng Điện Tim</h2>
-        <p class="guide-desc" id="captureSubtitle">
-          Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Hỗ trợ thước xoay tiểu ly chống lệch góc và tối ưu nét sóng đưa thẳng vào HIS.
-        </p>
+        <h2 class="guide-title" id="captureTitle">Chụp điện tim</h2>
+        <p class="guide-desc" id="captureSubtitle"></p>
       </div>
 
       <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
@@ -448,7 +446,7 @@
         <span class="upload-pct-badge" id="uploadPctBadge">0%</span>
       </div>
       <h3 class="upload-title" id="uploadTitle">Đang truyền ảnh lên HIS...</h3>
-      <p class="upload-meta" id="uploadMeta">Chuẩn bị kết nối máy bàn...</p>
+      <p class="upload-meta" id="uploadMeta">Chuẩn bị truyền dữ liệu...</p>
     </div>
   </div>
 
@@ -847,8 +845,8 @@
       if (spec === 'ecg') {
         tabEcg.classList.add('active');
         iconEcgMode.style.display = 'block';
-        captureTitle.textContent = 'Chụp Dải Băng Điện Tim';
-        captureSubtitle.textContent = 'Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Hỗ trợ thước xoay tiểu ly chống lệch góc và tối ưu nét sóng đưa thẳng vào HIS.';
+        captureTitle.textContent = 'Chụp điện tim';
+        captureSubtitle.textContent = '';
 
         groupEcgPresets.style.display = 'flex';
         groupUsPresets.style.display = 'none';
@@ -858,8 +856,8 @@
       } else {
         tabUltrasound.classList.add('active');
         iconUsMode.style.display = 'block';
-        captureTitle.textContent = 'Chụp Hình Ảnh Siêu Âm';
-        captureSubtitle.textContent = 'Chụp từ màn hình máy siêu âm (Convex / Linear / 4:3). Hỗ trợ thước xoay tiểu ly, tăng tương phản mô và nét bờ tổn thương.';
+        captureTitle.textContent = 'Chụp siêu âm';
+        captureSubtitle.textContent = '';
 
         groupEcgPresets.style.display = 'none';
         groupUsPresets.style.display = 'flex';
@@ -2203,7 +2201,7 @@
     btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
       if (!p2p.isConnected) {
-        showErrorBanner('Chưa kết nối với máy bàn HIS. Vui lòng quét lại QR.');
+        showErrorBanner('Chưa kết nối với HIS. Vui lòng quét lại QR.');
         return;
       }
 
@@ -2252,7 +2250,7 @@
 
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressModal.style.display = 'none';
-          showWarningBanner('PDF đã gửi đến máy bàn. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
+          showWarningBanner('PDF đã gửi đến HIS. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
           btnDocSendPdf.disabled = false;
           triggerHaptic('warning');
           return;
