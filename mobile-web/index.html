@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
-  <link rel="stylesheet" href="css/style.css?v=2.0.1">
+  <link rel="stylesheet" href="css/style.css?v=2.0.2">
 </head>
 <body>
   <!-- Header -->
@@ -344,7 +344,11 @@
       <!-- Controls: Preset + Size Estimate + Page Counter -->
       <div style="padding: 0 16px;">
         <div class="doc-preset-selector">
-          <button type="button" class="doc-preset-btn active" data-doc-preset="document">
+          <button type="button" class="doc-preset-btn active" data-doc-preset="enhance">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            Sắc nét
+          </button>
+          <button type="button" class="doc-preset-btn" data-doc-preset="document">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Tài liệu
           </button>
@@ -458,10 +462,10 @@
   <script src="js/vendor/heic2any.min.js"></script>
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script type="module">
-    import { ImageEditor } from './js/editor.js?v=2.0.1';
-    import { P2PClient } from './js/p2p-client.js?v=2.0.1';
-    import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.1';
-    import { unwarpDocument } from './js/perspective.js?v=2.0.1';
+    import { ImageEditor } from './js/editor.js?v=2.0.2';
+    import { P2PClient } from './js/p2p-client.js?v=2.0.2';
+    import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
+    import { unwarpDocument } from './js/perspective.js?v=2.0.2';
 
     // State
     let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
@@ -470,7 +474,18 @@
     // Document Scan State
     let docPages = []; // Array of { file: File, thumbnail: string (dataURL) }
     let docSelectedIndex = -1;
-    let docPreset = 'document'; // 'document' | 'color'
+    let docPreset = 'enhance'; // 'enhance' | 'document' | 'color'
+
+    // Haptic Feedback (Rung xúc giác nhẹ trên thiết bị di động)
+    function triggerHaptic(type = 'tap') {
+      if (typeof navigator === 'undefined' || !navigator.vibrate) return;
+      try {
+        if (type === 'tap') navigator.vibrate(12);
+        else if (type === 'snap') navigator.vibrate(24);
+        else if (type === 'success') navigator.vibrate([20, 60, 30]);
+        else if (type === 'warning') navigator.vibrate([40, 80, 40]);
+      } catch (e) {}
+    }
 
     // DOM Elements
     const tabEcg = document.getElementById('tabEcg');
@@ -1403,6 +1418,7 @@
 
     function removeDocPage(idx) {
       exitCropMode();
+      triggerHaptic('warning');
       const removed = docPages.splice(idx, 1)[0];
       if (removed?.previewUrl) {
         try { URL.revokeObjectURL(removed.previewUrl); } catch (e) {}
@@ -1433,6 +1449,7 @@
         const thumbnail = await createThumbnail(processedFile);
         const previewUrl = URL.createObjectURL(processedFile);
         hideLoading();
+        triggerHaptic('tap');
 
         docPages.push({
           file: processedFile,
@@ -1452,9 +1469,9 @@
     }
 
     // Camera & Gallery triggers
-    btnDocCapture?.addEventListener('click', () => docCameraInput.click());
-    btnDocAddPage?.addEventListener('click', () => docCameraInput.click());
-    btnDocGallery?.addEventListener('click', () => docGalleryInput.click());
+    btnDocCapture?.addEventListener('click', () => { triggerHaptic('tap'); docCameraInput.click(); });
+    btnDocAddPage?.addEventListener('click', () => { triggerHaptic('tap'); docCameraInput.click(); });
+    btnDocGallery?.addEventListener('click', () => { triggerHaptic('tap'); docGalleryInput.click(); });
 
     docCameraInput?.addEventListener('change', (e) => {
       if (e.target.files?.[0]) addDocPage(e.target.files[0]);
@@ -1473,6 +1490,7 @@
     // ---- Rotate 90° ----
     btnDocRotate?.addEventListener('click', () => {
       if (docSelectedIndex < 0 || docSelectedIndex >= docPages.length) return;
+      triggerHaptic('tap');
       const page = docPages[docSelectedIndex];
       page.rotation = (page.rotation + 90) % 360;
       renderDocThumbnails();
@@ -1481,6 +1499,7 @@
     // ---- Move Left / Right (reorder) ----
     btnDocMoveLeft?.addEventListener('click', () => {
       if (docSelectedIndex <= 0) return;
+      triggerHaptic('tap');
       const idx = docSelectedIndex;
       [docPages[idx - 1], docPages[idx]] = [docPages[idx], docPages[idx - 1]];
       docSelectedIndex = idx - 1;
@@ -1489,6 +1508,7 @@
 
     btnDocMoveRight?.addEventListener('click', () => {
       if (docSelectedIndex >= docPages.length - 1 || docSelectedIndex < 0) return;
+      triggerHaptic('tap');
       const idx = docSelectedIndex;
       [docPages[idx], docPages[idx + 1]] = [docPages[idx + 1], docPages[idx]];
       docSelectedIndex = idx + 1;
@@ -1631,6 +1651,82 @@
           ctx.fill();
         });
 
+        // Magnifying Loupe while dragging corner pin
+        if (activeDragCorner >= 0 && activeDragCorner < pts.length && docPreviewImg && docPreviewImg.complete) {
+          const curPt = pts[activeDragCorner];
+          const loupeRadius = 44;
+          let lx = curPt.x;
+          let ly = curPt.y - 64;
+          if (ly - loupeRadius < 10) {
+            ly = curPt.y + 64;
+          }
+          lx = Math.max(loupeRadius + 6, Math.min(cw - loupeRadius - 6, lx));
+
+          ctx.save();
+          // Shadow for loupe elevation
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+          ctx.shadowBlur = 14;
+          ctx.shadowOffsetY = 4;
+
+          // Base background
+          ctx.beginPath();
+          ctx.arc(lx, ly, loupeRadius, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
+
+          // Clip circle
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(lx, ly, loupeRadius, 0, Math.PI * 2);
+          ctx.clip();
+
+          // 2.4x Magnified image centered on curPt
+          const zoom = 2.4;
+          ctx.translate(lx, ly);
+          ctx.scale(zoom, zoom);
+          ctx.drawImage(docPreviewImg, -curPt.x, -curPt.y, cw, ch);
+          ctx.restore();
+
+          // Center crosshair / reticle (+)
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#0284c7';
+          ctx.beginPath();
+          ctx.moveTo(lx - 12, ly);
+          ctx.lineTo(lx - 3, ly);
+          ctx.moveTo(lx + 3, ly);
+          ctx.lineTo(lx + 12, ly);
+          ctx.moveTo(lx, ly - 12);
+          ctx.lineTo(lx, ly - 3);
+          ctx.moveTo(lx, ly + 3);
+          ctx.lineTo(lx, ly + 12);
+          ctx.stroke();
+
+          // Center reticle dot
+          ctx.beginPath();
+          ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#0284c7';
+          ctx.fill();
+
+          // Outer loupe border
+          ctx.beginPath();
+          ctx.arc(lx, ly, loupeRadius, 0, Math.PI * 2);
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#0284c7';
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(lx, ly, loupeRadius - 2, 0, Math.PI * 2);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+          ctx.stroke();
+
+          ctx.restore();
+        }
+
       } else if (activeEditMode === 'crop') {
         if (!cropRect) return;
 
@@ -1711,9 +1807,15 @@
             closestIdx = i;
           }
         });
+        if (closestIdx !== -1) {
+          triggerHaptic('tap');
+        }
         activeDragCorner = closestIdx;
       } else if (activeEditMode === 'crop') {
         activeDragHandle = getCropHandleAt(px, py);
+        if (activeDragHandle) {
+          triggerHaptic('tap');
+        }
         cropTouchStart = {
           px, py,
           nx: px / cw,
@@ -1787,9 +1889,13 @@
     }
 
     function handleEditPointerUp() {
+      const wasDragging = (activeDragCorner >= 0 || activeDragHandle !== null);
       activeDragCorner = -1;
       activeDragHandle = null;
       cropTouchStart = null;
+      if (wasDragging) {
+        drawEditCanvas();
+      }
     }
 
     // Touch listeners on canvas
@@ -1893,6 +1999,7 @@
           hideLoading();
           exitEditOverlay();
           renderDocThumbnails();
+          triggerHaptic('snap');
 
         } else if (activeEditMode === 'crop') {
           if (!cropRect || cropRect.w < 0.05 || cropRect.h < 0.05) {
@@ -1957,6 +2064,7 @@
           hideLoading();
           exitEditOverlay();
           renderDocThumbnails();
+          triggerHaptic('snap');
         }
       } catch (err) {
         hideLoading();
@@ -1972,17 +2080,21 @@
       if (docPages.length === 0) return;
       docPreviewModalBody.innerHTML = '';
 
+      const isEnhance = (docPreset === 'enhance');
       const isGrayscale = (docPreset === 'document');
       const estimate = estimatePdfSize(docPages.length, docPreset);
       const sizeMB = (estimate.estimatedKB / 1024).toFixed(1);
       const sizeStr = estimate.estimatedKB < 1024 ? `${estimate.estimatedKB} KB` : `${sizeMB} MB`;
-      docPreviewMetaLine.textContent = `${docPages.length} trang • Chế độ: ${isGrayscale ? 'Tài liệu (Trắng đen)' : 'Ảnh màu'} • Ước tính ~${sizeStr}`;
+      const modeName = isEnhance ? 'Sắc nét (Tăng tương phản)' : (isGrayscale ? 'Tài liệu (Trắng đen)' : 'Ảnh màu');
+      docPreviewMetaLine.textContent = `${docPages.length} trang • Chế độ: ${modeName} • Ước tính ~${sizeStr}`;
 
       docPages.forEach((page, idx) => {
         const card = document.createElement('div');
         card.className = 'doc-preview-page-card';
         const rotStyle = page.rotation ? `transform: rotate(${page.rotation}deg);` : '';
-        const filterStyle = isGrayscale ? 'filter: grayscale(100%) contrast(110%);' : '';
+        const filterStyle = isEnhance
+          ? 'filter: contrast(135%) brightness(108%);'
+          : (isGrayscale ? 'filter: grayscale(100%) contrast(110%);' : '');
         card.innerHTML = `
           <img class="doc-preview-page-img" src="${page.previewUrl || page.thumbnail}" alt="Trang ${idx + 1}" style="${rotStyle} ${filterStyle}">
           <div class="doc-preview-page-label">Trang ${idx + 1} / ${docPages.length} ${page.rotation ? `(${page.rotation}°)` : ''}</div>
@@ -2008,6 +2120,7 @@
     // Preset selection
     document.querySelectorAll('.doc-preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        triggerHaptic('tap');
         document.querySelectorAll('.doc-preset-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         docPreset = btn.dataset.docPreset;
@@ -2027,8 +2140,8 @@
         btnDocSendPdf.disabled = true;
         uploadProgressModal.style.display = 'flex';
         uploadPctBadge.textContent = '5%';
-        uploadTitle.textContent = 'Đang tạo file PDF...';
-        uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu'})...`;
+        const modeLabel = docPreset === 'enhance' ? 'Sắc nét' : (docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu');
+        uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${modeLabel})...`;
 
         const pdfResult = await buildPdf(
           docPages.map(p => ({ file: p.file, rotation: p.rotation || 0 })),
@@ -2070,6 +2183,7 @@
           uploadProgressModal.style.display = 'none';
           showWarningBanner('PDF đã gửi đến máy bàn. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
           btnDocSendPdf.disabled = false;
+          triggerHaptic('warning');
           return;
         }
 
@@ -2077,10 +2191,11 @@
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
           btnDocSendPdf.disabled = false;
+          triggerHaptic('warning');
           return;
         }
 
-        if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch (e) {} }
+        triggerHaptic('success');
         uploadPctBadge.textContent = '100%';
         uploadTitle.textContent = 'Đã gửi PDF vào HIS';
         uploadMeta.textContent = `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`;
