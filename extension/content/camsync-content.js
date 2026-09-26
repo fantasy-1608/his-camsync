@@ -889,6 +889,41 @@ function getPatientInfoFromDOM() {
   /**
    * Khởi tạo Nút "Quét từ ĐT" trên Toolbar
    */
+  /**
+   * Inject nút "Nhập từ ĐT" vào form Phiếu Scan (NTU01H102_ThemPhieuKySo)
+   * Nút nằm cạnh nút "Scan" hiện có, cho phép nhận PDF từ điện thoại qua CamSync
+   */
+  function injectPhieuScanButton() {
+    // Tránh inject trùng
+    if (document.getElementById('btnCamSyncPhieuScan')) return;
+
+    // Tìm nút Scan hoặc thanh nút action ở đáy form
+    const btnScan = document.querySelector('button[id*="Scan"], .btn[onclick*="scan"], #btnScan');
+    // Fallback: tìm thanh nút cuối form (chứa Lưu, Scan, Đóng)
+    const btnLuu = document.querySelector('#btnLuu, button[id*="btnLuu"]');
+    const targetBtn = btnScan || btnLuu;
+    if (!targetBtn || !targetBtn.parentNode) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'btnCamSyncPhieuScan';
+    btn.className = 'btn btn-info';
+    btn.style.cssText = 'margin-left: 4px;';
+    btn.innerHTML = '<span class="glyphicon glyphicon-phone" aria-hidden="true"></span> Nhập từ ĐT';
+    btn.title = 'Chụp giấy tờ từ điện thoại, chuyển PDF đính kèm vào phiếu';
+    btn.addEventListener('click', () => {
+      openQrModal();
+    });
+
+    // Chèn nút vào thanh action, trước nút Đóng (nếu có)
+    const btnClose = document.querySelector('#btnClose, button[id*="btnDong"], button[onclick*="close"]');
+    if (btnClose && btnClose.parentNode === targetBtn.parentNode) {
+      btnClose.parentNode.insertBefore(btn, btnClose);
+    } else {
+      targetBtn.parentNode.appendChild(btn);
+    }
+  }
+
   function injectSyncButton() {
     const adapter = getHisAdapter();
     const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
@@ -3231,6 +3266,13 @@ function getPatientInfoFromDOM() {
       if (isAvailable) {
         injectSyncButton();
       }
+
+      // Phiếu Scan: Inject nút "Nhập từ ĐT" vào form NTU01H102_ThemPhieuKySo
+      try {
+        if (window.location.href.includes('NTU01H102_ThemPhieuKySo')) {
+          injectPhieuScanButton();
+        }
+      } catch (e) {}
     };
 
     checkAndInit();
