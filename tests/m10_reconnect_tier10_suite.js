@@ -297,6 +297,8 @@ function createDesktopEnvironment(options = {}) {
   const clinicalCode = fs.readFileSync(clinicalPath, 'utf8');
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');
@@ -339,6 +341,8 @@ function createDesktopEnvironment(options = {}) {
 function createMobileEnvironment(options = {}) {
   const mobileScriptPath = path.resolve(__dirname, '../mobile-web/js/p2p-client.js');
   let code = fs.readFileSync(mobileScriptPath, 'utf8');
+  // Synthetic authorized-channel fixture for reconnect mechanics only.
+  code = code.replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
   code = code.replace(/\bexport\s+/g, '');
 
   let historyState = null;

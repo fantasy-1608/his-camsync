@@ -96,12 +96,12 @@
   <div class="container">
     <h1>
       HIS CamSync — Privacy Policy
-      <span class="badge">Zero-Retention</span>
+      <span class="badge">Bản dự thảo</span>
     </h1>
-    <div class="updated">Cập nhật lần cuối: 24/09/2026 • Phiên bản: 1.1.0</div>
+    <div class="updated">Cập nhật lần cuối: 26/09/2026 • Chờ bệnh viện duyệt phạm vi xử lý dữ liệu</div>
 
     <div class="highlight-box">
-      <strong>Cam kết cốt lõi:</strong> HIS CamSync tuân thủ nghiêm ngặt nguyên tắc <strong>Zero-Retention (Không lưu trữ đám mây)</strong> và <strong>Zero-Leakage (Bảo mật lâm sàng tuyệt đối)</strong>. Dữ liệu hình ảnh cận lâm sàng chỉ truyền trực tiếp trong bộ nhớ tạm (RAM) giữa điện thoại của nhân viên y tế và máy trạm VNPT HIS của bệnh viện, tuyệt đối không lưu trữ trên ổ đĩa hay cơ sở dữ liệu bên thứ ba.
+      <strong>Phạm vi hiện tại:</strong> Ảnh và thông tin bệnh nhân được xử lý trên điện thoại, máy trạm và HIS; dữ liệu có thể đi qua WebRTC hoặc Supabase Realtime. Cấu hình quyền truy cập, nơi xử lý và thời hạn lưu giữ của các bên cung cấp dịch vụ phải được bệnh viện xác nhận trước khi dùng thường quy.
     </div>
 
     <h2>1. Mục đích duy nhất (Single Purpose)</h2>
@@ -109,15 +109,15 @@
 
     <h2>2. Dữ liệu thu thập và phương thức xử lý</h2>
     <ul>
-      <li><strong>Dữ liệu hình ảnh y tế:</strong> Ảnh chụp dải băng điện tim hoặc hình ảnh siêu âm chỉ được xử lý tạm thời trên trình duyệt của điện thoại và máy tính. Ảnh được đóng dấu chìm định danh (Clinical Watermark) và nạp thẳng vào biểu mẫu bệnh án trên VNPT HIS. Chúng tôi <em>không lưu lại bất kỳ bản sao nào</em> trên máy chủ.</li>
-      <li><strong>Thông tin bệnh nhân (PHI):</strong> Mã bệnh nhân và họ tên chỉ được hiển thị cục bộ trên giao diện nhằm đảm bảo an toàn lâm sàng (tránh nạp nhầm bệnh án). Mã QR và URL trên điện thoại <em>hoàn toàn không chứa thông tin định danh cá nhân</em>.</li>
-      <li><strong>Dữ liệu phiên làm việc:</strong> Session ID được sinh ngẫu nhiên theo chuẩn mật mã học 128-bit entropy (crypto.getRandomValues) và tự động bị hủy ngay khi đóng modal hoặc sau 60 giây hết hạn.</li>
+      <li><strong>Dữ liệu hình ảnh y tế:</strong> Ảnh ECG, siêu âm hoặc nội soi được xử lý trong trình duyệt, có thể đóng dấu mã bệnh nhân, rồi nạp vào HIS. Bản gốc và ảnh đã chỉnh có thể tồn tại trong bộ nhớ trình duyệt trong phiên; HIS lưu ảnh theo chính sách bệnh viện.</li>
+      <li><strong>Thông tin bệnh nhân (PHI):</strong> Mã, họ tên, lượt khám và phiếu chỉ định được dùng để đối chiếu hồ sơ và có thể xuất hiện trên ảnh đóng dấu. Mã QR/URL chứa mã phiên và khóa mã hóa, cần được giữ kín, không chụp hoặc chia sẻ ngoài nhân viên được phép.</li>
+      <li><strong>Dữ liệu phiên làm việc:</strong> Mã phiên và khóa được tạo ngẫu nhiên; phiên trên máy trạm hết hạn sau tối đa 5 phút hoặc khi đóng/hủy. Bản ghi thao tác cục bộ chỉ lưu loại sự kiện và mã lỗi được giới hạn.</li>
     </ul>
 
     <h2>3. Lưu trữ và Truyền tải dữ liệu</h2>
     <ul>
-      <li><strong>Kênh truyền ưu tiên:</strong> Kết nối trực tiếp ngang hàng WebRTC P2P DataChannel trong mạng nội bộ bệnh viện (không đi qua internet).</li>
-      <li><strong>Kênh truyền dự phòng:</strong> Supabase Realtime Broadcast qua WebSockets an toàn (WSS). Dữ liệu chỉ trung chuyển trực tiếp trong bộ nhớ RAM và tự hủy ngay sau khi máy tính nhận xong. Không có thao tác ghi đĩa (Zero-Disk-Write).</li>
+      <li><strong>WebRTC:</strong> Truyền dữ liệu giữa thiết bị khi thiết lập được kết nối; dịch vụ PeerJS signaling và máy chủ ICE/TURN có thể tham gia thiết lập hoặc chuyển tiếp tùy mạng.</li>
+      <li><strong>Supabase Realtime:</strong> Kênh dự phòng qua WSS. Chính sách quyền kênh riêng, giới hạn truy cập và lưu giữ của nhà cung cấp đang chờ kiểm chứng; không dùng cho vận hành toàn viện trước khi được phê duyệt.</li>
     </ul>
 
     <h2>4. Chia sẻ dữ liệu với bên thứ ba</h2>
@@ -126,7 +126,7 @@
     <h2>5. Quyền hạn trình duyệt yêu cầu (Permissions Justification)</h2>
     <ul>
       <li><strong>storage:</strong> Dùng để ghi nhớ cấu hình cục bộ của nhân viên y tế (ví dụ: chế độ chuyên khoa ưa thích, cài đặt bộ lọc ảnh) trên chính máy tính đang dùng.</li>
-      <li><strong>host_permissions (*.vncare.vn, *.supabase.co):</strong> Cần thiết để tương tác với giao diện VNPT HIS tại các cơ sở y tế và kết nối kênh truyền tín hiệu WebSockets bảo mật.</li>
+      <li><strong>host_permissions (*.vncare.vn):</strong> Dùng để hoạt động trên giao diện VNPT HIS. Quyền Supabase đã loại khỏi manifest cho đến khi kênh riêng được nghiệm thu.</li>
     </ul>
 
     <h2>6. Thông tin liên hệ</h2>

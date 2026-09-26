@@ -428,7 +428,7 @@ async function runTests() {
     console.log = origLog;
 
     assert.ok(loggedEntry, 'Log entry recorded');
-    assert.strictEqual(loggedEntry.sid, 'a1b2c3...c3d4', 'Raw sid was sanitized to hashSid');
+    assert.strictEqual(loggedEntry.sid, undefined, 'Session identifiers are excluded from persistent audit');
     assert.notStrictEqual(loggedEntry.sid, rawSid);
 
     reporter.pass('TC-AUDIT-3.1', 'Audit logger strictly pseudonymizes session IDs (0 raw session ID leakage on logs)');

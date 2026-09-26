@@ -20,7 +20,7 @@ import {
 import { MockCanvas, verifyJpegHeader } from '../harness/canvas-pixel-harness.js';
 import { ClinicalSynthesizer } from '../generators/clinical-synthesizer.js';
 
-describe('Tier 4: Real-World Clinical Scenarios Suite', () => {
+describe('Tier 4: Synthetic Clinical Scenarios Suite', () => {
 
   test('TC-S01: Clinical ECG Upload Workflow (Rhythm strip, 25% opacity watermark, E2EE, HIS commit)', async () => {
     // 1. Synthesize Lead II ECG rhythm strip
@@ -29,7 +29,8 @@ describe('Tier 4: Real-World Clinical Scenarios Suite', () => {
     assert.strictEqual(ecgCanvas.height, 400);
 
     const desktop = loadProductionDesktopModules({
-      patientText: 'Mã bệnh nhân: 778899 - Tên bệnh nhân: VO HOANG NAM - Mã lượt khám: ENC_ECG_01'
+      patientText: 'Mã bệnh nhân: 778899 - Tên bệnh nhân: VO HOANG NAM - Mã lượt khám: ENC_ECG_01',
+      orderId: 'ORD_ECG_01'
     });
     await desktop.audit.clear();
 
@@ -106,7 +107,7 @@ describe('Tier 4: Real-World Clinical Scenarios Suite', () => {
 
     const entries = await desktop.audit.getEntries();
     assert.strictEqual(entries[0].ev, 'HIS_COMMITTED');
-    assert.strictEqual(entries[0].patientRef, '77***99');
+    assert.strictEqual(entries[0].patientRef, undefined);
   });
 
   test('TC-S02: High-Resolution Endoscopy Batch Workflow (Batch transfers, buffer cleanup, idempotency)', async () => {

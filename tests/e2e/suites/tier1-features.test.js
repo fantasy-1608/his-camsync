@@ -677,7 +677,7 @@ describe('Tier 1: Feature Coverage Suite (F01 - F21)', () => {
       const entries = await desktop.audit.getEntries();
       assert.strictEqual(entries.length, 1);
       assert.strictEqual(entries[0].ev, 'HIS_UNKNOWN');
-      assert.strictEqual(entries[0].patientRef, 'BN***00');
+      assert.strictEqual(entries[0].patientRef, undefined);
     });
   });
 

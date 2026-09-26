@@ -1,8 +1,8 @@
 # Chrome Web Store Submission Guide & Metadata — HIS CamSync
 
 > Ngày cập nhật: 26/09/2026  
-> Phiên bản tiện ích: 1.3.0  
-> File nén tải lên: `his-camsync-v1.3.0.zip` (428 KB)  
+> Phiên bản mã đang chuẩn bị: 1.4.0 (chưa gửi Chrome Web Store)
+> ZIP phát hành và SHA-256: chỉ chốt sau khi các cổng nghiệm thu được ký.
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
 Tài liệu này tổng hợp toàn bộ các mục, trường thông tin và lựa chọn cần thiết để điền vào **Chrome Developer Dashboard** (Trang quản trị nhà phát triển của Google Chrome Web Store). Bạn chỉ cần sao chép (copy-paste) và tích chọn theo đúng bảng hướng dẫn dưới đây.
@@ -19,7 +19,7 @@ HIS CamSync - Đồng Bộ Ảnh & ECG Cận Lâm Sàng
 
 ### Tóm tắt / Mô tả ngắn (Short Description) `[BẮT BUỘC]`
 ```text
-Đồng bộ ảnh chụp ECG giấy và kết quả cận lâm sàng trực tiếp từ điện thoại vào hệ thống VNPT HIS qua WebRTC P2P và Cloud Relay an toàn.
+Đồng bộ ảnh chụp ECG giấy và kết quả cận lâm sàng từ điện thoại vào hệ thống VNPT HIS qua WebRTC P2P trên phạm vi HIS đã được bệnh viện nghiệm thu.
 ```
 *(Độ dài: 130 ký tự — Giới hạn tối đa của Google: 132 ký tự)*
 
@@ -34,14 +34,14 @@ CÁC TÍNH NĂNG NỔI BẬT:
 • Chuyển đổi định dạng ảnh GPU siêu tốc: Tự động giải mã và chuyển đổi ảnh iPhone (HEIC/HEIF) sang chuẩn JPEG y tế (92%) trực tiếp trên phần cứng điện thoại (< 50ms), loại bỏ hoàn toàn cảnh báo lỗi định dạng từ hệ thống HIS.
 • Bộ lọc ảnh chuyên khoa y tế: Tăng cường độ nét sóng chì điện tim (B&W ECG filter), khử nhiễu nền nhiệt giấy in, bảo toàn chính xác lưới milimet chuẩn (5mm / 1mm).
 • Công cụ biên tập lâm sàng: Hỗ trợ xoay ảnh, căn chỉnh góc chụp 4 điểm linh hoạt cho đầu dò Siêu âm, Nội soi và dải giấy ECG kéo dài.
-• Đóng dấu chìm an toàn (Clinical Watermark): Tự động gắn Mã BN, Thời gian chụp và Nguồn gốc ảnh tinh tế ở viền ảnh, bảo đảm tính pháp lý và toàn vẹn mà không che khuất các chi tiết chẩn đoán quan trọng.
-• Đồng bộ mượt mà trên mọi đường truyền (Dual-Transport): Tự động chuyển đổi thông minh giữa mạng Wi-Fi nội bộ bệnh viện (WebRTC P2P) và mạng dữ liệu di động (4G/5G Cloud Relay), hiển thị tiến trình tải 3 giai đoạn trực quan và truyền dữ liệu thông suốt.
-• Chống trùng lặp ảnh & Thao tác liền mạch: Cơ chế nhận diện bằng chứng lưu trữ thật giúp nạp đúng 1 ảnh cho mỗi lần gửi, tự động hoàn tất và hiển thị thông báo trượt nhẹ nhàng, không gây gián đoạn thao tác của nhân viên y tế.
+• Đóng dấu chìm an toàn (Clinical Watermark): Tự động gắn Mã BN, Thời gian chụp và Nguồn gốc ảnh tinh tế ở viền ảnh, cần được khoa chuyên môn kiểm tra để không che khuất vùng chẩn đoán.
+• Truyền ảnh WebRTC: Kết nối ngang hàng khi mạng và chính sách bệnh viện cho phép. Kênh Supabase Realtime hiện bị khóa cho đến khi có phân quyền phiên riêng.
+• Chống trùng lặp ảnh & Thao tác liền mạch: Mỗi transferId được theo dõi để tránh gửi lại tự động; khi chưa có bằng chứng lưu từ HIS, nhân viên phải đối chiếu thủ công trước khi gửi lại.
 
-BẢO MẬT & AN TOÀN LÂM SÀNG CẤP ĐỘ Y TẾ (ZERO-RETENTION):
-• Mã hóa đầu cuối (E2EE): Áp dụng chuẩn mật mã WebCrypto AES-256-GCM với IV 96-bit duy nhất cho từng gói tin; toàn bộ thông tin bệnh nhân được mã hóa an toàn, Zero wire PHI trên đường truyền công cộng.
-• Không lưu trữ trung gian: Dữ liệu trung chuyển RAM-to-RAM trực tiếp giữa điện thoại và máy tính, tuyệt đối không lưu trữ hình ảnh hay hồ sơ trên máy chủ đám mây.
-• Rào chắn an toàn 3 lớp (Clinical Guard): Khóa cứng phiên làm việc theo mã bệnh nhân; tự động hủy phiên an toàn nếu nhân viên y tế đổi bệnh nhân khác trên máy tính, triệt tiêu hoàn toàn nguy cơ nạp nhầm bệnh án.
+BẢO MẬT VÀ AN TOÀN LÂM SÀNG (CHỜ NGHIỆM THU BỆNH VIỆN):
+• Mã hóa đầu cuối (E2EE): Áp dụng chuẩn mật mã WebCrypto AES-256-GCM với IV 96-bit duy nhất cho từng gói tin; toàn bộ thông tin bệnh nhân được mã hóa an toàn, cần kiểm chứng bằng traffic capture trên cấu hình vận hành.
+• Xử lý dữ liệu: Ảnh được xử lý trên thiết bị và truyền qua WebRTC; dịch vụ signaling/ICE/TURN và việc lưu trên HIS phải được bệnh viện rà soát.
+• Rào chắn an toàn 3 lớp (Clinical Guard): Khóa cứng phiên làm việc theo mã bệnh nhân; tự động hủy phiên an toàn nếu nhân viên y tế đổi bệnh nhân khác trên máy tính, các luồng chưa xác minh định danh trên HIS bị chặn theo nguyên tắc fail-closed.
 
 HƯỚNG DẪN SỬ DỤNG NHANH:
 1. Mở hồ sơ bệnh nhân trên VNPT HIS ➔ Chuyển qua tab "Hình ảnh".
@@ -90,7 +90,6 @@ Synchronize clinical images and ECG strip photos directly from mobile devices in
 | `storage` | permissions | `Used strictly to persist local user UI preferences (such as preferred clinical specialty mode and camera filter settings) on the local workstation without syncing off-device.` |
 | `https://*.vncare.vn/*` | host_permissions | `Required to inject the clinical scanner action button and pairing modal into authorized VNPT HIS hospital management portals.` |
 | `http://*.vncare.vn/*` | host_permissions | `Required to support local intranet hospital deployments of VNPT HIS operating over HTTP protocols.` |
-| `https://*.supabase.co/*` | host_permissions | `Required to establish secure WebSocket signaling and ephemeral RAM-to-RAM image transfer when devices are on separate hospital subnets.` |
 
 ---
 
@@ -99,12 +98,12 @@ Synchronize clinical images and ECG strip photos directly from mobile devices in
 Khi vào tab **Privacy** (Quyền riêng tư), Google sẽ hỏi một loạt câu hỏi trắc nghiệm. Hãy chọn chính xác như sau:
 
 ### Câu hỏi: "Does the extension collect user data?" (Tiện ích có thu thập dữ liệu người dùng không?)
-👉 Chọn: **No** (Không thu thập dữ liệu) hoặc nếu Google yêu cầu khai báo chi tiết:
+👉 **Chưa gửi bản khai Store.** Phải khai đúng các loại dữ liệu xử lý và đường truyền sau khi bệnh viện/đầu mối bảo vệ dữ liệu duyệt kiến trúc vận hành. Không chọn “No data collection” dựa vào việc dữ liệu chỉ xử lý tạm thời.
 
 | Loại dữ liệu (Data Type) | Có thu thập không? | Có truyền ra ngoài máy không? | Mục đích | Có chia sẻ bên thứ 3 không? |
 | :--- | :--- | :--- | :--- | :--- |
-| **Personally Identifiable Info** (Họ tên, CCCD) | ❌ Không | ❌ Không | Không thu thập | ❌ Không |
-| **Health Info** (Thông tin sức khỏe) | ✅ Có (tạm thời) | ❌ Không lưu trữ | Chuyển ảnh trực tiếp vào HIS bệnh viện | ❌ Không |
+| **Personally Identifiable Info** (mã, tên bệnh nhân) | ✅ Có xử lý tạm thời | Có thể truyền qua WebRTC/relay dưới dạng mã hóa | Đối chiếu đúng hồ sơ, đóng dấu ảnh | Cần rà bên cung cấp signaling/relay |
+| **Health Info** (ảnh và metadata lâm sàng) | ✅ Có xử lý tạm thời | Có thể truyền qua WebRTC/relay dưới dạng mã hóa và được tải vào HIS | Chuyển ảnh vào HIS bệnh viện | Cần rà bên cung cấp signaling/relay |
 | **Financial / Payment Info** | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
 | **Web History** (Lịch sử duyệt web) | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |
 | **User Activity** (Hành vi click chuột) | ❌ Không | ❌ Không | Không áp dụng | ❌ Không |

@@ -1,13 +1,15 @@
-# 🏥 HIS CamSync (Medical Camera & ECG Sync) — v1.3.0
+# 🏥 HIS CamSync (Medical Camera & ECG Sync) — v1.4.0 (chưa phát hành)
 
 > **Giải pháp chụp và đồng bộ ảnh cận lâm sàng tức thì (Zero-Install Mobile Scanner & Direct Sync)**  
 > Chuyển dải giấy điện tim ECG nhiệt, hình ảnh siêu âm, nội soi từ **Camera Điện Thoại ➔ Màn hình VNPT HIS trên máy tính bàn** trong **10-15 giây**, tuân thủ nghiêm ngặt chuẩn an toàn lâm sàng và Luật Bảo vệ dữ liệu cá nhân (BVDLCN 2025).
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.4.0%20candidate-blue.svg)](package.json)
 [![Manifest](https://img.shields.io/badge/manifest-v3-green.svg)](extension/manifest.json)
 [![Security Level](https://img.shields.io/badge/security-Healthcare--Grade%20(E2EE)-success.svg)](#-kiến-trúc-bảo-mật-cấp-độ-y-tế-medical-grade-e2ee)
 [![Test Suite](https://img.shields.io/badge/tests-406%2F406%20PASS%20(100%25)-brightgreen.svg)](tests/run_all_hardening_tiers.js)
-[![Transport](https://img.shields.io/badge/transport-WebRTC%20%7C%20Supabase%20Relay-orange.svg)](#-kiến-trúc-hệ-thống--ranh-giới-kênh-truyền)
+[![Transport](https://img.shields.io/badge/transport-WebRTC%20candidate-orange.svg)](#-kiến-trúc-hệ-thống--ranh-giới-kênh-truyền)
+
+**Trạng thái 1.4.0:** chưa phát hành toàn viện. Kênh Supabase Realtime đang khóa vì chưa có phân quyền private theo phiên. Chưa có readback server HIS nên thao tác upload chỉ cho `HIS_UNKNOWN`; nhân viên cần đối chiếu trực tiếp trên HIS trước khi gửi lại. Xem [tình trạng triển khai](CAMSYNC_RELEASE_IMPLEMENTATION_STATUS_2026-09-26.md).
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](package.json)
 
 ---
@@ -95,9 +97,9 @@ $$\text{TRANSFER\_VERIFIED} \longrightarrow \text{CONTEXT\_VERIFIED} \longrighta
 | Trạng thái | Tiêu chuẩn bằng chứng | Hành vi giao diện Desktop / Mobile |
 |---|---|---|
 | `HIS_UPLOAD_PENDING` | File đã đính kèm, lệnh upload đã kích hoạt trên HIS | Hiển thị tiến trình 95%: *"Đang nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ..."* |
-| `HIS_COMMITTED` | Phát hiện phần tử thumbnail mới trong `#list`, `input.value` khớp tên file, form upload reset | Hiển thị 100%: *"Đã lưu vào HIS!"*, rung haptic, tự đóng sau 500ms, hiện Toast trượt góc |
+| `HIS_COMMITTED` | Chỉ bản ghi HIS từ server khớp `transferId`, tệp, bệnh nhân, lượt khám và phiếu chỉ định; tích hợp đọc lại HIS hiện đang chờ xác nhận | Chỉ hiển thị “Đã lưu vào HIS” khi có bằng chứng này |
 | `HIS_REJECTED` | Server HIS từ chối hoặc giao diện HIS báo lỗi | Hiển thị cảnh báo lỗi rõ ràng, cho phép chụp lại |
-| `HIS_UNKNOWN` | Mất mạng kéo dài hoặc timeout sau 15s | Hiển thị Amber Banner yêu cầu đối chiếu thủ công trên HIS, vô hiệu hóa auto-retry |
+| `HIS_UNKNOWN` | Không có bằng chứng lưu từ server, mất mạng, timeout hoặc đổi ngữ cảnh sau khi gửi | Yêu cầu đối chiếu thủ công trên HIS trước khi gửi lại; không tự thử lại |
 
 ---
 

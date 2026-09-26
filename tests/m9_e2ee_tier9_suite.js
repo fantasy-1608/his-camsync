@@ -409,6 +409,8 @@ function createE2EEEnvironment(options = {}) {
   const hisCode = fs.readFileSync(hisPath, 'utf8');
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');
@@ -1202,14 +1204,14 @@ async function runE2EESuite() {
     const photoCount = env.getPhotoCount();
 
     const passed = ackReceived &&
-                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
-                   ackReceived.success === true &&
+                   ackReceived.status === 'HIS_UNKNOWN' &&
+                   ackReceived.success === false &&
                    injected &&
-                   photoCount === 1;
+                   photoCount === 0;
 
     reporter.record(
       'TC-E2EE-4.1',
-      'WebRTC: Encrypted multi-chunk transfer decrypts, injects into HIS form, and dispatches positive ACK',
+      'WebRTC: encrypted transfer attaches but remains UNKNOWN without HIS readback',
       passed,
       `ACK status: ${ackReceived?.status}, DOM files: ${env.fileUpload.files.length}, photoCount: ${photoCount}`
     );
@@ -1276,13 +1278,13 @@ async function runE2EESuite() {
 
     const injected = env.fileUpload.files.length === 1;
     const passed = ackReceived &&
-                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
-                   ackReceived.success === true &&
+                   ackReceived.status === 'HIS_UNKNOWN' &&
+                   ackReceived.success === false &&
                    injected;
 
     reporter.record(
       'TC-E2EE-4.2',
-      'Realtime: Encrypted 64KB chunk transfer decrypts, injects into HIS form, and dispatches positive transfer_ack',
+      'Realtime fixture: encrypted transfer remains UNKNOWN without HIS readback',
       passed,
       `ACK status: ${ackReceived?.status}, DOM files: ${env.fileUpload.files.length}`
     );

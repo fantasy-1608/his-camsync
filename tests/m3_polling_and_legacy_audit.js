@@ -183,9 +183,8 @@ async function runAudit() {
     assert.ok(Array.isArray(manifest.host_permissions), 'host_permissions must be an array');
     const hasWss = manifest.host_permissions.some(p => p.includes('wss://*.supabase.co/*'));
     const hasHttps = manifest.host_permissions.some(p => p.includes('https://*.supabase.co/*'));
-    assert.ok(hasWss, 'Missing wss://*.supabase.co/* in host_permissions');
-    assert.ok(hasHttps, 'Missing https://*.supabase.co/* in host_permissions');
-    audit.pass('TC-AUDIT-3.1', 'Manifest MV3 declares required wss:// and https:// Supabase permissions');
+    assert.ok(!hasWss && !hasHttps, 'Unapproved public relay must not have Supabase host permissions');
+    audit.pass('TC-AUDIT-3.1', 'Manifest excludes Supabase host permissions while private channel is pending');
   } catch (err) {
     audit.fail('TC-AUDIT-3.1', 'Manifest permissions check failed', err);
   }

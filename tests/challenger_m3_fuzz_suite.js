@@ -365,6 +365,8 @@ function createIntegratedEnvironment(options = {}) {
   const hisCode = fs.readFileSync(hisPath, 'utf8');
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
+  // Synthetic transport fixture: exercises protocol logic, not channel authorization.
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');
