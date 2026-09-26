@@ -412,7 +412,7 @@ export class P2PClient {
         }, 25000);
 
         this.isCloudReady = true;
-        this.updateStatus(true, '🟢 Đã kết nối máy bàn');
+        this.updateStatus(true, '🟢 Đã kết nối');
 
         // Báo cho máy bàn thông tin thiết bị và yêu cầu dữ liệu bệnh nhân qua RAM broadcast
         this.broadcast('device_info', { device: this.getDeviceMetadata() });
@@ -511,13 +511,13 @@ export class P2PClient {
         if (!this.isSessionIntentionallyClosed && this.sessionId && this.reconnectAttempts < this.maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 8000);
           console.log(`[Realtime] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
-          this.updateStatus(false, `Đang kết nối lại máy bàn... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          this.updateStatus(false, `Đang kết nối lại... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
           this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;
             this.initRealtimeBroadcast();
           }, delay);
         } else if (!this.conn || !this.conn.open) {
-          this.updateStatus(false, 'Mất kết nối máy bàn');
+          this.updateStatus(false, 'Mất kết nối');
         }
       };
 
@@ -602,7 +602,7 @@ export class P2PClient {
       this.peer.on('error', (err) => {
         console.warn('[P2P] WebRTC event error:', err.type);
         if (!this.isCloudReady) {
-          this.updateStatus(false, 'Đang tìm máy bàn...');
+          this.updateStatus(false, 'Đang tìm kết nối...');
         }
       });
     } catch (e) {
@@ -625,7 +625,7 @@ export class P2PClient {
     this.conn.on('open', () => {
       console.log('[P2P] WebRTC DataChannel đã mở trực tiếp!');
       this.isConnected = true;
-      this.updateStatus(true, '🟢 Đã kết nối máy bàn');
+      this.updateStatus(true, '🟢 Đã kết nối');
 
       try {
         // Gửi thông tin thiết bị và yêu cầu dữ liệu bệnh nhân
@@ -683,7 +683,7 @@ export class P2PClient {
         const isContextChanged = data.reason === 'clinical_context_changed';
         const msg = isContextChanged ?
           '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
-          'Máy bàn đã đóng phiên';
+          'Phiên làm việc đã đóng';
         this.updateStatus(false, msg);
       }
     });
@@ -691,13 +691,13 @@ export class P2PClient {
     this.conn.on('close', () => {
       console.log('[P2P] Kênh WebRTC đóng');
       if (!this.isCloudReady) {
-        this.updateStatus(false, 'Mất kết nối máy bàn');
+        this.updateStatus(false, 'Mất kết nối');
       }
     });
 
     this.conn.on('error', () => {
       if (!this.isCloudReady) {
-        this.updateStatus(false, 'Đang tìm máy bàn...');
+        this.updateStatus(false, 'Đang tìm kết nối...');
       }
     });
   }
