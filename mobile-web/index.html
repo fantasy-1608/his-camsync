@@ -80,6 +80,12 @@
           </svg>
           <span>Siêu Âm / CĐHA</span>
         </button>
+        <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <span>Tài Liệu</span>
+        </button>
       </div>
 
       <!-- Center Guidance Card -->
@@ -90,6 +96,9 @@
           </svg>
           <svg id="iconUsMode" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
             <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+          </svg>
+          <svg id="iconDocMode" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
         </div>
         <h2 class="guide-title" id="captureTitle">Chụp Dải Băng Điện Tim</h2>
@@ -270,6 +279,74 @@
         </div>
       </div>
     </section>
+
+    <!-- Screen 3: Chụp Tài Liệu Nhiều Trang & Xuất PDF -->
+    <section id="docScreen" class="screen" style="display: none;">
+      <!-- Thumbnail Strip (Dải ảnh đã chụp) -->
+      <div class="doc-thumbnail-strip" id="docThumbnailStrip">
+        <!-- Thumbnails sẽ được render bằng JS -->
+        <button type="button" class="doc-thumb-add" id="btnDocAddPage">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Thêm</span>
+        </button>
+      </div>
+
+      <!-- Document Preview (hiển thị trang đang chọn) -->
+      <div class="doc-capture-guide" id="docPreviewArea">
+        <div id="docPreviewImgWrap" style="width: 100%; max-height: 50vh; display: flex; align-items: center; justify-content: center; padding: 8px;">
+          <img id="docPreviewImg" style="max-width: 100%; max-height: 48vh; border-radius: 8px; box-shadow: var(--shadow-md); display: none;" alt="Trang đang xem">
+        </div>
+        <div id="docEmptyState" style="text-align: center; padding: 24px;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; opacity: 0.5;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <p class="guide-title" style="font-size: 16px; margin-bottom: 6px;">Chụp Giấy Tờ & Tài Liệu</p>
+          <p class="guide-desc">Chụp từng trang giấy tờ (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.</p>
+        </div>
+      </div>
+
+      <!-- Controls: Preset + Size Estimate + Page Counter -->
+      <div style="padding: 0 16px;">
+        <div class="doc-preset-selector">
+          <button type="button" class="doc-preset-btn active" data-doc-preset="document">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Tài liệu
+          </button>
+          <button type="button" class="doc-preset-btn" data-doc-preset="color">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Ảnh màu
+          </button>
+        </div>
+        <div style="text-align: center;">
+          <span class="doc-page-counter" id="docPageCounter">
+            <span class="count-num" id="docPageNum">0</span> trang
+          </span>
+          <span class="doc-size-estimate" id="docSizeEstimate"></span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="doc-actions-row">
+        <button type="button" class="btn-doc-capture" id="btnDocCapture">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span>Chụp trang</span>
+        </button>
+        <button type="button" class="btn-doc-send-pdf" id="btnDocSendPdf" disabled>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span id="btnDocSendText">Xuất PDF & Gửi</span>
+        </button>
+      </div>
+
+      <!-- Hidden file input for document capture -->
+      <input type="file" id="docCameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
+      <input type="file" id="docGalleryInput" accept="image/jpeg,image/png,image/*,.heic,.heif,.HEIC,.HEIF" style="display: none;">
+    </section>
   </main>
 
   <!-- Upload Progress Modal / Overlay -->
@@ -301,13 +378,20 @@
   <!-- Scripts -->
   <script src="js/vendor/peerjs.min.js"></script>
   <script src="js/vendor/heic2any.min.js"></script>
+  <script src="js/vendor/jspdf.umd.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.0';
     import { P2PClient } from './js/p2p-client.js';
+    import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js';
 
     // State
-    let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound'
+    let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
     let currentFilter = 'normal';
+
+    // Document Scan State
+    let docPages = []; // Array of { file: File, thumbnail: string (dataURL) }
+    let docSelectedIndex = -1;
+    let docPreset = 'document'; // 'document' | 'color'
 
     // DOM Elements
     const tabEcg = document.getElementById('tabEcg');
@@ -601,16 +685,57 @@
 
     p2p.connect();
 
-    // Chuyển đổi chuyên khoa (Specialty Switcher)
+    // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ)
+    const tabDocument = document.getElementById('tabDocument');
+    const iconDocMode = document.getElementById('iconDocMode');
+    const docScreen = document.getElementById('docScreen');
+
     function switchSpecialty(spec) {
       currentSpecialty = spec;
+
+      // Deactivate all tabs
+      tabEcg.classList.remove('active');
+      tabUltrasound.classList.remove('active');
+      tabDocument.classList.remove('active');
+
+      // Hide all mode-specific icons
+      iconEcgMode.style.display = 'none';
+      iconUsMode.style.display = 'none';
+      iconDocMode.style.display = 'none';
+
+      if (spec === 'document') {
+        // Document mode — Hiển thị Screen 3 (docScreen)
+        tabDocument.classList.add('active');
+        iconDocMode.style.display = 'block';
+        captureTitle.textContent = 'Chụp Giấy Tờ & Tài Liệu';
+        captureSubtitle.textContent = 'Chụp từng trang (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.';
+
+        // Show docScreen, hide capture/editor screens
+        captureScreen.style.display = 'none';
+        editorScreen.style.display = 'none';
+        docScreen.style.display = 'flex';
+        document.body.classList.remove('in-editor');
+
+        // Hide image-mode-specific presets & tools
+        groupEcgPresets.style.display = 'none';
+        groupUsPresets.style.display = 'none';
+        ecgTools.forEach(el => el.style.display = 'none');
+        usTools.forEach(el => el.style.display = 'none');
+
+        renderDocThumbnails();
+        return;
+      }
+
+      // Image modes (ECG / Ultrasound) — Hide docScreen, show captureScreen
+      docScreen.style.display = 'none';
+      if (!document.body.classList.contains('in-editor')) {
+        captureScreen.style.display = 'flex';
+      }
       editor.setSpecialty(spec);
 
       if (spec === 'ecg') {
         tabEcg.classList.add('active');
-        tabUltrasound.classList.remove('active');
         iconEcgMode.style.display = 'block';
-        iconUsMode.style.display = 'none';
         captureTitle.textContent = 'Chụp Dải Băng Điện Tim';
         captureSubtitle.textContent = 'Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Hỗ trợ thước xoay tiểu ly chống lệch góc và tối ưu nét sóng đưa thẳng vào HIS.';
 
@@ -621,8 +746,6 @@
         usTools.forEach(el => el.style.display = 'none');
       } else {
         tabUltrasound.classList.add('active');
-        tabEcg.classList.remove('active');
-        iconEcgMode.style.display = 'none';
         iconUsMode.style.display = 'block';
         captureTitle.textContent = 'Chụp Hình Ảnh Siêu Âm';
         captureSubtitle.textContent = 'Chụp từ màn hình máy siêu âm (Convex / Linear / 4:3). Hỗ trợ thước xoay tiểu ly, tăng tương phản mô và nét bờ tổn thương.';
@@ -640,6 +763,7 @@
 
     tabEcg.addEventListener('click', () => switchSpecialty('ecg'));
     tabUltrasound.addEventListener('click', () => switchSpecialty('ultrasound'));
+    tabDocument.addEventListener('click', () => switchSpecialty('document'));
 
     // Trigger Camera & Gallery
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());
@@ -993,6 +1117,249 @@
 
     document.getElementById('btnDismissError')?.addEventListener('click', hideErrorBanner);
     document.getElementById('btnDismissWarning')?.addEventListener('click', hideWarningBanner);
+
+    // =========================================================================
+    // Document Scan Mode — Chụp giấy tờ nhiều trang, xuất PDF gửi Phiếu Scan
+    // =========================================================================
+
+    const docThumbnailStrip = document.getElementById('docThumbnailStrip');
+    const btnDocAddPage = document.getElementById('btnDocAddPage');
+    const btnDocCapture = document.getElementById('btnDocCapture');
+    const btnDocSendPdf = document.getElementById('btnDocSendPdf');
+    const btnDocSendText = document.getElementById('btnDocSendText');
+    const docCameraInput = document.getElementById('docCameraInput');
+    const docGalleryInput = document.getElementById('docGalleryInput');
+    const docPreviewImg = document.getElementById('docPreviewImg');
+    const docEmptyState = document.getElementById('docEmptyState');
+    const docPageNum = document.getElementById('docPageNum');
+    const docSizeEstimate = document.getElementById('docSizeEstimate');
+
+    // Render thumbnail strip
+    function renderDocThumbnails() {
+      // Xóa thumbnails cũ (giữ lại nút "Thêm")
+      const existing = docThumbnailStrip.querySelectorAll('.doc-thumb-item');
+      existing.forEach(el => el.remove());
+
+      docPages.forEach((page, idx) => {
+        const item = document.createElement('div');
+        item.className = 'doc-thumb-item' + (idx === docSelectedIndex ? ' active' : '');
+        item.innerHTML = `
+          <img src="${page.thumbnail}" alt="Trang ${idx + 1}">
+          <span class="doc-thumb-page-num">${idx + 1}</span>
+          <button type="button" class="doc-thumb-remove" data-idx="${idx}" aria-label="Xóa trang">&times;</button>
+        `;
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.doc-thumb-remove')) return;
+          selectDocPage(idx);
+        });
+        item.querySelector('.doc-thumb-remove').addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeDocPage(idx);
+        });
+        docThumbnailStrip.insertBefore(item, btnDocAddPage);
+      });
+
+      // Cập nhật counter & size estimate
+      docPageNum.textContent = docPages.length;
+      updateDocSizeEstimate();
+
+      // Cập nhật trạng thái nút gửi
+      btnDocSendPdf.disabled = docPages.length === 0 || !p2p.isConnected;
+
+      // Cập nhật preview
+      if (docPages.length === 0) {
+        docPreviewImg.style.display = 'none';
+        docEmptyState.style.display = 'block';
+        docSelectedIndex = -1;
+      } else {
+        docEmptyState.style.display = 'none';
+        if (docSelectedIndex < 0 || docSelectedIndex >= docPages.length) {
+          docSelectedIndex = docPages.length - 1;
+        }
+        docPreviewImg.src = docPages[docSelectedIndex].thumbnail;
+        docPreviewImg.style.display = 'block';
+      }
+    }
+
+    function selectDocPage(idx) {
+      docSelectedIndex = idx;
+      renderDocThumbnails();
+    }
+
+    function removeDocPage(idx) {
+      docPages.splice(idx, 1);
+      if (docSelectedIndex >= docPages.length) {
+        docSelectedIndex = docPages.length - 1;
+      }
+      renderDocThumbnails();
+    }
+
+    function updateDocSizeEstimate() {
+      const estimate = estimatePdfSize(docPages.length, docPreset);
+      if (docPages.length === 0) {
+        docSizeEstimate.textContent = '';
+        docSizeEstimate.className = 'doc-size-estimate';
+        return;
+      }
+      const sizeMB = (estimate.estimatedKB / 1024).toFixed(1);
+      docSizeEstimate.textContent = `≈ ${estimate.estimatedKB < 1024 ? estimate.estimatedKB + ' KB' : sizeMB + ' MB'}`;
+      if (!estimate.withinLimit) {
+        docSizeEstimate.className = 'doc-size-estimate danger';
+      } else if (estimate.estimatedKB > 3500) {
+        docSizeEstimate.className = 'doc-size-estimate warning';
+      } else {
+        docSizeEstimate.className = 'doc-size-estimate';
+      }
+    }
+
+    // Xử lý thêm trang mới vào document
+    async function addDocPage(file) {
+      if (!file) return;
+      try {
+        const processedFile = await convertHeicToJpegIfNecessary(file);
+        showLoading('Đang tạo thumbnail...');
+        const thumbnail = await createThumbnail(processedFile);
+        hideLoading();
+
+        docPages.push({ file: processedFile, thumbnail });
+        docSelectedIndex = docPages.length - 1;
+        renderDocThumbnails();
+
+        // Scroll thumbnail strip to end
+        requestAnimationFrame(() => {
+          docThumbnailStrip.scrollLeft = docThumbnailStrip.scrollWidth;
+        });
+      } catch (err) {
+        hideLoading();
+        showErrorBanner('Không thể thêm trang: ' + (err.message || err));
+      }
+    }
+
+    // Document capture triggers
+    btnDocCapture.addEventListener('click', () => docCameraInput.click());
+    btnDocAddPage.addEventListener('click', () => docCameraInput.click());
+
+    docCameraInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) addDocPage(file);
+      docCameraInput.value = '';
+    });
+
+    docGalleryInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) addDocPage(file);
+      docGalleryInput.value = '';
+    });
+
+    // Preset selection
+    document.querySelectorAll('.doc-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.doc-preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        docPreset = btn.dataset.docPreset;
+        updateDocSizeEstimate();
+      });
+    });
+
+    // Xuất PDF & Gửi lên HIS
+    btnDocSendPdf.addEventListener('click', async () => {
+      if (docPages.length === 0) return;
+      if (!p2p.isConnected) {
+        showErrorBanner('Chưa kết nối với máy bàn HIS. Vui lòng quét lại QR.');
+        return;
+      }
+
+      try {
+        btnDocSendPdf.disabled = true;
+        uploadProgressModal.style.display = 'flex';
+        uploadPctBadge.textContent = '5%';
+        uploadTitle.textContent = 'Đang tạo file PDF...';
+        uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu'})...`;
+
+        // Build PDF
+        const pdfResult = await buildPdf(
+          docPages.map(p => ({ file: p.file })),
+          {
+            preset: docPreset,
+            filename: `scan_${p2p.patientInfo?.id || 'doc'}_${Date.now()}.pdf`,
+            onProgress: (pageIdx, total) => {
+              const pct = Math.round(10 + (pageIdx / total) * 40);
+              uploadPctBadge.textContent = `${pct}%`;
+              uploadMeta.textContent = `Đang xử lý trang ${pageIdx + 1}/${total}...`;
+            }
+          }
+        );
+
+        uploadPctBadge.textContent = '55%';
+        uploadTitle.textContent = 'Đang truyền PDF lên HIS...';
+        uploadMeta.textContent = `Dung lượng: ${pdfResult.sizeKB} KB (${pdfResult.pageCount} trang)`;
+
+        hideErrorBanner();
+        hideWarningBanner();
+
+        // Gửi PDF qua P2P (dùng cùng kênh truyền ảnh, nhưng metadata khác)
+        const patient = p2p.patientInfo;
+        const res = await p2p.sendImage(pdfResult.blob, {
+          name: pdfResult.filename,
+          type: 'application/pdf',
+          specialty: 'document',
+          pageCount: pdfResult.pageCount,
+        }, (pct, statusMsg) => {
+          const adjustedPct = Math.round(55 + (pct / 100) * 40);
+          uploadPctBadge.textContent = `${adjustedPct}%`;
+          if (pct >= 90) {
+            uploadTitle.textContent = 'Đang gửi vào Phiếu Scan HIS...';
+            uploadMeta.textContent = statusMsg || 'Chờ xác nhận đính kèm file...';
+          } else {
+            uploadTitle.textContent = 'Đang truyền PDF lên HIS...';
+            uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * pdfResult.sizeKB)} / ${pdfResult.sizeKB} KB...`;
+          }
+        });
+
+        // Xử lý kết quả
+        if (res && res.status === 'HIS_UNKNOWN') {
+          uploadProgressModal.style.display = 'none';
+          showWarningBanner('PDF đã gửi đến máy bàn. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
+          btnDocSendPdf.disabled = false;
+          return;
+        }
+
+        if (!res || res.status === 'HIS_REJECTED' || !res.success) {
+          uploadProgressModal.style.display = 'none';
+          showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
+          btnDocSendPdf.disabled = false;
+          return;
+        }
+
+        // Thành công
+        if (navigator.vibrate) {
+          try { navigator.vibrate([40, 60, 40]); } catch (e) {}
+        }
+
+        uploadPctBadge.textContent = '100%';
+        uploadTitle.textContent = 'Đã gửi PDF vào HIS';
+        uploadMeta.textContent = `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`;
+        if (toastText) toastText.textContent = 'PDF đã gửi vào Phiếu Scan thành công!';
+
+        setTimeout(() => {
+          uploadProgressModal.style.display = 'none';
+          toast.classList.add('visible');
+
+          // Reset document pages
+          docPages = [];
+          docSelectedIndex = -1;
+          renderDocThumbnails();
+          btnDocSendPdf.disabled = false;
+
+          setTimeout(() => { toast.classList.remove('visible'); }, 1500);
+        }, 500);
+
+      } catch (err) {
+        uploadProgressModal.style.display = 'none';
+        showErrorBanner(err.message || 'Lỗi tạo hoặc gửi PDF');
+        btnDocSendPdf.disabled = false;
+      }
+    });
 
     window.addEventListener('beforeunload', () => {
       try { p2p.destroy(); } catch (e) {}
