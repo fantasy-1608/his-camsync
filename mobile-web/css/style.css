@@ -1,24 +1,117 @@
+/**
+ * HIS-CamSync: Mobile Web Styling (Quiet Clinical Utility)
+ * Hỗ trợ tự động Dark / Light Mode theo cài đặt hệ thống của điện thoại (prefers-color-scheme)
+ * Tối ưu hóa công thái học một tay (Thumb-Zone) cho y bác sĩ, điều dưỡng
+ */
+
+/* ==========================================================================
+   CSS Custom Properties & Design Tokens
+   ========================================================================== */
 :root {
-  --bg-primary: #07090e;
-  --bg-surface: #101622;
-  --bg-elevated: #1a2234;
-  --bg-card: #131b2b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
+  /* Default: Clinical Light Mode (Phòng khám / Ban ngày) */
+  --bg-app: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f8fafc;
+
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-accent: #0284c7;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --accent-blue: #0284c7;
+  --accent-blue-hover: #0369a1;
+  --accent-blue-subtle: rgba(2, 132, 199, 0.08);
+
   --accent-green: #059669;
-  --accent-green-hover: #047857;
-  --accent-red: #ef4444;
-  --accent-cyan: #38bdf8;
-  --border-subtle: #1e293b;
-  --border-focus: #3b82f6;
+  --accent-green-subtle: rgba(5, 150, 105, 0.1);
+
+  --accent-amber: #d97706;
+  --accent-amber-subtle: rgba(217, 119, 6, 0.1);
+
+  --accent-red: #dc2626;
+  --accent-red-subtle: rgba(220, 38, 38, 0.08);
+
+  --canvas-bg: #e2e8f0;
+  --ruler-bg: #f1f5f9;
+  --ruler-tick: #94a3b8;
+  --ruler-tick-major: #475569;
+  --ruler-pointer: #d97706;
+
+  --crop-overlay: rgba(15, 23, 42, 0.5);
+  --crop-border: #0284c7;
+  --crop-handle: #0284c7;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+
+  --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 20px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Courier New', monospace;
 }
 
+/* Tự động chuyển đổi sang Clinical Dark Mode theo cài đặt của điện thoại */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-app: #0c111a;
+    --bg-surface: #141c2a;
+    --bg-elevated: #1b263b;
+    --bg-card: #162030;
+    --bg-card-subtle: #111827;
+
+    --border-subtle: #233044;
+    --border-strong: #33445d;
+    --border-accent: #38bdf8;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #0c111a;
+
+    --accent-blue: #0284c7;
+    --accent-blue-hover: #38bdf8;
+    --accent-blue-subtle: rgba(56, 189, 248, 0.12);
+
+    --accent-green: #10b981;
+    --accent-green-subtle: rgba(16, 185, 129, 0.12);
+
+    --accent-amber: #f59e0b;
+    --accent-amber-subtle: rgba(245, 158, 11, 0.15);
+
+    --accent-red: #ef4444;
+    --accent-red-subtle: rgba(239, 68, 68, 0.12);
+
+    --canvas-bg: #070a0f;
+    --ruler-bg: #111827;
+    --ruler-tick: #475569;
+    --ruler-tick-major: #94a3b8;
+    --ruler-pointer: #f59e0b;
+
+    --crop-overlay: rgba(0, 0, 0, 0.65);
+    --crop-border: #38bdf8;
+    --crop-handle: #38bdf8;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ==========================================================================
+   Base & Reset
+   ========================================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -35,8 +128,8 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg-primary);
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
   color: var(--text-primary);
   height: 100%;
   height: -webkit-fill-available;
@@ -48,10 +141,15 @@ body {
   position: fixed;
   inset: 0;
   width: 100%;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* ==========================================================================
-   Header
+   Header (Cố định ở trên)
    ========================================================================== */
 .app-header {
   padding: 10px 14px;
@@ -60,19 +158,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
   z-index: 20;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .header-brand {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+}
+
+.brand-icon {
+  color: var(--accent-blue);
+  display: flex;
+  align-items: center;
 }
 
 .brand-title {
@@ -82,500 +181,391 @@ body {
   color: var(--text-primary);
 }
 
-.intranet-tag {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: rgba(56, 189, 248, 0.12);
-  color: var(--accent-cyan);
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  white-space: nowrap;
-}
-
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   padding: 4px 10px;
-  border-radius: 14px;
-  background: rgba(5, 150, 105, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(5, 150, 105, 0.35);
+  border-radius: var(--radius-full);
+  background: var(--accent-green-subtle);
+  color: var(--accent-green);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: #34d399;
-  box-shadow: 0 0 6px #34d399;
+  background-color: var(--accent-green);
+  box-shadow: 0 0 5px var(--accent-green);
 }
 
 .status-badge.disconnected {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.35);
+  background: var(--accent-red-subtle);
+  color: var(--accent-red);
+  border-color: rgba(239, 68, 68, 0.25);
 }
+
 .status-badge.disconnected .status-dot {
-  background-color: #f87171;
-  box-shadow: 0 0 6px #f87171;
+  background-color: var(--accent-red);
+  box-shadow: 0 0 5px var(--accent-red);
 }
 
 /* ==========================================================================
-   Patient Context Banner
+   Patient Context Card (Trọng tâm lâm sàng - Chống nhầm lẫn bệnh nhân)
    ========================================================================== */
-.patient-banner {
-  background: #091322;
-  border-bottom: 1px solid #1e293b;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: #38bdf8;
+.patient-context-card {
+  margin: 8px 12px 0 12px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+  z-index: 15;
+  transition: all 0.2s ease;
+}
+
+.patient-top-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  z-index: 15;
 }
 
-.patient-icon {
-  font-size: 14px;
+.patient-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 
-#patientBannerText {
-  font-weight: 600;
+.patient-shield-icon {
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.patient-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.patient-id-badge {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-blue);
+  background: var(--accent-blue-subtle);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(2, 132, 199, 0.2);
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
-/* ==========================================================================
-   Clinical Error Banner (Fail-Closed Notification)
-   ========================================================================== */
-.error-banner {
-  background: #EF4444;
-  border-bottom: 1px solid #DC2626;
-  color: #FFFFFF;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
+.patient-meta-row {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  position: sticky;
-  top: 0;
-  z-index: 110;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-  transition: opacity 300ms ease, transform 300ms ease;
-}
-
-.error-banner-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.btn-dismiss-error {
-  background: none;
-  border: none;
-  color: #FFFFFF;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0.85;
-  transition: opacity 300ms ease;
-}
-
-.btn-dismiss-error:active,
-.btn-dismiss-error:hover {
-  opacity: 1;
-}
-
-/* ==========================================================================
-   Clinical Warning Banner (HIS_UNKNOWN / Amber Notification)
-   ========================================================================== */
-.warning-banner {
-  background: #D97706;
-  border-bottom: 1px solid #B45309;
-  color: #FFFFFF;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  position: sticky;
-  top: 0;
-  z-index: 110;
-  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
-  transition: opacity 300ms ease, transform 300ms ease;
-}
-
-.warning-banner-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.btn-dismiss-warning {
-  background: none;
-  border: none;
-  color: #FFFFFF;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0.85;
-  transition: opacity 300ms ease;
-}
-
-.btn-dismiss-warning:active,
-.btn-dismiss-warning:hover {
-  opacity: 1;
-}
-
-/* ==========================================================================
-   Specialty Mode Selector (ECG vs Ultrasound)
-   ========================================================================== */
-.specialty-tabs-wrap {
-  padding: 8px 14px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: center;
-  z-index: 14;
-  flex-shrink: 0;
-}
-
-body.in-editor .specialty-tabs-wrap {
-  display: none !important;
-}
-
-.specialty-tabs {
-  display: flex;
-  background: var(--bg-primary);
-  padding: 3px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  width: 100%;
-  max-width: 360px;
-  gap: 4px;
-}
-
-.spec-tab {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.spec-tab svg {
-  flex-shrink: 0;
-}
-
-.spec-tab.active {
-  background: var(--bg-elevated);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-.spec-tab[data-specialty="ecg"].active {
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.3);
-}
-
-.spec-tab[data-specialty="ultrasound"].active {
-  color: #34d399;
-  border-color: rgba(52, 211, 153, 0.3);
+.patient-meta-bullet {
+  color: var(--border-strong);
+  font-size: 10px;
 }
 
 /* ==========================================================================
-   Main View
+   Alert Banners (Fail-Closed Alerts)
+   ========================================================================== */
+.error-banner,
+.warning-banner {
+  margin: 6px 12px 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  z-index: 16;
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.error-banner {
+  background: var(--accent-red-subtle);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: var(--accent-red);
+}
+
+.warning-banner {
+  background: var(--accent-amber-subtle);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  color: var(--accent-amber);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.btn-dismiss-banner {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  padding: 0 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Main View & Screen Management
    ========================================================================== */
 .main-view {
-  flex: 1 1 0%;
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-/* ==========================================================================
-   Screen 1: Capture Screen
-   ========================================================================== */
-.capture-screen {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 16px max(76px, calc(env(safe-area-inset-bottom) + 42px));
-  overflow-y: auto;
+  overflow: hidden;
+  position: relative;
 }
 
-.capture-card {
-  width: 100%;
-  max-width: 360px;
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ==========================================================================
+   Screen 1: Standby / Capture Screen (Màn hình Chụp)
+   ========================================================================== */
+.capture-screen {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Specialty Mode Segmented Selector */
+.specialty-segmented-bar {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.spec-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.spec-tab-btn.active {
+  background-color: var(--accent-blue);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Capture Central Hero Card */
+.capture-guide-card {
+  margin: auto 0;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
-.capture-icon-box {
-  width: 88px;
-  height: 88px;
-  border-radius: 26px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+.guide-icon-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-blue-subtle);
+  color: var(--accent-blue);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #38bdf8;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  margin-bottom: 14px;
 }
 
-.capture-text-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.capture-title {
-  font-size: 20px;
+.guide-title {
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
+  margin-bottom: 6px;
   letter-spacing: -0.01em;
 }
 
-.capture-subtitle {
+.guide-desc {
   font-size: 13px;
+  line-height: 1.45;
   color: var(--text-secondary);
-  line-height: 1.5;
-  padding: 0 8px;
+  max-width: 280px;
 }
 
-/* Clinical Security Notice */
-.security-card {
+/* Bottom Action Area (Thumb Zone) */
+.capture-bottom-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+/* Shutter Button (Nút bấm chụp lớn kiểu Camera cao cấp) */
+.btn-shutter-main {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 4px solid var(--accent-blue);
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-shutter-main:active {
+  transform: scale(0.92);
+}
+
+.shutter-inner-circle {
   width: 100%;
-  background: rgba(16, 22, 34, 0.7);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  text-align: left;
+  height: 100%;
+  border-radius: 50%;
+  background-color: var(--accent-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
 }
 
-.security-card-header {
+.btn-gallery-subtle {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  margin-bottom: 4px;
-}
-
-.security-card-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.45;
-}
-
-.security-card-desc b {
-  color: #f1f5f9;
-}
-
-.capture-actions {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.btn-large-capture {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  background: var(--accent-blue);
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.4);
-  transition: transform 0.1s ease, background-color 0.15s ease;
-}
-
-.btn-large-capture:active {
-  transform: scale(0.98);
-  background: var(--accent-blue-hover);
-}
-
-.btn-subtle-gallery {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
-.btn-subtle-gallery:active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
+.btn-gallery-subtle:active {
+  background-color: var(--bg-elevated);
+  transform: scale(0.97);
 }
 
 /* ==========================================================================
-   Screen 2: Editor Screen
+   Screen 2: Clinical Studio / Editor Screen (Màn hình Biên tập & Cắt cúp)
    ========================================================================== */
 .editor-screen {
-  flex: 1 1 0%;
-  min-height: 0;
-  height: 100%;
-  display: none;
+  display: flex;
   flex-direction: column;
-  background: #030407;
+  height: 100%;
   overflow: hidden;
-}
-
-/* Presets Bar */
-.presets-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-  z-index: 10;
-}
-
-.presets-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.presets-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.preset-pill {
-  padding: 6px 12px;
-  border-radius: 18px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.preset-pill.active {
-  background: var(--accent-blue);
-  color: #ffffff;
-  border-color: #60a5fa;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
-}
-
-.preset-pill:active {
-  transform: scale(0.95);
 }
 
 /* Canvas Viewport */
 .canvas-viewport {
-  flex: 1 1 0%;
-  min-height: 0;
-  min-width: 0;
+  flex: 1;
+  min-height: 180px;
+  background-color: var(--canvas-bg);
   position: relative;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000000;
-  padding: 6px 8px;
-  touch-action: none;
+  overflow: hidden;
+  padding: 8px;
 }
 
 .canvas-container {
   position: relative;
-  display: block;
-  line-height: 0;
   max-width: 100%;
   max-height: 100%;
-  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.85);
-  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #previewCanvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xs);
+  background-color: #ffffff;
 }
 
-/* Crop Overlay */
+/* Crop Overlay & Handles */
 .crop-overlay {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  overflow: hidden;
+  pointer-events: auto;
   touch-action: none;
 }
 
 .crop-box {
   position: absolute;
-  border: 2px solid #38bdf8;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
-  pointer-events: auto;
+  border: 1.5px solid var(--crop-border);
+  box-shadow: 0 0 0 9999px var(--crop-overlay);
+  box-sizing: border-box;
   touch-action: none;
   cursor: move;
 }
 
-/* Grid 3x3 */
+/* Rule of Thirds Grid */
 .crop-grid {
   position: absolute;
   inset: 0;
@@ -583,267 +573,388 @@ body.in-editor .specialty-tabs-wrap {
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: 1fr 1fr 1fr;
   pointer-events: none;
-  opacity: 0.35;
 }
 
 .crop-grid div {
-  border-right: 1px dashed #ffffff;
-  border-bottom: 1px dashed #ffffff;
-}
-.crop-grid div:nth-child(3n) {
-  border-right: none;
-}
-.crop-grid div:nth-child(n+7) {
-  border-bottom: none;
+  border: 0.5px dashed rgba(255, 255, 255, 0.35);
 }
 
-/* Handles 4 góc (Vùng chạm 48x48px siêu nhạy) */
+/* Corner Bracket Handles */
 .crop-handle {
   position: absolute;
-  width: 24px;
-  height: 24px;
-  background: #2563eb;
-  border-radius: 50%;
-  border: 2.5px solid #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
-  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #ffffff;
+  pointer-events: auto;
 }
 
-.crop-handle::after {
-  content: '';
-  position: absolute;
-  top: -14px;
-  left: -14px;
-  right: -14px;
-  bottom: -14px;
-}
+.handle-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.handle-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+.handle-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+.handle-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
 
-.handle-tl { top: -12px; left: -12px; cursor: nwse-resize; }
-.handle-tr { top: -12px; right: -12px; cursor: nesw-resize; }
-.handle-bl { bottom: -12px; left: -12px; cursor: nesw-resize; }
-.handle-br { bottom: -12px; right: -12px; cursor: nwse-resize; }
-
-/* Handles 4 cạnh cho dải ECG */
+/* Edge Midpoint Handles */
 .crop-edge-handle {
   position: absolute;
-  z-index: 4;
+  background-color: #ffffff;
+  pointer-events: auto;
 }
 
-.crop-edge-handle::after {
-  content: '';
-  position: absolute;
-  top: -14px;
-  left: -14px;
-  right: -14px;
-  bottom: -14px;
-}
-
-.handle-t {
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 38px;
-  height: 7px;
-  background: #ffffff;
-  border-radius: 4px;
-  cursor: ns-resize;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.handle-b {
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 38px;
-  height: 7px;
-  background: #ffffff;
-  border-radius: 4px;
-  cursor: ns-resize;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.handle-l {
-  left: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 7px;
-  height: 38px;
-  background: #ffffff;
-  border-radius: 4px;
-  cursor: ew-resize;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.handle-r {
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 7px;
-  height: 38px;
-  background: #ffffff;
-  border-radius: 4px;
-  cursor: ew-resize;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
+.handle-t { top: -3px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; border-radius: 2px; }
+.handle-b { bottom: -3px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; border-radius: 2px; }
+.handle-l { left: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; border-radius: 2px; }
+.handle-r { right: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; border-radius: 2px; }
 
 /* ==========================================================================
-   Editor Controls (Bottom Toolbar)
+   Editor Controls (Thumb-Zone Panel ở nửa dưới)
    ========================================================================== */
-.editor-controls {
-  flex-shrink: 0;
-  background: var(--bg-surface);
+.editor-controls-panel {
+  background-color: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
-  padding: 8px 14px max(74px, calc(env(safe-area-inset-bottom, 20px) + 52px));
   display: flex;
   flex-direction: column;
+  padding: 8px 12px 10px 12px;
   gap: 8px;
-  z-index: 10;
+  flex-shrink: 0;
 }
 
-.tools-row {
+/* 1. Presets Row (Khung cắt tỉ lệ) */
+.presets-scroll-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 6px;
   overflow-x: auto;
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  padding: 2px 0;
+  padding-bottom: 2px;
 }
 
-.tool-btn {
-  flex: 1 1 0;
-  min-width: 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  padding: 6px 3px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  min-height: 44px;
-  white-space: nowrap;
+.presets-scroll-row::-webkit-scrollbar {
+  display: none;
 }
 
-.tool-btn svg {
+.preset-pill {
   flex-shrink: 0;
-}
-
-.tool-btn span {
-  font-size: 10.5px;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.tool-btn.active {
-  background: rgba(37, 99, 235, 0.25);
-  border-color: #60a5fa;
-  color: #93c5fd;
-}
-
-.tool-btn.specialty-tool-ecg.active {
-  background: rgba(56, 189, 248, 0.22);
-  border-color: #38bdf8;
-  color: #38bdf8;
-}
-
-.tool-btn.specialty-tool-us.active {
-  background: rgba(52, 211, 153, 0.22);
-  border-color: #34d399;
-  color: #34d399;
-}
-
-.tool-btn:active {
-  transform: scale(0.95);
-}
-
-.actions-row {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-secondary {
-  flex: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  background: var(--bg-elevated);
+  gap: 5px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+
+.preset-pill.active {
+  background-color: var(--accent-blue-subtle);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* 2. Thước Xoay Tiểu Ly (Straighten Angle Dial - Chuẩn Apple iOS Photos) */
+.straighten-dial-module {
+  background-color: var(--bg-card-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.straighten-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.btn-subtle-tool {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-subtle-tool:active {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.btn-subtle-tool.active {
+  background-color: var(--accent-blue-subtle);
+  color: var(--accent-blue);
+}
+
+/* Huy hiệu hiển thị góc xoay (Apple style degree badge) */
+.angle-degree-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.angle-degree-badge.has-angle {
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-subtle);
+  color: var(--accent-amber);
+}
+
+/* Vùng thước trượt ngang */
+.ruler-track-container {
+  position: relative;
+  width: 100%;
+  height: 34px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: ew-resize;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#rulerCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Kim chỉ mốc trung tâm màu vàng */
+.ruler-center-pointer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background-color: var(--ruler-pointer);
+  pointer-events: none;
+  box-shadow: 0 0 4px var(--ruler-pointer);
+}
+
+.ruler-center-pointer::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ruler-pointer);
+}
+
+/* 3. Specialty Enhancers Bar (Nét sóng, khử nền nhiệt, tương phản...) */
+.enhancers-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.enhancers-row::-webkit-scrollbar {
+  display: none;
+}
+
+.enhancer-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-height: 34px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.enhancer-btn.active {
+  background-color: var(--accent-blue-subtle);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+/* 4. Action Buttons Bar (Chụp lại & Gửi Lên HIS) */
+.action-buttons-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.btn-action-secondary {
+  flex: 1;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  min-height: 48px;
-  transition: transform 0.1s ease;
+  transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
-.btn-secondary:active {
-  transform: scale(0.97);
+.btn-action-secondary:active {
+  transform: scale(0.98);
+  background-color: var(--border-subtle);
 }
 
-.btn-primary {
-  flex: 2;
+.btn-action-primary {
+  flex: 1.6;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px;
-  background: var(--accent-green);
+  background-color: var(--accent-blue);
   border: none;
-  border-radius: var(--radius-md);
   color: #ffffff;
   font-size: 15px;
   font-weight: 700;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
-  min-height: 48px;
-  transition: transform 0.1s ease, background 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
-.btn-primary:active {
+.btn-action-primary:active {
   transform: scale(0.98);
-  background: var(--accent-green-hover);
+  background-color: var(--accent-blue-hover);
 }
 
-.btn-primary:disabled {
-  opacity: 0.6;
+.btn-action-primary:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: none;
+  transform: none;
 }
 
 /* ==========================================================================
-   Toast Notification
+   Modals & Overlays (Tiến độ & Thông báo)
    ========================================================================== */
+.upload-progress-modal,
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+
+.upload-progress-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.upload-spinner-box {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-spinner {
+  width: 100%;
+  height: 100%;
+  border: 3.5px solid var(--border-subtle);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.upload-pct-badge {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.upload-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.upload-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Toast */
 .notification-toast {
   position: fixed;
-  bottom: max(96px, calc(env(safe-area-inset-bottom) + 68px));
+  top: calc(env(safe-area-inset-top, 10px) + 12px);
   left: 50%;
-  transform: translateX(-50%) translateY(120px);
-  background: #0f231c;
-  border: 1px solid #059669;
-  color: #34d399;
-  padding: 12px 22px;
-  border-radius: 30px;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  transform: translateX(-50%) translateY(-30px);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--accent-green);
+  color: var(--accent-green);
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
   opacity: 0;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 100;
+  pointer-events: none;
+  z-index: 60;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
 }
 
 .notification-toast.visible {
@@ -851,122 +962,6 @@ body.in-editor .specialty-tabs-wrap {
   opacity: 1;
 }
 
-/* ==========================================================================
-   Loading Overlay (iPhone HEIC to JPEG conversion)
-   ========================================================================== */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(7, 9, 14, 0.82);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  z-index: 200;
-}
-
-.loading-spinner {
-  width: 44px;
-  height: 44px;
-  border: 3.5px solid rgba(56, 189, 248, 0.2);
-  border-top-color: #38bdf8;
-  border-radius: 50%;
-  animation: camsync-spin 0.8s linear infinite;
-}
-
-@keyframes camsync-spin {
+@keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.loading-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f8fafc;
-  text-align: center;
-  max-width: 80%;
-  letter-spacing: -0.01em;
-}
-
-/* ==========================================================================
-   Upload Progress Modal
-   ========================================================================== */
-.upload-progress-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(7, 9, 14, 0.88);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  z-index: 300;
-  animation: camsyncFadeIn 0.2s ease;
-}
-
-.upload-progress-card {
-  background: #101622;
-  border: 1px solid #1e293b;
-  border-radius: 20px;
-  padding: 28px 24px;
-  width: 100%;
-  max-width: 320px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75);
-}
-
-.upload-progress-spinner-wrap {
-  position: relative;
-  width: 84px;
-  height: 84px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 18px;
-}
-
-.upload-spinner {
-  width: 84px;
-  height: 84px;
-  border: 4px solid rgba(56, 189, 248, 0.15);
-  border-top-color: #38bdf8;
-  border-right-color: #34d399;
-  border-radius: 50%;
-  animation: camsync-spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
-}
-
-.upload-pct-badge {
-  position: absolute;
-  font-size: 16px;
-  font-weight: 700;
-  color: #f8fafc;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-.upload-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #f8fafc;
-  margin-bottom: 6px;
-}
-
-.upload-meta {
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.4;
-}
-
-@keyframes camsyncFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
 }

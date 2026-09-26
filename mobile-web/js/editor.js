@@ -14,7 +14,10 @@ export class ImageEditor {
     this.cropBox = cropBox;
 
     this.originalImage = null;
-    this.rotation = 0; // 0, 90, 180, 270
+    this.rotation90 = 0; // 0, 90, 180, 270
+    this.fineAngle = 0;  // -45 to +45 độ tinh chỉnh tiểu ly
+    this.rotation = 0;   // Tổng góc xoay (hỗ trợ tương thích ngược)
+    this.isRotatingFine = false;
     this.specialty = 'ecg'; // 'ecg' | 'ultrasound'
     this.filter = 'normal'; // 'normal', 'ecg', 'bw', 'us-contrast', 'us-sharpen', 'us-invert'
     this.showEcgGridGuide = false; // Lưới milimet tham chiếu
@@ -54,6 +57,8 @@ export class ImageEditor {
         const img = new Image();
         img.onload = () => {
           this.originalImage = img;
+          this.rotation90 = 0;
+          this.fineAngle = 0;
           this.rotation = 0;
           this.filter = 'normal';
           if (this.specialty === 'ecg') {
@@ -72,10 +77,35 @@ export class ImageEditor {
     });
   }
 
-  rotate(degrees) {
-    this.rotation = (this.rotation + degrees + 360) % 360;
+  rotate90(degrees) {
+    this.rotation90 = (this.rotation90 + degrees + 360) % 360;
+    this.rotation = (this.rotation90 + this.fineAngle);
     this.setCropPreset(this.currentPreset);
     this.render();
+    return this.rotation90;
+  }
+
+  rotate(degrees) {
+    return this.rotate90(degrees);
+  }
+
+  setFineAngle(degrees, isInteracting = false) {
+    this.fineAngle = Math.max(-45, Math.min(45, Math.round(degrees * 10) / 10));
+    this.rotation = (this.rotation90 + this.fineAngle);
+    this.isRotatingFine = isInteracting;
+    this.render();
+    return this.fineAngle;
+  }
+
+  resetRotation() {
+    this.rotation90 = 0;
+    this.fineAngle = 0;
+    this.rotation = 0;
+    this.render();
+  }
+
+  getTotalAngle() {
+    return (this.rotation90 + this.fineAngle);
   }
 
   setFilter(filterName) {
@@ -128,36 +158,45 @@ export class ImageEditor {
     if (!this.originalImage) return;
 
     const img = this.originalImage;
-    const isSideways = this.rotation === 90 || this.rotation === 270;
-    const targetWidth = isSideways ? img.height : img.width;
-    const targetHeight = isSideways ? img.width : img.height;
+    const totalAngle = (this.rotation90 + this.fineAngle);
+    const rad = (totalAngle * Math.PI) / 180;
+    const cos = Math.abs(Math.cos(rad));
+    const sin = Math.abs(Math.sin(rad));
+
+    // Bounding box unscaled của ảnh sau khi xoay góc tự do
+    const rotatedW = img.width * cos + img.height * sin;
+    const rotatedH = img.width * sin + img.height * cos;
 
     // Giới hạn 1600px chuẩn lâm sàng: sắc nét từng mm lưới, dung lượng ~250KB JPEG
     const maxDim = 1600;
     let scale = 1;
-    if (Math.max(targetWidth, targetHeight) > maxDim) {
-      scale = maxDim / Math.max(targetWidth, targetHeight);
+    if (Math.max(rotatedW, rotatedH) > maxDim) {
+      scale = maxDim / Math.max(rotatedW, rotatedH);
     }
 
-    this.canvas.width = Math.round(targetWidth * scale);
-    this.canvas.height = Math.round(targetHeight * scale);
+    this.canvas.width = Math.round(rotatedW * scale);
+    this.canvas.height = Math.round(rotatedH * scale);
 
     if (this.container) {
       this.container.style.aspectRatio = `${this.canvas.width} / ${this.canvas.height}`;
     }
 
+    // Nền trắng tinh khiết cho mép giấy y tế
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     this.ctx.save();
     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-    this.ctx.rotate((this.rotation * Math.PI) / 180);
+    this.ctx.rotate(rad);
 
-    const drawW = isSideways ? this.canvas.height : this.canvas.width;
-    const drawH = isSideways ? this.canvas.width : this.canvas.height;
+    const drawW = img.width * scale;
+    const drawH = img.height * scale;
 
     this.ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
     this.ctx.restore();
 
-    // Áp dụng bộ lọc điểm ảnh chuyên dụng
-    if (this.filter !== 'normal') {
+    // Áp dụng bộ lọc điểm ảnh (bỏ qua khi đang kéo trượt xoay nhanh để đạt 60fps)
+    if (this.filter !== 'normal' && !this.isRotatingFine) {
       this.applyPixelFilter();
     }
 
@@ -166,9 +205,43 @@ export class ImageEditor {
       this.drawEcgGridGuide();
     }
 
+    // Vẽ lưới căn chỉnh dóng hàng khi đang xoay góc tiểu ly
+    if (this.isRotatingFine) {
+      this.drawAlignmentGrid();
+    }
+
     requestAnimationFrame(() => {
       this.updateCropBoxUI();
     });
+  }
+
+  /**
+   * Vẽ lưới dóng hàng tham chiếu ngang dọc (chuẩn Apple Camera Straighten Grid)
+   */
+  drawAlignmentGrid() {
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(2, 132, 199, 0.45)';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([6, 4]);
+
+    const numH = 6;
+    for (let i = 1; i < numH; i++) {
+      const y = (this.canvas.height * i) / numH;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, y);
+      this.ctx.lineTo(this.canvas.width, y);
+      this.ctx.stroke();
+    }
+
+    const numV = 6;
+    for (let i = 1; i < numV; i++) {
+      const x = (this.canvas.width * i) / numV;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x, this.canvas.height);
+      this.ctx.stroke();
+    }
+    this.ctx.restore();
   }
 
   applyPixelFilter() {
