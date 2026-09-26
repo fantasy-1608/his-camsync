@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -10,15 +10,13 @@
 <body>
   <!-- Header -->
   <header class="app-header">
-    <div class="header-left">
-      <div class="header-brand">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
+    <div class="header-brand">
+      <span class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20M2 12h20"/>
         </svg>
-        <span class="brand-title">HIS CamSync</span>
-      </div>
-      <span class="intranet-tag">🩺 Lâm Sàng</span>
+      </span>
+      <span class="brand-title">HIS CamSync</span>
     </div>
     <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để kết nối lại">
       <span class="status-dot"></span>
@@ -26,138 +24,106 @@
     </div>
   </header>
 
-  <!-- Patient Context Banner -->
-  <div id="patientBanner" class="patient-banner" style="display: none;">
-    <span class="patient-icon">🩺</span>
-    <span id="patientBannerText">...</span>
+  <!-- Patient Context Card (Chốt Chặn Lâm Sàng - Chống Nhầm Lẫn Bệnh Nhân) -->
+  <div id="patientCard" class="patient-context-card">
+    <div class="patient-top-row">
+      <div class="patient-name-wrap">
+        <svg class="patient-shield-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span id="patientName" class="patient-name">Chờ đồng bộ bệnh nhân...</span>
+      </div>
+      <span id="patientIdBadge" class="patient-id-badge">BN: ---</span>
+    </div>
+    <div class="patient-meta-row">
+      <span id="patientDemographics">Mở hồ sơ trên HIS để đồng bộ</span>
+    </div>
   </div>
 
   <!-- Red Error Banner (Fail-Closed Clinical Alert) -->
   <div id="errorBanner" class="error-banner" style="display: none;">
-    <div class="error-banner-content">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="12"></line>
-        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    <div class="banner-content">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
       <span id="errorBannerText">Lỗi nạp ảnh lên HIS</span>
     </div>
-    <button type="button" id="btnDismissError" class="btn-dismiss-error" aria-label="Đóng">&times;</button>
+    <button type="button" id="btnDismissError" class="btn-dismiss-banner" aria-label="Đóng">&times;</button>
   </div>
 
   <!-- Amber Warning Banner (HIS_UNKNOWN Alert) -->
   <div id="warningBanner" class="warning-banner" style="display: none;">
-    <div class="warning-banner-content">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        <line x1="12" y1="9" x2="12" y2="13"></line>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    <div class="banner-content">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
       </svg>
-      <span id="warningBannerText">Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại</span>
+      <span id="warningBannerText">Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS</span>
     </div>
-    <button type="button" id="btnDismissWarning" class="btn-dismiss-warning" aria-label="Đóng">&times;</button>
-  </div>
-
-  <!-- Specialty Mode Selector (ECG vs Ultrasound) -->
-  <div class="specialty-tabs-wrap">
-    <div class="specialty-tabs">
-      <button type="button" class="spec-tab active" id="tabEcg" data-specialty="ecg">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        </svg>
-        <span>Điện Tâm Đồ (ECG)</span>
-      </button>
-      <button type="button" class="spec-tab" id="tabUltrasound" data-specialty="ultrasound">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <circle cx="12" cy="12" r="6"></circle>
-          <circle cx="12" cy="12" r="2"></circle>
-        </svg>
-        <span>Siêu Âm / CĐHA</span>
-      </button>
-    </div>
+    <button type="button" id="btnDismissWarning" class="btn-dismiss-banner" aria-label="Đóng">&times;</button>
   </div>
 
   <!-- Main View -->
   <main class="main-view">
     <!-- Screen 1: Chụp ảnh / Khởi đầu -->
-    <section id="captureScreen" class="capture-screen">
-      <div class="capture-card">
-        <div class="capture-icon-box" id="captureIconBox">
-          <svg id="iconEcgMode" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+    <section id="captureScreen" class="screen capture-screen">
+      <!-- Specialty Segmented Bar -->
+      <div class="specialty-segmented-bar">
+        <button type="button" class="spec-tab-btn active" id="tabEcg" data-specialty="ecg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
-          <svg id="iconUsMode" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-            <path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"></path>
+          <span>Điện Tâm Đồ (ECG)</span>
+        </button>
+        <button type="button" class="spec-tab-btn" id="tabUltrasound" data-specialty="ultrasound">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+          </svg>
+          <span>Siêu Âm / CĐHA</span>
+        </button>
+      </div>
+
+      <!-- Center Guidance Card -->
+      <div class="capture-guide-card">
+        <div class="guide-icon-circle" id="guideIcon">
+          <svg id="iconEcgMode" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <svg id="iconUsMode" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
           </svg>
         </div>
+        <h2 class="guide-title" id="captureTitle">Chụp Dải Băng Điện Tim</h2>
+        <p class="guide-desc" id="captureSubtitle">
+          Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Hỗ trợ thước xoay tiểu ly chống lệch góc và tối ưu nét sóng đưa thẳng vào HIS.
+        </p>
+      </div>
 
-        <div class="capture-text-wrap">
-          <h2 class="capture-title" id="captureTitle">Chụp Dải Băng Điện Tim</h2>
-          <p class="capture-subtitle" id="captureSubtitle">
-            Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Tự động tối ưu nét chì và lưới milimet đưa thẳng vào bệnh án HIS.
-          </p>
-        </div>
+      <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
+      <input type="file" id="galleryInput" accept="image/jpeg,image/png,image/*,.heic,.heif,.HEIC,.HEIF" style="display: none;">
 
-        <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
-        <input type="file" id="galleryInput" accept="image/jpeg,image/png,image/*,.heic,.heif,.HEIC,.HEIF" style="display: none;">
-
-        <div class="capture-actions">
-          <button type="button" id="btnTriggerCapture" class="btn-large-capture">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-              <circle cx="12" cy="13" r="4"></circle>
+      <!-- Bottom Thumb Zone Actions -->
+      <div class="capture-bottom-actions">
+        <button type="button" id="btnTriggerCapture" class="btn-shutter-main" aria-label="Chụp ảnh mới">
+          <div class="shutter-inner-circle">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span>Chụp Ảnh Mới</span>
-          </button>
-          <button type="button" id="btnTriggerGallery" class="btn-subtle-gallery">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-            <span>Chọn từ thư viện ảnh</span>
-          </button>
-        </div>
+          </div>
+        </button>
+        <button type="button" id="btnTriggerGallery" class="btn-gallery-subtle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span>Chọn từ thư viện ảnh</span>
+        </button>
       </div>
     </section>
 
-    <!-- Screen 2: Chỉnh sửa & Xử lý ảnh -->
-    <section id="editorScreen" class="editor-screen">
-      <!-- Quick Presets Bar -->
-      <div class="presets-bar">
-        <span class="presets-label">Khung cắt:</span>
-
-        <!-- ECG Presets Group -->
-        <div class="presets-group" id="groupEcgPresets">
-          <button type="button" class="preset-pill active" data-preset="ecg-strip">
-            ⚡ Dải nhịp Lead II
-          </button>
-          <button type="button" class="preset-pill" data-preset="ecg-12lead">
-            📑 12 Chuyển đạo
-          </button>
-          <button type="button" class="preset-pill" data-preset="full">
-            ✂️ Toàn cảnh
-          </button>
-        </div>
-
-        <!-- Ultrasound Presets Group -->
-        <div class="presets-group" id="groupUsPresets" style="display: none;">
-          <button type="button" class="preset-pill active" data-preset="us-convex">
-            📡 Đầu dò Convex
-          </button>
-          <button type="button" class="preset-pill" data-preset="us-linear">
-            📏 Đầu dò Linear
-          </button>
-          <button type="button" class="preset-pill" data-preset="us-4x3">
-            🖼️ Tỷ lệ 4:3
-          </button>
-          <button type="button" class="preset-pill" data-preset="full">
-            ✂️ Toàn cảnh
-          </button>
-        </div>
-      </div>
-
+    <!-- Screen 2: Chỉnh sửa & Xử lý ảnh (Clinical Studio) -->
+    <section id="editorScreen" class="screen editor-screen" style="display: none;">
       <!-- Canvas Viewport -->
       <div class="canvas-viewport">
         <div id="canvasContainer" class="canvas-container">
@@ -182,92 +148,122 @@
         </div>
       </div>
 
-      <!-- Controls & Specialty Tools -->
-      <div class="editor-controls">
-        <!-- Tools Row: Common + Specialty Filters -->
-        <div class="tools-row" id="toolsRow">
-          <!-- Xoay ảnh -->
-          <button type="button" id="btnRotateLeft" class="tool-btn" title="Xoay trái 90°">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-              <path d="M3 3v5h5"></path>
-            </svg>
-            <span>Trái 90°</span>
-          </button>
+      <!-- Controls Panel (Thumb-Zone ở nửa dưới) -->
+      <div class="editor-controls-panel">
+        <!-- 1. Quick Presets Bar -->
+        <div class="presets-scroll-row">
+          <div id="groupEcgPresets" style="display: flex; gap: 6px;">
+            <button type="button" class="preset-pill active" data-preset="ecg-strip">
+              Dải nhịp Lead II
+            </button>
+            <button type="button" class="preset-pill" data-preset="ecg-12lead">
+              12 Chuyển đạo
+            </button>
+            <button type="button" class="preset-pill" data-preset="full">
+              Toàn cảnh
+            </button>
+          </div>
+          <div id="groupUsPresets" style="display: none; gap: 6px;">
+            <button type="button" class="preset-pill active" data-preset="us-convex">
+              Đầu dò Convex
+            </button>
+            <button type="button" class="preset-pill" data-preset="us-linear">
+              Đầu dò Linear
+            </button>
+            <button type="button" class="preset-pill" data-preset="us-4x3">
+              Tỷ lệ 4:3
+            </button>
+            <button type="button" class="preset-pill" data-preset="full">
+              Toàn cảnh
+            </button>
+          </div>
+        </div>
 
-          <button type="button" id="btnRotateRight" class="tool-btn" title="Xoay phải 90°">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
-              <path d="M21 3v5h-5"></path>
-            </svg>
-            <span>Phải 90°</span>
-          </button>
+        <!-- 2. Thước Xoay Tiểu Ly & Căn Chỉnh Góc (Straighten Dial Module) -->
+        <div class="straighten-dial-module">
+          <div class="straighten-top-row">
+            <button type="button" id="btnRotateLeft" class="btn-subtle-tool" title="Xoay trái 90°">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
 
-          <!-- ECG Specialty Filters -->
-          <button type="button" id="btnFilterEcg" class="tool-btn specialty-tool-ecg">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-            </svg>
-            <span id="btnFilterEcgText">Nét sóng & Lưới</span>
-          </button>
+            <!-- Degree Badge (Chạm vào để hoàn tác về 0°) -->
+            <div id="angleBadge" class="angle-degree-badge" title="Chạm để đưa về góc thẳng 0°">
+              0°
+            </div>
 
-          <button type="button" id="btnFilterBw" class="tool-btn specialty-tool-ecg">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <path d="M12 2a10 10 0 0 1 0 20z"></path>
+            <button type="button" id="btnRotateRight" class="btn-subtle-tool" title="Xoay phải 90°">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+              </svg>
+            </button>
+
+            <button type="button" id="btnToggleGrid" class="btn-subtle-tool" title="Bật/Tắt lưới dóng hàng">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Ruler Canvas & Center Pointer Needle -->
+          <div id="rulerContainer" class="ruler-track-container">
+            <div class="ruler-center-pointer"></div>
+            <canvas id="rulerCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- 3. Specialty Enhancers Bar -->
+        <div class="enhancers-row">
+          <!-- ECG Enhancers -->
+          <button type="button" id="btnFilterEcg" class="enhancer-btn specialty-tool-ecg">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span>Nét sóng chì</span>
+          </button>
+          <button type="button" id="btnFilterBw" class="enhancer-btn specialty-tool-ecg">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/>
             </svg>
             <span>Khử nền nhiệt</span>
           </button>
 
-          <button type="button" id="btnToggleGrid" class="tool-btn specialty-tool-ecg" title="Bật lưới milimet tham chiếu">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="1"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-              <line x1="15" y1="3" x2="15" y2="21"></line>
-              <line x1="3" y1="9" x2="21" y2="9"></line>
-              <line x1="3" y1="15" x2="21" y2="15"></line>
+          <!-- Ultrasound Enhancers -->
+          <button type="button" id="btnFilterUsContrast" class="enhancer-btn specialty-tool-us" style="display: none;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 18a6 6 0 0 0 0-12v12z"/>
             </svg>
-            <span id="btnGridText">Lưới mm</span>
+            <span>Tương phản mô</span>
           </button>
-
-          <!-- Ultrasound Specialty Filters -->
-          <button type="button" id="btnFilterUsContrast" class="tool-btn specialty-tool-us" style="display: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <path d="M12 18a6 6 0 0 0 0-12v12z"></path>
+          <button type="button" id="btnFilterUsSharpen" class="enhancer-btn specialty-tool-us" style="display: none;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
-            <span id="btnUsContrastText">Tương phản mô</span>
+            <span>Làm nét bờ</span>
           </button>
-
-          <button type="button" id="btnFilterUsSharpen" class="tool-btn specialty-tool-us" style="display: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          <button type="button" id="btnFilterUsInvert" class="enhancer-btn specialty-tool-us" style="display: none;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="20" rx="3"/><line x1="2" y1="2" x2="22" y2="22"/>
             </svg>
-            <span id="btnUsSharpenText">Làm nét bờ</span>
-          </button>
-
-          <button type="button" id="btnFilterUsInvert" class="tool-btn specialty-tool-us" style="display: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="2" width="20" height="20" rx="3"></rect>
-              <line x1="2" y1="2" x2="22" y2="22"></line>
-            </svg>
-            <span id="btnUsInvertText">Âm bản</span>
+            <span>Âm bản</span>
           </button>
         </div>
 
-        <!-- Action Row: Chụp lại / Gửi Lên HIS -->
-        <div class="actions-row">
-          <button type="button" id="btnRetake" class="btn-secondary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-              <circle cx="12" cy="13" r="4"></circle>
+        <!-- 4. Action Buttons Bar -->
+        <div class="action-buttons-row">
+          <button type="button" id="btnRetake" class="btn-action-secondary">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
             </svg>
             <span>Chụp lại</span>
           </button>
-          <button type="button" id="btnSendToHis" class="btn-primary">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          <button type="button" id="btnSendToHis" class="btn-action-primary">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
             <span id="btnSendText">Gửi Lên HIS</span>
           </button>
@@ -279,7 +275,7 @@
   <!-- Upload Progress Modal / Overlay -->
   <div id="uploadProgressModal" class="upload-progress-modal" style="display: none;">
     <div class="upload-progress-card">
-      <div class="upload-progress-spinner-wrap">
+      <div class="upload-spinner-box">
         <div class="upload-spinner" id="uploadSpinner"></div>
         <span class="upload-pct-badge" id="uploadPctBadge">0%</span>
       </div>
@@ -290,7 +286,7 @@
 
   <!-- Toast Notification -->
   <div id="toast" class="notification-toast">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>
     <span id="toastText">Đã lưu vào HIS thành công!</span>
@@ -298,8 +294,8 @@
 
   <!-- Loading Overlay (Chuyển đổi HEIC sang JPEG) -->
   <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-    <div class="loading-spinner"></div>
-    <span id="loadingText" class="loading-text">Đang tối ưu ảnh iPhone sang chuẩn JPEG...</span>
+    <div class="upload-spinner" style="width: 44px; height: 44px; margin-bottom: 12px;"></div>
+    <span id="loadingText" style="color: #ffffff; font-size: 13px; font-weight: 600;">Đang chuẩn hóa ảnh iPhone...</span>
   </div>
 
   <!-- Scripts -->
@@ -342,9 +338,14 @@
 
     const btnRotateLeft = document.getElementById('btnRotateLeft');
     const btnRotateRight = document.getElementById('btnRotateRight');
+    const angleBadge = document.getElementById('angleBadge');
+    const btnToggleGrid = document.getElementById('btnToggleGrid');
+
+    const rulerContainer = document.getElementById('rulerContainer');
+    const rulerCanvas = document.getElementById('rulerCanvas');
+
     const btnFilterEcg = document.getElementById('btnFilterEcg');
     const btnFilterBw = document.getElementById('btnFilterBw');
-    const btnToggleGrid = document.getElementById('btnToggleGrid');
 
     const btnFilterUsContrast = document.getElementById('btnFilterUsContrast');
     const btnFilterUsSharpen = document.getElementById('btnFilterUsSharpen');
@@ -358,6 +359,10 @@
     const statusText = document.getElementById('statusText');
     const toast = document.getElementById('toast');
     const toastText = document.getElementById('toastText');
+
+    const patientNameEl = document.getElementById('patientName');
+    const patientIdBadgeEl = document.getElementById('patientIdBadge');
+    const patientDemographicsEl = document.getElementById('patientDemographics');
 
     const uploadProgressModal = document.getElementById('uploadProgressModal');
     const uploadPctBadge = document.getElementById('uploadPctBadge');
@@ -373,7 +378,7 @@
       if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
-    // Hỗ trợ trích xuất session_id, key & gen từ URL hash fragment #session=<id>&key=<key>&gen=<gen> hoặc search query
+    // Trích xuất session_id, key & gen từ URL hash fragment hoặc query
     let initialSessionId = null;
     let initialCryptoKey = null;
     let initialGeneration = null;
@@ -390,9 +395,7 @@
     if (!initialSessionId && window.location.search) {
       const searchParams = new URLSearchParams(window.location.search);
       initialSessionId = searchParams.get('session');
-      if (!initialCryptoKey) {
-        initialCryptoKey = searchParams.get('key');
-      }
+      if (!initialCryptoKey) initialCryptoKey = searchParams.get('key');
       if (initialGeneration === null) {
         const genParam = searchParams.get('gen');
         if (genParam !== null && genParam !== '') {
@@ -402,7 +405,7 @@
       }
     }
 
-    // Làm sạch thanh địa chỉ ngay lập tức để triệt tiêu rò rỉ session ID & cryptographic key
+    // Làm sạch thanh địa chỉ ngay lập tức để bảo mật thông tin phiên
     if (window.location.hash || window.location.search) {
       try {
         window.history.replaceState(null, '', window.location.pathname);
@@ -411,6 +414,157 @@
 
     // Khởi tạo Editor & P2P Client
     const editor = new ImageEditor(canvas, canvasContainer, cropOverlay, cropBox);
+
+    // =========================================================================
+    // Thước Xoay Tiểu Ly (Straighten Protractor Dial - Chuẩn Apple iOS Photos)
+    // =========================================================================
+    class StraightenDial {
+      constructor(canvas, container, badge, onAngleChange) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.container = container;
+        this.badge = badge;
+        this.onAngleChange = onAngleChange;
+        this.angle = 0;
+        this.pxPerDegree = 8; // 8px vuốt = 1 độ
+        this.isDragging = false;
+        this.startX = 0;
+        this.startAngle = 0;
+
+        this.init();
+      }
+
+      init() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        // Lắng nghe sự kiện thay đổi giao diện sáng/tối của OS để vẽ lại thước
+        if (window.matchMedia) {
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.draw());
+        }
+
+        // Pointer drag trên thước
+        this.container.addEventListener('pointerdown', (e) => {
+          this.isDragging = true;
+          this.startX = e.clientX;
+          this.startAngle = this.angle;
+          if (this.container.setPointerCapture && e.pointerId) {
+            try { this.container.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          e.preventDefault();
+        });
+
+        window.addEventListener('pointermove', (e) => {
+          if (!this.isDragging) return;
+          const dx = e.clientX - this.startX;
+          let newAngle = this.startAngle - (dx / this.pxPerDegree);
+          newAngle = Math.max(-45, Math.min(45, newAngle));
+
+          // Tự hít về 0° khi ở gần ±0.8°
+          if (Math.abs(newAngle) < 0.8) {
+            if (this.angle !== 0 && navigator.vibrate) {
+              try { navigator.vibrate(12); } catch (_) {}
+            }
+            newAngle = 0;
+          }
+
+          this.setAngle(newAngle, true);
+        });
+
+        const onPointerUp = () => {
+          if (!this.isDragging) return;
+          this.isDragging = false;
+          this.onAngleChange(this.angle, false);
+          this.draw();
+        };
+
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
+
+        // Chạm vào huy hiệu để đưa về 0° ngay lập tức
+        this.badge.addEventListener('click', () => {
+          this.setAngle(0, false);
+        });
+
+        this.draw();
+      }
+
+      resize() {
+        const rect = this.container.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.ctx.resetTransform?.();
+        this.ctx.scale(dpr, dpr);
+        this.width = rect.width;
+        this.height = rect.height;
+        this.draw();
+      }
+
+      setAngle(deg, isInteracting = false) {
+        this.angle = Math.max(-45, Math.min(45, Math.round(deg * 10) / 10));
+        
+        // Cập nhật huy hiệu góc
+        const rounded = Math.round(this.angle);
+        if (rounded === 0) {
+          this.badge.textContent = '0°';
+          this.badge.classList.remove('has-angle');
+        } else {
+          this.badge.textContent = (rounded > 0 ? `+${rounded}°` : `${rounded}°`);
+          this.badge.classList.add('has-angle');
+        }
+
+        this.draw();
+        this.onAngleChange(this.angle, isInteracting);
+      }
+
+      reset() {
+        this.setAngle(0, false);
+      }
+
+      draw() {
+        if (!this.width || !this.height) return;
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.width, this.height);
+
+        const centerX = this.width / 2;
+        const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const tickColor = isDark ? '#475569' : '#94a3b8';
+        const majorTickColor = isDark ? '#94a3b8' : '#475569';
+        const textColor = isDark ? '#64748b' : '#94a3b8';
+
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "SF Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // Vẽ các vạch từ -45° đến +45°
+        for (let deg = -45; deg <= 45; deg++) {
+          const x = centerX + (deg - this.angle) * this.pxPerDegree;
+          if (x < -20 || x > this.width + 20) continue;
+
+          const isMajor = deg % 5 === 0;
+          const isTen = deg % 10 === 0;
+          const tickH = isTen ? 14 : (isMajor ? 10 : 6);
+
+          ctx.beginPath();
+          ctx.strokeStyle = isMajor ? majorTickColor : tickColor;
+          ctx.lineWidth = isMajor ? 1.5 : 1;
+          ctx.moveTo(x, 2);
+          ctx.lineTo(x, 2 + tickH);
+          ctx.stroke();
+
+          if (isTen && deg !== 0) {
+            ctx.fillStyle = textColor;
+            ctx.fillText(String(deg), x, 18);
+          }
+        }
+      }
+    }
+
+    const straightenDial = new StraightenDial(rulerCanvas, rulerContainer, angleBadge, (deg, isInteracting) => {
+      editor.setFineAngle(deg, isInteracting);
+    });
 
     const p2p = new P2PClient({
       sessionId: initialSessionId || undefined,
@@ -430,11 +584,17 @@
         }
       },
       onPatientInfo: (patient) => {
-        const banner = document.getElementById('patientBanner');
-        const text = document.getElementById('patientBannerText');
-        if (patient && patient.name) {
-          text.textContent = `BN: ${patient.name} (${patient.id})${patient.age ? ' - ' + patient.age : ''}`;
-          banner.style.display = 'flex';
+        if (patient && (patient.name || patient.id)) {
+          patientNameEl.textContent = patient.name ? patient.name.toUpperCase() : 'BỆNH NHÂN';
+          patientIdBadgeEl.textContent = patient.id ? `BN: ${patient.id}` : 'BN: ---';
+          
+          const metaParts = [];
+          if (patient.age) metaParts.push(patient.age);
+          if (patient.gender) metaParts.push(patient.gender);
+          if (patient.room) metaParts.push(`Buồng ${patient.room}`);
+          if (patient.department) metaParts.push(patient.department);
+
+          patientDemographicsEl.textContent = metaParts.length > 0 ? metaParts.join(' • ') : 'Đã kết nối hồ sơ lâm sàng';
         }
       }
     });
@@ -452,7 +612,7 @@
         iconEcgMode.style.display = 'block';
         iconUsMode.style.display = 'none';
         captureTitle.textContent = 'Chụp Dải Băng Điện Tim';
-        captureSubtitle.textContent = 'Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Tự động tối ưu nét chì và lưới milimet đưa thẳng vào bệnh án HIS.';
+        captureSubtitle.textContent = 'Căn chỉnh dải băng Lead II hoặc 12 chuyển đạo. Hỗ trợ thước xoay tiểu ly chống lệch góc và tối ưu nét sóng đưa thẳng vào HIS.';
 
         groupEcgPresets.style.display = 'flex';
         groupUsPresets.style.display = 'none';
@@ -465,7 +625,7 @@
         iconEcgMode.style.display = 'none';
         iconUsMode.style.display = 'block';
         captureTitle.textContent = 'Chụp Hình Ảnh Siêu Âm';
-        captureSubtitle.textContent = 'Chụp từ màn hình máy siêu âm (Convex / Linear / 4:3). Tự động tinh chỉnh tương phản mô và nét bờ tổn thương.';
+        captureSubtitle.textContent = 'Chụp từ màn hình máy siêu âm (Convex / Linear / 4:3). Hỗ trợ thước xoay tiểu ly, tăng tương phản mô và nét bờ tổn thương.';
 
         groupEcgPresets.style.display = 'none';
         groupUsPresets.style.display = 'flex';
@@ -474,9 +634,8 @@
         usTools.forEach(el => el.style.display = 'inline-flex');
       }
 
-      // Reset active filters
       currentFilter = 'normal';
-      document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.enhancer-btn').forEach(b => b.classList.remove('active'));
     }
 
     tabEcg.addEventListener('click', () => switchSpecialty('ecg'));
@@ -486,7 +645,7 @@
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());
     btnTriggerGallery.addEventListener('click', () => galleryInput.click());
 
-    // Tự động chuyển đổi HEIC sang JPEG siêu tốc trên điện thoại (Apple Silicon / Android)
+    // Tự động chuyển đổi HEIC sang JPEG siêu tốc trên điện thoại
     async function convertHeicToJpegIfNecessary(file) {
       if (!file) return file;
       const fileName = file.name || '';
@@ -499,27 +658,18 @@
 
       showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
       
-      // 1. Tận dụng phần cứng iOS Safari giải mã HEIC tức thì qua Image/Canvas
       try {
         let bitmap = null;
         if (typeof createImageBitmap === 'function') {
-          try {
-            bitmap = await createImageBitmap(file);
-          } catch (_) {}
+          try { bitmap = await createImageBitmap(file); } catch (_) {}
         }
 
         if (!bitmap) {
           bitmap = await new Promise((resolve, reject) => {
             const url = URL.createObjectURL(file);
             const img = new Image();
-            img.onload = () => {
-              URL.revokeObjectURL(url);
-              resolve(img);
-            };
-            img.onerror = (e) => {
-              URL.revokeObjectURL(url);
-              reject(e);
-            };
+            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+            img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
             img.src = url;
           });
         }
@@ -544,7 +694,6 @@
         console.warn('[Mobile] Native HEIC decode fallback:', nativeErr);
       }
 
-      // 2. Dự phòng qua thư viện heic2any Web Worker nếu trình duyệt không có giải mã native
       try {
         if (typeof window.heic2any === 'function') {
           const res = await window.heic2any({
@@ -580,11 +729,15 @@
         const firstPill = presetGroup.querySelector('.preset-pill');
         if (firstPill) firstPill.classList.add('active');
 
-        // Reset filter
+        // Reset bộ lọc & thước xoay
         currentFilter = 'normal';
-        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.enhancer-btn').forEach(b => b.classList.remove('active'));
+        straightenDial.reset();
 
-        setTimeout(() => editor.render(), 60);
+        setTimeout(() => {
+          straightenDial.resize();
+          editor.render();
+        }, 80);
       } catch (err) {
         hideLoading();
         showErrorBanner('Không thể tải ảnh: ' + (err.message || err));
@@ -604,9 +757,20 @@
       });
     });
 
-    // Rotation
-    btnRotateLeft.addEventListener('click', () => editor.rotate(-90));
-    btnRotateRight.addEventListener('click', () => editor.rotate(90));
+    // Rotation controls
+    btnRotateLeft.addEventListener('click', () => {
+      editor.rotate90(-90);
+    });
+
+    btnRotateRight.addEventListener('click', () => {
+      editor.rotate90(90);
+    });
+
+    btnToggleGrid.addEventListener('click', () => {
+      const active = editor.toggleEcgGridGuide();
+      if (active) btnToggleGrid.classList.add('active');
+      else btnToggleGrid.classList.remove('active');
+    });
 
     // ECG Filters
     btnFilterEcg.addEventListener('click', () => {
@@ -631,12 +795,6 @@
         btnFilterBw.classList.add('active');
       }
       editor.setFilter(currentFilter);
-    });
-
-    btnToggleGrid.addEventListener('click', () => {
-      const active = editor.toggleEcgGridGuide();
-      if (active) btnToggleGrid.classList.add('active');
-      else btnToggleGrid.classList.remove('active');
     });
 
     // Ultrasound Filters
@@ -711,7 +869,7 @@
         btnSendToHis.disabled = true;
         uploadProgressModal.style.display = 'flex';
         uploadPctBadge.textContent = '10%';
-        uploadTitle.textContent = 'Đang xử lý xuất ảnh...';
+        uploadTitle.textContent = 'Đang xuất ảnh...';
         uploadMeta.textContent = 'Chuẩn hóa định dạng JPEG lâm sàng...';
 
         const blob = await editor.exportBlob(0.90, {
@@ -745,11 +903,11 @@
           }
         });
 
-        // Xử lý trung thực theo trạng thái xác thực HIS:
+        // Xử lý các trạng thái xác thực HIS:
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressModal.style.display = 'none';
           showWarningBanner(res.reason || res.error || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại');
-          btnSendToHis.disabled = true; // Vô hiệu hóa retry để ngăn ghi trùng lặp
+          btnSendToHis.disabled = true;
           btnSendText.textContent = 'Chưa xác định lưu';
           return;
         }
@@ -762,7 +920,6 @@
           return;
         }
 
-        // Positively guard HIS_COMMITTED (eliminate negative fall-through)
         const isCommitted = res?.status === 'HIS_COMMITTED' && res?.success === true;
         if (!isCommitted) {
           uploadProgressModal.style.display = 'none';
@@ -770,21 +927,21 @@
           return;
         }
 
-        // CHỈ khi res.status === 'HIS_COMMITTED':
-        // Phản hồi rung haptic
+        // Rung haptic khi gửi thành công
         if (navigator.vibrate) {
           try { navigator.vibrate([40, 60, 40]); } catch (e) {}
         }
 
         uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = '✅ Đã lưu vào HIS!';
+        uploadTitle.textContent = 'Đã lưu vào HIS';
         uploadMeta.textContent = 'Ảnh đã được máy chủ HIS lưu trữ thành công';
         if (toastText) toastText.textContent = 'Đã lưu vào HIS thành công!';
 
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
           toast.classList.add('visible');
-          // Chuyển ngay về màn hình chụp để thao tác liền mạch, thuận tiện
+          
+          // Trở lại màn hình chụp để sẵn sàng chụp ảnh tiếp theo
           cameraInput.value = '';
           galleryInput.value = '';
           editorScreen.style.display = 'none';
