@@ -320,6 +320,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           <span>Xoay</span>
         </button>
+        <button type="button" class="doc-edit-btn" id="btnDocPerspective" title="Nắn phẳng 4 góc chụp nghiêng">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="3 7 9 3 21 7 17 21 3 17 3 7"/><circle cx="3" cy="7" r="1.5" fill="currentColor"/><circle cx="9" cy="3" r="1.5" fill="currentColor"/><circle cx="21" cy="7" r="1.5" fill="currentColor"/><circle cx="17" cy="21" r="1.5" fill="currentColor"/><circle cx="3" cy="17" r="1.5" fill="currentColor"/></svg>
+          <span>Nắn góc</span>
+        </button>
         <button type="button" class="doc-edit-btn" id="btnDocCrop" title="Cắt xén">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>
           <span>Cắt</span>
@@ -330,10 +334,10 @@
         </button>
       </div>
 
-      <!-- Crop Confirm Bar (chỉ hiện khi đang cắt) -->
+      <!-- Crop / Warp Confirm Bar (chỉ hiện khi đang cắt hoặc nắn góc) -->
       <div class="doc-crop-confirm" id="docCropConfirm" style="display: none;">
         <button type="button" class="doc-crop-cancel" id="btnCropCancel">Hủy</button>
-        <span class="doc-crop-hint">Kéo góc để chọn vùng cắt</span>
+        <span class="doc-crop-hint" id="docCropHint">Kéo góc để chọn vùng</span>
         <button type="button" class="doc-crop-apply" id="btnCropApply">Áp dụng</button>
       </div>
 
@@ -457,6 +461,7 @@
     import { ImageEditor } from './js/editor.js?v=2.0.0';
     import { P2PClient } from './js/p2p-client.js';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js';
+    import { unwarpDocument } from './js/perspective.js';
 
     // State
     let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
@@ -1491,19 +1496,24 @@
     });
 
     // =========================================================================
-    // Touch-Based Crop Workspace (Full Resolution)
+    // Touch-Based Crop & 4-Corner Perspective Warp Workspace (Full Resolution)
     // =========================================================================
-    let cropMode = false;
+    let activeEditMode = null; // null | 'crop' | 'perspective'
     let cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 }; // Normalized [0, 1]
+    let perspectiveCorners = [
+      { x: 0.06, y: 0.06 }, // TL (0)
+      { x: 0.94, y: 0.06 }, // TR (1)
+      { x: 0.94, y: 0.94 }, // BR (2)
+      { x: 0.06, y: 0.94 }  // BL (3)
+    ];
+    let activeDragCorner = -1; // 0..3
     let activeDragHandle = null; // 'tl', 'tr', 'bl', 'br', 'move', 'new'
     let cropTouchStart = null;
 
-    function enterCropMode() {
-      if (docSelectedIndex < 0) return;
-      cropMode = true;
-      cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+    const btnDocPerspective = document.getElementById('btnDocPerspective');
+    const docCropHint = document.getElementById('docCropHint');
 
-      // Align overlay exactly over docPreviewImg
+    function setupOverlayPosition() {
       const imgRect = docPreviewImg.getBoundingClientRect();
       const wrapRect = docPreviewImgWrap.getBoundingClientRect();
       const left = imgRect.left - wrapRect.left;
@@ -1522,71 +1532,149 @@
 
       docCropConfirm.style.display = 'flex';
       docEditToolbar.style.display = 'none';
-
-      drawCropCanvas();
     }
 
-    function exitCropMode() {
-      cropMode = false;
+    function enterPerspectiveMode() {
+      if (docSelectedIndex < 0) return;
+      activeEditMode = 'perspective';
+      perspectiveCorners = [
+        { x: 0.06, y: 0.06 },
+        { x: 0.94, y: 0.06 },
+        { x: 0.94, y: 0.94 },
+        { x: 0.06, y: 0.94 }
+      ];
+      if (docCropHint) docCropHint.textContent = 'Kéo 4 góc theo mép giấy tờ';
+      if (btnCropApply) btnCropApply.textContent = 'Áp dụng nắn';
+      setupOverlayPosition();
+      drawEditCanvas();
+    }
+
+    function enterCropMode() {
+      if (docSelectedIndex < 0) return;
+      activeEditMode = 'crop';
+      cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+      if (docCropHint) docCropHint.textContent = 'Kéo góc để chọn vùng cắt';
+      if (btnCropApply) btnCropApply.textContent = 'Áp dụng cắt';
+      setupOverlayPosition();
+      drawEditCanvas();
+    }
+
+    function exitEditOverlay() {
+      activeEditMode = null;
       activeDragHandle = null;
+      activeDragCorner = -1;
       docCropOverlay.style.display = 'none';
       docCropConfirm.style.display = 'none';
       if (docPages.length > 0) docEditToolbar.style.display = 'flex';
     }
 
-    function drawCropCanvas() {
+    // Alias for backward compatibility
+    function exitCropMode() {
+      exitEditOverlay();
+    }
+
+    function drawEditCanvas() {
       const canvas = docCropCanvas;
       const ctx = canvas.getContext('2d');
       const cw = canvas.width;
       const ch = canvas.height;
       ctx.clearRect(0, 0, cw, ch);
 
-      // 1. Dark semi-transparent mask
+      // Dark semi-transparent mask
       ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
       ctx.fillRect(0, 0, cw, ch);
 
-      if (!cropRect) return;
+      if (activeEditMode === 'perspective') {
+        const pts = perspectiveCorners.map(p => ({ x: p.x * cw, y: p.y * ch }));
 
-      const rx = cropRect.x * cw;
-      const ry = cropRect.y * ch;
-      const rw = cropRect.w * cw;
-      const rh = cropRect.h * ch;
+        // Clear inside quadrilateral
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
+        ctx.lineTo(pts[2].x, pts[2].y);
+        ctx.lineTo(pts[3].x, pts[3].y);
+        ctx.closePath();
+        ctx.clip();
+        ctx.clearRect(0, 0, cw, ch);
+        // Subtle blue tint over paper area
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.08)';
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
 
-      // 2. Clear inner crop window
-      ctx.clearRect(rx, ry, rw, rh);
+        // Quadrilateral border
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[1].x, pts[1].y);
+        ctx.lineTo(pts[2].x, pts[2].y);
+        ctx.lineTo(pts[3].x, pts[3].y);
+        ctx.closePath();
+        ctx.stroke();
 
-      // 3. Rule of thirds subtle grid lines
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(rx + rw / 3, ry); ctx.lineTo(rx + rw / 3, ry + rh);
-      ctx.moveTo(rx + (rw * 2) / 3, ry); ctx.lineTo(rx + (rw * 2) / 3, ry + rh);
-      ctx.moveTo(rx, ry + rh / 3); ctx.lineTo(rx + rw, ry + rh / 3);
-      ctx.moveTo(rx, ry + (rh * 2) / 3); ctx.lineTo(rx + rw, ry + (rh * 2) / 3);
-      ctx.stroke();
+        // 4 Corner interactive pins
+        pts.forEach((pt, i) => {
+          // Touch target ring
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 16, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 3;
+          ctx.stroke();
 
-      // 4. Crop boundary
-      ctx.strokeStyle = '#0284c7';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(rx, ry, rw, rh);
+          // Center blue dot
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#0284c7';
+          ctx.fill();
+        });
 
-      // 5. Four Corner Handles
-      const hs = 14;
-      const corners = [
-        [rx, ry],
-        [rx + rw, ry],
-        [rx, ry + rh],
-        [rx + rw, ry + rh]
-      ];
-      corners.forEach(([cx, cy]) => {
-        ctx.fillStyle = '#ffffff';
+      } else if (activeEditMode === 'crop') {
+        if (!cropRect) return;
+
+        const rx = cropRect.x * cw;
+        const ry = cropRect.y * ch;
+        const rw = cropRect.w * cw;
+        const rh = cropRect.h * ch;
+
+        // Clear inner crop window
+        ctx.clearRect(rx, ry, rw, rh);
+
+        // Rule of thirds subtle grid lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rx + rw / 3, ry); ctx.lineTo(rx + rw / 3, ry + rh);
+        ctx.moveTo(rx + (rw * 2) / 3, ry); ctx.lineTo(rx + (rw * 2) / 3, ry + rh);
+        ctx.moveTo(rx, ry + rh / 3); ctx.lineTo(rx + rw, ry + rh / 3);
+        ctx.moveTo(rx, ry + (rh * 2) / 3); ctx.lineTo(rx + rw, ry + (rh * 2) / 3);
+        ctx.stroke();
+
+        // Crop boundary
         ctx.strokeStyle = '#0284c7';
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, hs / 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      });
+        ctx.strokeRect(rx, ry, rw, rh);
+
+        // 4 Corner Handles
+        const hs = 14;
+        const corners = [
+          [rx, ry],
+          [rx + rw, ry],
+          [rx, ry + rh],
+          [rx + rw, ry + rh]
+        ];
+        corners.forEach(([cx, cy]) => {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#0284c7';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, hs / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+      }
     }
 
     function getCropHandleAt(px, py) {
@@ -1607,185 +1695,273 @@
       return 'new';
     }
 
-    function handleCropPointerDown(px, py) {
-      if (!cropMode) return;
+    function handleEditPointerDown(px, py) {
+      if (!activeEditMode) return;
       const cw = docCropCanvas.width;
       const ch = docCropCanvas.height;
-      activeDragHandle = getCropHandleAt(px, py);
-      cropTouchStart = {
-        px, py,
-        nx: px / cw,
-        ny: py / ch,
-        initialRect: { ...cropRect }
-      };
-      if (activeDragHandle === 'new') {
-        cropRect = { x: px / cw, y: py / ch, w: 0.02, h: 0.02 };
+
+      if (activeEditMode === 'perspective') {
+        // Find closest corner within touch radius
+        let closestIdx = -1;
+        let minDist = 48; // Touch-friendly threshold
+        perspectiveCorners.forEach((pt, i) => {
+          const d = Math.hypot(px - pt.x * cw, py - pt.y * ch);
+          if (d < minDist) {
+            minDist = d;
+            closestIdx = i;
+          }
+        });
+        activeDragCorner = closestIdx;
+      } else if (activeEditMode === 'crop') {
+        activeDragHandle = getCropHandleAt(px, py);
+        cropTouchStart = {
+          px, py,
+          nx: px / cw,
+          ny: py / ch,
+          initialRect: { ...cropRect }
+        };
+        if (activeDragHandle === 'new') {
+          cropRect = { x: px / cw, y: py / ch, w: 0.02, h: 0.02 };
+        }
       }
-      drawCropCanvas();
+      drawEditCanvas();
     }
 
-    function handleCropPointerMove(px, py) {
-      if (!cropMode || !activeDragHandle || !cropTouchStart) return;
+    function handleEditPointerMove(px, py) {
+      if (!activeEditMode) return;
       const cw = docCropCanvas.width;
       const ch = docCropCanvas.height;
       const nx = Math.max(0, Math.min(1, px / cw));
       const ny = Math.max(0, Math.min(1, py / ch));
-      const init = cropTouchStart.initialRect;
 
-      if (activeDragHandle === 'move') {
-        const dx = nx - cropTouchStart.nx;
-        const dy = ny - cropTouchStart.ny;
-        let newX = Math.max(0, Math.min(1 - init.w, init.x + dx));
-        let newY = Math.max(0, Math.min(1 - init.h, init.y + dy));
-        cropRect = { x: newX, y: newY, w: init.w, h: init.h };
-      } else if (activeDragHandle === 'tl') {
-        const right = init.x + init.w;
-        const bottom = init.y + init.h;
-        const newX = Math.min(right - 0.05, nx);
-        const newY = Math.min(bottom - 0.05, ny);
-        cropRect = { x: newX, y: newY, w: right - newX, h: bottom - newY };
-      } else if (activeDragHandle === 'tr') {
-        const left = init.x;
-        const bottom = init.y + init.h;
-        const newW = Math.max(0.05, nx - left);
-        const newY = Math.min(bottom - 0.05, ny);
-        cropRect = { x: left, y: newY, w: newW, h: bottom - newY };
-      } else if (activeDragHandle === 'bl') {
-        const right = init.x + init.w;
-        const top = init.y;
-        const newX = Math.min(right - 0.05, nx);
-        const newH = Math.max(0.05, ny - top);
-        cropRect = { x: newX, y: top, w: right - newX, h: newH };
-      } else if (activeDragHandle === 'br') {
-        cropRect = {
-          x: init.x,
-          y: init.y,
-          w: Math.max(0.05, nx - init.x),
-          h: Math.max(0.05, ny - init.y)
-        };
-      } else if (activeDragHandle === 'new') {
-        cropRect = {
-          x: Math.min(cropTouchStart.nx, nx),
-          y: Math.min(cropTouchStart.ny, ny),
-          w: Math.abs(nx - cropTouchStart.nx),
-          h: Math.abs(ny - cropTouchStart.ny)
-        };
+      if (activeEditMode === 'perspective') {
+        if (activeDragCorner >= 0 && activeDragCorner < 4) {
+          perspectiveCorners[activeDragCorner] = { x: nx, y: ny };
+          drawEditCanvas();
+        }
+      } else if (activeEditMode === 'crop') {
+        if (!activeDragHandle || !cropTouchStart) return;
+        const init = cropTouchStart.initialRect;
+
+        if (activeDragHandle === 'move') {
+          const dx = nx - cropTouchStart.nx;
+          const dy = ny - cropTouchStart.ny;
+          let newX = Math.max(0, Math.min(1 - init.w, init.x + dx));
+          let newY = Math.max(0, Math.min(1 - init.h, init.y + dy));
+          cropRect = { x: newX, y: newY, w: init.w, h: init.h };
+        } else if (activeDragHandle === 'tl') {
+          const right = init.x + init.w;
+          const bottom = init.y + init.h;
+          const newX = Math.min(right - 0.05, nx);
+          const newY = Math.min(bottom - 0.05, ny);
+          cropRect = { x: newX, y: newY, w: right - newX, h: bottom - newY };
+        } else if (activeDragHandle === 'tr') {
+          const left = init.x;
+          const bottom = init.y + init.h;
+          const newW = Math.max(0.05, nx - left);
+          const newY = Math.min(bottom - 0.05, ny);
+          cropRect = { x: left, y: newY, w: newW, h: bottom - newY };
+        } else if (activeDragHandle === 'bl') {
+          const right = init.x + init.w;
+          const top = init.y;
+          const newX = Math.min(right - 0.05, nx);
+          const newH = Math.max(0.05, ny - top);
+          cropRect = { x: newX, y: top, w: right - newX, h: newH };
+        } else if (activeDragHandle === 'br') {
+          cropRect = {
+            x: init.x,
+            y: init.y,
+            w: Math.max(0.05, nx - init.x),
+            h: Math.max(0.05, ny - init.y)
+          };
+        } else if (activeDragHandle === 'new') {
+          cropRect = {
+            x: Math.min(cropTouchStart.nx, nx),
+            y: Math.min(cropTouchStart.ny, ny),
+            w: Math.abs(nx - cropTouchStart.nx),
+            h: Math.abs(ny - cropTouchStart.ny)
+          };
+        }
+        drawEditCanvas();
       }
-      drawCropCanvas();
     }
 
-    function handleCropPointerUp() {
+    function handleEditPointerUp() {
+      activeDragCorner = -1;
       activeDragHandle = null;
       cropTouchStart = null;
     }
 
-    // Touch listeners on crop canvas
+    // Touch listeners on canvas
     docCropCanvas?.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const rect = docCropCanvas.getBoundingClientRect();
       const touch = e.touches[0];
-      handleCropPointerDown(touch.clientX - rect.left, touch.clientY - rect.top);
+      handleEditPointerDown(touch.clientX - rect.left, touch.clientY - rect.top);
     }, { passive: false });
 
     docCropCanvas?.addEventListener('touchmove', (e) => {
       e.preventDefault();
       const rect = docCropCanvas.getBoundingClientRect();
       const touch = e.touches[0];
-      handleCropPointerMove(touch.clientX - rect.left, touch.clientY - rect.top);
+      handleEditPointerMove(touch.clientX - rect.left, touch.clientY - rect.top);
     }, { passive: false });
 
-    docCropCanvas?.addEventListener('touchend', handleCropPointerUp);
+    docCropCanvas?.addEventListener('touchend', handleEditPointerUp);
 
     // Mouse fallback
     let mouseIsDown = false;
     docCropCanvas?.addEventListener('mousedown', (e) => {
       mouseIsDown = true;
       const rect = docCropCanvas.getBoundingClientRect();
-      handleCropPointerDown(e.clientX - rect.left, e.clientY - rect.top);
+      handleEditPointerDown(e.clientX - rect.left, e.clientY - rect.top);
     });
     docCropCanvas?.addEventListener('mousemove', (e) => {
       if (!mouseIsDown) return;
       const rect = docCropCanvas.getBoundingClientRect();
-      handleCropPointerMove(e.clientX - rect.left, e.clientY - rect.top);
+      handleEditPointerMove(e.clientX - rect.left, e.clientY - rect.top);
     });
     docCropCanvas?.addEventListener('mouseup', () => {
       mouseIsDown = false;
-      handleCropPointerUp();
+      handleEditPointerUp();
     });
 
+    btnDocPerspective?.addEventListener('click', enterPerspectiveMode);
     btnDocCrop?.addEventListener('click', enterCropMode);
-    btnCropCancel?.addEventListener('click', exitCropMode);
+    btnCropCancel?.addEventListener('click', exitEditOverlay);
 
-    // Apply Crop (Full Resolution)
+    // Apply Crop or Perspective Warp (Full Resolution)
     btnCropApply?.addEventListener('click', async () => {
-      if (!cropRect || cropRect.w < 0.05 || cropRect.h < 0.05 || docSelectedIndex < 0) {
-        exitCropMode();
+      if (!activeEditMode || docSelectedIndex < 0) {
+        exitEditOverlay();
         return;
       }
+
       try {
-        showLoading('Đang cắt ảnh độ nét cao...');
         const page = docPages[docSelectedIndex];
 
-        // Load FULL-RESOLUTION image from page.file
-        const fullImg = await loadImageFromFile(page.file);
-        const rot = ((page.rotation % 360) + 360) % 360;
-        const swapped = (rot === 90 || rot === 270);
-        const natW = fullImg.naturalWidth;
-        const natH = fullImg.naturalHeight;
-        const rotW = swapped ? natH : natW;
-        const rotH = swapped ? natW : natH;
+        if (activeEditMode === 'perspective') {
+          showLoading('Đang nắn phẳng tài liệu (GPU)...');
 
-        // Draw rotated full-res image
-        const rotCanvas = document.createElement('canvas');
-        rotCanvas.width = rotW;
-        rotCanvas.height = rotH;
-        const rotCtx = rotCanvas.getContext('2d');
-        if (rot) {
-          rotCtx.translate(rotW / 2, rotH / 2);
-          rotCtx.rotate(rot * Math.PI / 180);
-          rotCtx.drawImage(fullImg, -natW / 2, -natH / 2);
-        } else {
-          rotCtx.drawImage(fullImg, 0, 0);
+          // Load FULL-RESOLUTION image from page.file
+          const fullImg = await loadImageFromFile(page.file);
+          const rot = ((page.rotation % 360) + 360) % 360;
+          const swapped = (rot === 90 || rot === 270);
+          const natW = fullImg.naturalWidth;
+          const natH = fullImg.naturalHeight;
+          const rotW = swapped ? natH : natW;
+          const rotH = swapped ? natW : natH;
+
+          // Apply rotation first if image was rotated
+          const rotCanvas = document.createElement('canvas');
+          rotCanvas.width = rotW;
+          rotCanvas.height = rotH;
+          const rotCtx = rotCanvas.getContext('2d');
+          if (rot) {
+            rotCtx.translate(rotW / 2, rotH / 2);
+            rotCtx.rotate(rot * Math.PI / 180);
+            rotCtx.drawImage(fullImg, -natW / 2, -natH / 2);
+          } else {
+            rotCtx.drawImage(fullImg, 0, 0);
+          }
+
+          // Convert normalized corners [0..1] to pixel coordinates [0..rotW, 0..rotH]
+          const pixelCorners = perspectiveCorners.map(c => [
+            Math.round(c.x * rotW),
+            Math.round(c.y * rotH)
+          ]);
+
+          // Perform hardware-accelerated WebGL / Canvas 2D Homography unwarping
+          const unwarpedCanvas = unwarpDocument(rotCanvas, pixelCorners);
+          const blob = await new Promise(r => unwarpedCanvas.toBlob(r, 'image/jpeg', 0.92));
+          const unwarpedFile = new File([blob], page.file.name || 'scan_deskewed.jpg', { type: 'image/jpeg' });
+
+          if (page.previewUrl) {
+            try { URL.revokeObjectURL(page.previewUrl); } catch (e) {}
+          }
+
+          page.file = unwarpedFile;
+          page.previewUrl = URL.createObjectURL(unwarpedFile);
+          page.thumbnail = await createThumbnail(unwarpedFile);
+          page.rotation = 0; // Deskewed into upright coordinates
+
+          rotCanvas.width = 0;
+          rotCanvas.height = 0;
+          unwarpedCanvas.width = 0;
+          unwarpedCanvas.height = 0;
+
+          hideLoading();
+          exitEditOverlay();
+          renderDocThumbnails();
+
+        } else if (activeEditMode === 'crop') {
+          if (!cropRect || cropRect.w < 0.05 || cropRect.h < 0.05) {
+            exitEditOverlay();
+            return;
+          }
+
+          showLoading('Đang cắt ảnh độ nét cao...');
+
+          // Load FULL-RESOLUTION image from page.file
+          const fullImg = await loadImageFromFile(page.file);
+          const rot = ((page.rotation % 360) + 360) % 360;
+          const swapped = (rot === 90 || rot === 270);
+          const natW = fullImg.naturalWidth;
+          const natH = fullImg.naturalHeight;
+          const rotW = swapped ? natH : natW;
+          const rotH = swapped ? natW : natH;
+
+          // Draw rotated full-res image
+          const rotCanvas = document.createElement('canvas');
+          rotCanvas.width = rotW;
+          rotCanvas.height = rotH;
+          const rotCtx = rotCanvas.getContext('2d');
+          if (rot) {
+            rotCtx.translate(rotW / 2, rotH / 2);
+            rotCtx.rotate(rot * Math.PI / 180);
+            rotCtx.drawImage(fullImg, -natW / 2, -natH / 2);
+          } else {
+            rotCtx.drawImage(fullImg, 0, 0);
+          }
+
+          // Crop coordinates
+          const cropX = Math.round(cropRect.x * rotW);
+          const cropY = Math.round(cropRect.y * rotH);
+          const cropW = Math.round(cropRect.w * rotW);
+          const cropH = Math.round(cropRect.h * rotH);
+
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = cropW;
+          outCanvas.height = cropH;
+          const outCtx = outCanvas.getContext('2d');
+          outCtx.drawImage(rotCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+          // Convert to high-quality JPEG Blob
+          const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.92));
+          const croppedFile = new File([blob], page.file.name || 'scan_cropped.jpg', { type: 'image/jpeg' });
+
+          if (page.previewUrl) {
+            try { URL.revokeObjectURL(page.previewUrl); } catch (e) {}
+          }
+
+          page.file = croppedFile;
+          page.previewUrl = URL.createObjectURL(croppedFile);
+          page.thumbnail = await createThumbnail(croppedFile);
+          page.rotation = 0; // Baked into cropped image
+
+          rotCanvas.width = 0;
+          rotCanvas.height = 0;
+          outCanvas.width = 0;
+          outCanvas.height = 0;
+
+          hideLoading();
+          exitEditOverlay();
+          renderDocThumbnails();
         }
-
-        // Crop coordinates
-        const cropX = Math.round(cropRect.x * rotW);
-        const cropY = Math.round(cropRect.y * rotH);
-        const cropW = Math.round(cropRect.w * rotW);
-        const cropH = Math.round(cropRect.h * rotH);
-
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = cropW;
-        outCanvas.height = cropH;
-        const outCtx = outCanvas.getContext('2d');
-        outCtx.drawImage(rotCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-        // Convert to high-quality JPEG Blob
-        const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.92));
-        const croppedFile = new File([blob], page.file.name || 'scan_page.jpg', { type: 'image/jpeg' });
-
-        // Revoke old previewUrl
-        if (page.previewUrl) {
-          try { URL.revokeObjectURL(page.previewUrl); } catch (e) {}
-        }
-
-        page.file = croppedFile;
-        page.previewUrl = URL.createObjectURL(croppedFile);
-        page.thumbnail = await createThumbnail(croppedFile);
-        page.rotation = 0; // Baked into cropped image
-
-        rotCanvas.width = 0;
-        rotCanvas.height = 0;
-        outCanvas.width = 0;
-        outCanvas.height = 0;
-
-        hideLoading();
-        exitCropMode();
-        renderDocThumbnails();
       } catch (err) {
         hideLoading();
-        exitCropMode();
-        showErrorBanner('Lỗi cắt ảnh: ' + (err.message || err));
+        exitEditOverlay();
+        showErrorBanner('Lỗi xử lý ảnh: ' + (err.message || err));
       }
     });
 

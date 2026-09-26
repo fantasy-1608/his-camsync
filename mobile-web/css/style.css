@@ -1238,8 +1238,9 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: 5px;
+  padding: 6px 12px;
+  flex-wrap: wrap;
 }
 
 .doc-edit-btn {
@@ -1247,12 +1248,12 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 7px 12px;
+  padding: 6px 9px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
