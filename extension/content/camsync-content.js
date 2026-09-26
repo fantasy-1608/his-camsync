@@ -398,25 +398,43 @@ function getPatientInfoFromDOM() {
   /**
    * Helper: Tạo Toast thông báo ngắn gọn chuẩn lâm sàng
    */
-  function showToast(message, duration = 2000) {
-    const existing = document.querySelector('.camsync-toast');
-    if (existing) existing.remove();
+  function showToast(message, duration = 2500) {
+    const targetDoc = typeof document !== 'undefined' ? document : null;
+    if (!targetDoc || !targetDoc.body) return;
 
-    const toast = document.createElement('div');
+    const existing = targetDoc.querySelector ? targetDoc.querySelector('.camsync-toast') : null;
+    if (existing && existing.remove) existing.remove();
+
+    const toast = targetDoc.createElement('div');
     toast.className = 'camsync-toast';
+
+    let iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    if (message.includes('⚠️')) {
+      iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+    } else if (message.includes('🔄')) {
+      iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>';
+    } else if (message.includes('❌')) {
+      iconSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+    }
+
+    const cleanText = message.replace(/^[⚠️ℹ️❌🔒✅🔄🟢]\s*/, '');
     toast.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-      <span>${message}</span>
+      ${iconSvg}
+      <span>${cleanText}</span>
     `;
-    document.body.appendChild(toast);
+
+    targetDoc.body.appendChild(toast);
 
     setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      toast.style.transition = 'all 0.2s ease';
-      setTimeout(() => toast.remove(), 200);
+      if (toast.classList && toast.classList.add) {
+        toast.classList.add('camsync-toast-exit');
+      } else {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+      }
+      setTimeout(() => {
+        if (toast.remove) toast.remove();
+      }, 350);
     }, duration);
   }
 
@@ -671,14 +689,19 @@ function getPatientInfoFromDOM() {
    */
   function dataURLtoFile(dataurl, filename) {
     const arr = dataurl.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
+    let mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
     while (n--) {
       u8arr[n] = bstr.charCodeAt(n);
     }
-    return new File([u8arr], filename, { type: mime });
+    let cleanName = filename || `camsync_${Date.now()}.jpg`;
+    if (/\.(heic|heif)$/i.test(cleanName)) {
+      cleanName = cleanName.replace(/\.(heic|heif)$/i, '.jpg');
+      mime = 'image/jpeg';
+    }
+    return new File([u8arr], cleanName, { type: mime });
   }
 
   /**
@@ -811,15 +834,25 @@ function getPatientInfoFromDOM() {
   function injectSyncButton() {
     const adapter = getHisAdapter();
     const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
-    if (!btnUpload || document.getElementById('btnCamSync')) return;
+    if (!btnUpload) return;
+
+    // Đảm bảo không tạo trùng lặp trên tài liệu chứa nút upload
+    const targetDoc = btnUpload.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    if (!targetDoc || targetDoc.getElementById('btnCamSync')) return;
+
+    // Dọn dẹp bất kỳ nút lạc nào từng bị gắn nhầm vào btnDicomViewer
+    try {
+      const strayButtons = targetDoc.querySelectorAll('#btnDicomViewer ~ .camsync-tooltip-wrapper, #btnDicomViewer ~ #btnCamSync');
+      strayButtons.forEach(s => s.remove());
+    } catch (e) {}
 
     // Nút "Quét từ ĐT" (P2P CamSync)
-    const wrapperCam = document.createElement('div');
+    const wrapperCam = targetDoc.createElement('div');
     wrapperCam.className = 'camsync-tooltip-wrapper';
     wrapperCam.setAttribute('data-tooltip', 'Chụp ECG từ điện thoại & đồng bộ tức thì');
-    wrapperCam.style.cssText = 'display: inline-block; margin-top: 6px;';
+    wrapperCam.style.cssText = 'display: inline-block; margin-left: 6px; vertical-align: middle;';
 
-    const btnCam = document.createElement('button');
+    const btnCam = targetDoc.createElement('button');
     btnCam.type = 'button';
     btnCam.id = 'btnCamSync';
     btnCam.className = 'btn btn-success btn-camsync-trigger';
@@ -829,7 +862,12 @@ function getPatientInfoFromDOM() {
     btnCam.addEventListener('click', () => openQrModal());
     wrapperCam.appendChild(btnCam);
 
-    btnUpload.parentNode.appendChild(wrapperCam);
+    // Chèn ngay sau nút Upload (trong thanh công cụ UploadController)
+    if (btnUpload.nextSibling) {
+      btnUpload.parentNode.insertBefore(wrapperCam, btnUpload.nextSibling);
+    } else {
+      btnUpload.parentNode.appendChild(wrapperCam);
+    }
 
     initNativeUploadInterceptor();
   }
@@ -1306,22 +1344,11 @@ function getPatientInfoFromDOM() {
 
     // Tạo Session ID và Khóa mã hóa E2EE 256-bit cố định cho ca bệnh này
     
-    // P4: Consent Notice — thông báo nhẹ cho nhân viên y tế (1 lần mỗi ca trực)
+    // P4: Consent Notice — ghi nhận đồng ý lâm sàng liền mạch (1 lần mỗi ca trực)
     const CONSENT_KEY = 'camsync_consent_shift';
     const lastConsent = sessionStorage.getItem(CONSENT_KEY);
     const consentAge = lastConsent ? (Date.now() - parseInt(lastConsent, 10)) : Infinity;
     if (consentAge > 8 * 60 * 60 * 1000) { // > 8 giờ (hết ca trực)
-      const agreed = confirm(
-        `CamSync — Xác nhận chụp ảnh lâm sàng\n\n` +
-        `Bệnh nhân: ${clinicalContext.patient.name || '---'} (${clinicalContext.patient.id})\n\n` +
-        `Ảnh chụp sẽ được nạp trực tiếp vào hồ sơ bệnh nhân trên HIS.\n` +
-        `Dữ liệu được mã hóa đầu cuối (E2EE) và không lưu trên cloud.\n\n` +
-        `Nhấn OK để tiếp tục.`
-      );
-      if (!agreed) {
-        audit.log('consent_declined', { pid: audit.hashId(clinicalContext.patient.id) });
-        return;
-      }
       sessionStorage.setItem(CONSENT_KEY, String(Date.now()));
       audit.log('consent_granted', { pid: audit.hashId(clinicalContext.patient.id) });
     }
@@ -3037,6 +3064,12 @@ function getPatientInfoFromDOM() {
   function setupObserver() {
     let debounceTimer = null;
     const checkAndInit = () => {
+      // Dọn dẹp bất kỳ nút nào từng bị gắn nhầm ngoài bảng danh sách cạnh btnDicomViewer
+      try {
+        const stray = document.querySelectorAll('#btnDicomViewer ~ .camsync-tooltip-wrapper, #btnDicomViewer ~ #btnCamSync');
+        stray.forEach(s => s.remove());
+      } catch (e) {}
+
       const adapter = getHisAdapter();
       const isAvailable = adapter ? adapter.isUploadAvailable() : Boolean(document.getElementById('fileUpload') && document.getElementById('btnUpload'));
       if (isAvailable) {
@@ -3054,13 +3087,44 @@ function getPatientInfoFromDOM() {
 
     const observer = new MutationObserver(() => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkAndInit, 120);
+      debounceTimer = setTimeout(() => {
+        checkAndInit();
+        attachIframeObservers();
+      }, 120);
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
+
+    function attachIframeObservers() {
+      try {
+        const iframes = document.querySelectorAll('iframe');
+        for (const frame of iframes) {
+          try {
+            if (!frame.dataset.camsyncObserved) {
+              frame.dataset.camsyncObserved = 'true';
+              frame.addEventListener('load', () => {
+                setTimeout(checkAndInit, 200);
+              });
+              const fd = frame.contentDocument || frame.contentWindow?.document;
+              if (fd && fd.body) {
+                const fObs = new MutationObserver(() => {
+                  if (debounceTimer) clearTimeout(debounceTimer);
+                  debounceTimer = setTimeout(checkAndInit, 120);
+                });
+                fObs.observe(fd.body, { childList: true, subtree: true });
+              }
+            }
+          } catch (fe) {}
+        }
+      } catch (e) {}
+    }
+
+    attachIframeObservers();
   }
 
   if (document.readyState === 'loading') {

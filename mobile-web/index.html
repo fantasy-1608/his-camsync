@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src wss://*.supabase.co https://*.supabase.co wss://*.peerjs.com https://*.peerjs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.supabase.co https://*.supabase.co wss://*.peerjs.com https://*.peerjs.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -486,7 +486,7 @@
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());
     btnTriggerGallery.addEventListener('click', () => galleryInput.click());
 
-    // Tự động chuyển đổi HEIC sang JPEG
+    // Tự động chuyển đổi HEIC sang JPEG siêu tốc trên điện thoại (Apple Silicon / Android)
     async function convertHeicToJpegIfNecessary(file) {
       if (!file) return file;
       const fileName = file.name || '';
@@ -497,7 +497,54 @@
 
       if (!isHeic) return file;
 
-      showLoading('Đang đổi ảnh iPhone sang JPEG...');
+      showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
+      
+      // 1. Tận dụng phần cứng iOS Safari giải mã HEIC tức thì qua Image/Canvas
+      try {
+        let bitmap = null;
+        if (typeof createImageBitmap === 'function') {
+          try {
+            bitmap = await createImageBitmap(file);
+          } catch (_) {}
+        }
+
+        if (!bitmap) {
+          bitmap = await new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+              URL.revokeObjectURL(url);
+              resolve(img);
+            };
+            img.onerror = (e) => {
+              URL.revokeObjectURL(url);
+              reject(e);
+            };
+            img.src = url;
+          });
+        }
+
+        if (bitmap && bitmap.width > 0 && bitmap.height > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0);
+
+          const jpegBlob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, 'image/jpeg', 0.92);
+          });
+
+          if (jpegBlob) {
+            const cleanName = (fileName || 'photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
+            return new File([jpegBlob], cleanName, { type: 'image/jpeg' });
+          }
+        }
+      } catch (nativeErr) {
+        console.warn('[Mobile] Native HEIC decode fallback:', nativeErr);
+      }
+
+      // 2. Dự phòng qua thư viện heic2any Web Worker nếu trình duyệt không có giải mã native
       try {
         if (typeof window.heic2any === 'function') {
           const res = await window.heic2any({
@@ -506,14 +553,15 @@
             quality: 0.92
           });
           const blob = Array.isArray(res) ? res[0] : res;
-          const cleanName = (fileName || 'iphone_photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
+          const cleanName = (fileName || 'photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
           return new File([blob], cleanName, { type: 'image/jpeg' });
         }
       } catch (err) {
-        console.warn('[Mobile] Lỗi heic2any:', err);
+        console.warn('[Mobile] heic2any fallback error:', err);
       } finally {
         hideLoading();
       }
+
       return file;
     }
 
@@ -539,7 +587,7 @@
         setTimeout(() => editor.render(), 60);
       } catch (err) {
         hideLoading();
-        alert('Không thể tải ảnh: ' + (err.message || err));
+        showErrorBanner('Không thể tải ảnh: ' + (err.message || err));
       }
     }
 

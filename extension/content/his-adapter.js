@@ -15,27 +15,32 @@
   // =========================================================================
   const VNPT_SELECTORS = Object.freeze({
     FILE_INPUT: Object.freeze([
+      '#UploadController #fileUpload',
+      '#UploadController input[type="file"]',
       '#fileUpload',
       'input[type="file"]#fileUpload',
       'input[type="file"][name="fileUpload"]',
       'input[type="file"][name="file"]',
-      'input[type="file"].upload-input'
+      'input[type="file"].upload-input',
+      'input[type="file"][accept*="image"]'
     ]),
     UPLOAD_BUTTON: Object.freeze([
+      '#UploadController #btnUpload',
       '#btnUpload',
       'button#btnUpload',
       'button[name="btnUpload"]',
       '.btn-upload',
-      'button.btn-primary[type="button"]',
       'input[type="button"]#btnUpload'
     ]),
     DROP_ZONE: Object.freeze([
+      '#UploadController',
       '#list',
       '#frmUpload',
       '.upload-box',
       '#gridUploadResults'
     ]),
     PATIENT_BANNER: Object.freeze([
+      '#tabTTBN',
       '#patientInfo',
       '#thongtinbenhnhan',
       '#patientBanner',
@@ -48,6 +53,11 @@
       '#patientId'
     ]),
     ENCOUNTER_ID_INPUTS: Object.freeze([
+      '#hdfIDMauBenhPham',
+      'input[name="hdfIDMauBenhPham"]',
+      '#idmaubenhpham',
+      '#hdfIDKetQuaCLS',
+      '#hdfIDDichVuKB',
       '#maLuotKham',
       '#soVaoVien',
       '#maVaoVien',
@@ -56,6 +66,8 @@
       '#encounterId'
     ]),
     ORDER_ID_INPUTS: Object.freeze([
+      '#hdfSoPhieu',
+      'input[name="hdfSoPhieu"]',
       '#maPhieuChiDinh',
       '#soPhieu',
       '#txtMaPhieu',
@@ -93,11 +105,13 @@
   }
 
   function resolveElement(selectorList, customDoc) {
-    const doc = customDoc || getRootDocument();
+    const doc = customDoc || (typeof document !== 'undefined' ? document : getRootDocument());
     if (!doc) return null;
+
+    // 1. Quét document chính được chỉ định
     for (const sel of selectorList) {
       try {
-        if (sel.startsWith('#') && doc.getElementById) {
+        if (sel.startsWith('#') && !sel.includes(' ') && doc.getElementById) {
           const el = doc.getElementById(sel.slice(1));
           if (el) return el;
         }
@@ -107,6 +121,46 @@
         }
       } catch (e) {}
     }
+
+    // 2. Quét sâu vào các iframe con cùng nguồn (nếu có dialog CDHA mở dạng iframe)
+    try {
+      const iframes = doc.querySelectorAll ? doc.querySelectorAll('iframe') : [];
+      for (const frame of iframes) {
+        try {
+          const fDoc = frame.contentDocument || frame.contentWindow?.document;
+          if (fDoc) {
+            for (const sel of selectorList) {
+              if (sel.startsWith('#') && !sel.includes(' ') && fDoc.getElementById) {
+                const el = fDoc.getElementById(sel.slice(1));
+                if (el) return el;
+              }
+              if (fDoc.querySelector) {
+                const el = fDoc.querySelector(sel);
+                if (el) return el;
+              }
+            }
+          }
+        } catch (frameErr) {}
+      }
+    } catch (e) {}
+
+    // 3. Fallback: Nếu đang ở iframe và chưa thấy, tìm ở window.top
+    const rootDoc = getRootDocument();
+    if (rootDoc && rootDoc !== doc) {
+      for (const sel of selectorList) {
+        try {
+          if (sel.startsWith('#') && !sel.includes(' ') && rootDoc.getElementById) {
+            const el = rootDoc.getElementById(sel.slice(1));
+            if (el) return el;
+          }
+          if (rootDoc.querySelector) {
+            const el = rootDoc.querySelector(sel);
+            if (el) return el;
+          }
+        } catch (e) {}
+      }
+    }
+
     return null;
   }
 
@@ -127,7 +181,13 @@
     }
 
     _getDoc() {
-      return this._customDoc || getRootDocument();
+      if (this._customDoc) return this._customDoc;
+      if (typeof document !== 'undefined') {
+        if (document.getElementById('UploadController') || document.getElementById('btnUpload')) {
+          return document;
+        }
+      }
+      return getRootDocument();
     }
 
     setDocument(doc) {

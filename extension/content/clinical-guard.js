@@ -56,6 +56,21 @@
         docsToScan.push(document);
       }
 
+      // Quét thêm các iframe con cùng nguồn (ví dụ: dialog chẩn đoán hình ảnh dlgSuaKetQuaifmView)
+      for (const d of [...docsToScan]) {
+        try {
+          const iframes = d.querySelectorAll ? d.querySelectorAll('iframe') : [];
+          for (const f of iframes) {
+            try {
+              const fd = f.contentDocument || f.contentWindow?.document;
+              if (fd && !docsToScan.includes(fd)) {
+                docsToScan.push(fd);
+              }
+            } catch (fe) {}
+          }
+        } catch (e) {}
+      }
+
       let patientId = null;
       let patientName = null;
       let patientAge = '';
@@ -68,6 +83,7 @@
 
         // 1. Quét container Banner bệnh nhân chuyên biệt (ưu tiên cao)
         const bannerEl = targetDoc.getElementById ? (
+          targetDoc.getElementById('tabTTBN') ||
           targetDoc.getElementById('patientInfo') ||
           targetDoc.getElementById('thongtinbenhnhan') ||
           targetDoc.getElementById('patientBanner')
@@ -97,7 +113,8 @@
           const orderInput = targetDoc.getElementById('maPhieuChiDinh') ||
                              targetDoc.getElementById('soPhieu') ||
                              targetDoc.getElementById('txtMaPhieu') ||
-                             targetDoc.getElementById('orderId');
+                             targetDoc.getElementById('orderId') ||
+                             targetDoc.getElementById('hdfSoPhieu');
           if (orderInput && orderInput.value && orderInput.value.trim()) {
             orderId = orderInput.value.trim();
           }
@@ -107,10 +124,24 @@
                                  targetDoc.getElementById('maLuotKham') ||
                                  targetDoc.getElementById('txtSoVaoVien') ||
                                  targetDoc.getElementById('txtMaBA') ||
-                                 targetDoc.getElementById('encounterId');
+                                 targetDoc.getElementById('encounterId') ||
+                                 targetDoc.getElementById('hdfIDMauBenhPham') ||
+                                 targetDoc.getElementById('hdfIDKetQuaCLS') ||
+                                 targetDoc.getElementById('hdfIDDichVuKB');
           if (encounterInput && encounterInput.value && encounterInput.value.trim()) {
             encounterId = encounterInput.value.trim();
           }
+        }
+
+        // Bóc tách bổ sung từ URL tham số nếu mở trong popup/dialog
+        if (!encounterId && targetDoc.location && targetDoc.location.search) {
+          try {
+            const urlParams = new URLSearchParams(targetDoc.location.search);
+            const idmbp = urlParams.get('idmaubenhpham') || urlParams.get('idketquacls') || urlParams.get('iddichvukb');
+            if (idmbp && idmbp.trim()) {
+              encounterId = idmbp.trim();
+            }
+          } catch (e) {}
         }
 
         // Regex bóc tách bổ sung từ banner text
