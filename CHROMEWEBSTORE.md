@@ -1,8 +1,8 @@
 # Chrome Web Store Submission Guide & Metadata — HIS CamSync
 
-> Ngày cập nhật: 24/09/2026  
-> Phiên bản tiện ích: 1.1.0  
-> File nén tải lên: `his-camsync-v1.1.0.zip` (382 KB)  
+> Ngày cập nhật: 26/09/2026  
+> Phiên bản tiện ích: 1.3.0  
+> File nén tải lên: `his-camsync-v1.3.0.zip` (428 KB)  
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
 Tài liệu này tổng hợp toàn bộ các mục, trường thông tin và lựa chọn cần thiết để điền vào **Chrome Developer Dashboard** (Trang quản trị nhà phát triển của Google Chrome Web Store). Bạn chỉ cần sao chép (copy-paste) và tích chọn theo đúng bảng hướng dẫn dưới đây.
