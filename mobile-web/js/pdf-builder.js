@@ -17,16 +17,22 @@ const A4_HEIGHT_MM = 297;
 
 // DPI cho từng preset
 const PRESET_CONFIG = {
+  enhance: {
+    dpi: 150,
+    quality: 0.65,
+    mode: 'enhance',
+    label: 'Sắc nét',
+  },
   document: {
     dpi: 150,
     quality: 0.60,
-    grayscale: true,
+    mode: 'grayscale',
     label: 'Tài liệu',
   },
   color: {
     dpi: 200,
     quality: 0.75,
-    grayscale: false,
+    mode: 'color',
     label: 'Ảnh màu',
   },
 };
@@ -34,11 +40,11 @@ const PRESET_CONFIG = {
 /**
  * Nén ảnh xuống kích thước phù hợp theo preset
  * @param {HTMLImageElement | ImageBitmap} img
- * @param {string} preset - 'document' | 'color'
+ * @param {string} preset - 'enhance' | 'document' | 'color'
  * @returns {Promise<{dataUrl: string, width: number, height: number}>}
  */
-function compressImage(img, preset = 'document', rotation = 0) {
-  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.document;
+function compressImage(img, preset = 'enhance', rotation = 0) {
+  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.enhance;
   const dpi = config.dpi;
 
   // Tính kích thước pixel tối đa dựa trên DPI và khổ A4
@@ -84,8 +90,41 @@ function compressImage(img, preset = 'document', rotation = 0) {
     ctx.drawImage(img, 0, 0, outW, outH);
   }
 
-  // Chuyển grayscale nếu là preset tài liệu
-  if (config.grayscale) {
+  // Áp dụng bộ lọc theo preset
+  if (config.mode === 'enhance') {
+    const imageData = ctx.getImageData(0, 0, outW, outH);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const sat = max - min;
+      const y = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      if (sat > 32) {
+        const factor = y > 160 ? 1.25 : 0.85;
+        data[i] = Math.min(255, Math.max(0, Math.round(r * factor)));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(g * factor)));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(b * factor)));
+      } else {
+        let outY;
+        if (y >= 175) {
+          outY = 255 - (255 - y) * 0.15;
+        } else if (y <= 115) {
+          outY = y * 0.6;
+        } else {
+          const t = (y - 115) / 60;
+          const s = t * t * (3 - 2 * t);
+          outY = (115 * 0.6) * (1 - s) + 245 * s;
+        }
+        const v = Math.min(255, Math.max(0, Math.round(outY)));
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } else if (config.mode === 'grayscale' || config.grayscale) {
     const imageData = ctx.getImageData(0, 0, outW, outH);
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
@@ -122,7 +161,7 @@ function initWorkerIfSupported() {
   try {
     const workerScript = `
       self.onmessage = async (e) => {
-        const { id, blob, rotation, maxWidthPx, maxHeightPx, quality, grayscale } = e.data;
+        const { id, blob, rotation, maxWidthPx, maxHeightPx, quality, mode, grayscale } = e.data;
         try {
           const bmp = await createImageBitmap(blob);
           const imgW = bmp.width;
@@ -158,7 +197,40 @@ function initWorkerIfSupported() {
           }
           bmp.close();
 
-          if (grayscale) {
+          if (mode === 'enhance') {
+            const imageData = ctx.getImageData(0, 0, outW, outH);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i], g = data[i + 1], b = data[i + 2];
+              const max = Math.max(r, g, b);
+              const min = Math.min(r, g, b);
+              const sat = max - min;
+              const y = 0.299 * r + 0.587 * g + 0.114 * b;
+
+              if (sat > 32) {
+                const factor = y > 160 ? 1.25 : 0.85;
+                data[i] = Math.min(255, Math.max(0, Math.round(r * factor)));
+                data[i + 1] = Math.min(255, Math.max(0, Math.round(g * factor)));
+                data[i + 2] = Math.min(255, Math.max(0, Math.round(b * factor)));
+              } else {
+                let outY;
+                if (y >= 175) {
+                  outY = 255 - (255 - y) * 0.15;
+                } else if (y <= 115) {
+                  outY = y * 0.6;
+                } else {
+                  const t = (y - 115) / 60;
+                  const s = t * t * (3 - 2 * t);
+                  outY = (115 * 0.6) * (1 - s) + 245 * s;
+                }
+                const v = Math.min(255, Math.max(0, Math.round(outY)));
+                data[i] = v;
+                data[i + 1] = v;
+                data[i + 2] = v;
+              }
+            }
+            ctx.putImageData(imageData, 0, 0);
+          } else if (mode === 'grayscale' || grayscale) {
             const imageData = ctx.getImageData(0, 0, outW, outH);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
@@ -210,8 +282,8 @@ function initWorkerIfSupported() {
 /**
  * Xử lý nén ảnh bất đồng bộ qua Web Worker nếu có thể, fallback sang Main Thread
  */
-async function compressImageAsync(fileOrBlob, preset = 'document', rotation = 0) {
-  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.document;
+async function compressImageAsync(fileOrBlob, preset = 'enhance', rotation = 0) {
+  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.enhance;
   const dpi = config.dpi;
   const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);
   const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi);
@@ -228,7 +300,8 @@ async function compressImageAsync(fileOrBlob, preset = 'document', rotation = 0)
         maxWidthPx,
         maxHeightPx,
         quality: config.quality,
-        grayscale: config.grayscale
+        mode: config.mode,
+        grayscale: config.mode === 'grayscale'
       });
     }).catch(async (err) => {
       console.warn('[PDFBuilder] Worker processing failed, using fallback:', err);
@@ -407,8 +480,8 @@ export async function createThumbnail(file, maxSize = 120) {
  * @param {string} preset
  * @returns {{estimatedKB: number, withinLimit: boolean}}
  */
-export function estimatePdfSize(pageCount, preset = 'document') {
-  const avgPerPage = preset === 'document' ? 150 : 350; // KB
+export function estimatePdfSize(pageCount, preset = 'enhance') {
+  const avgPerPage = preset === 'color' ? 320 : 160; // KB (enhance & document ~160KB)
   const overhead = 50; // PDF structure overhead (KB)
   const estimatedKB = pageCount * avgPerPage + overhead;
   return {
