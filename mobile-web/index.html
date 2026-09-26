@@ -282,9 +282,8 @@
 
     <!-- Screen 3: Chụp Tài Liệu Nhiều Trang & Xuất PDF -->
     <section id="docScreen" class="screen" style="display: none;">
-      <!-- Thumbnail Strip (Dải ảnh đã chụp) -->
+      <!-- Thumbnail Strip (kéo thả thứ tự) -->
       <div class="doc-thumbnail-strip" id="docThumbnailStrip">
-        <!-- Thumbnails sẽ được render bằng JS -->
         <button type="button" class="doc-thumb-add" id="btnDocAddPage">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -293,10 +292,14 @@
         </button>
       </div>
 
-      <!-- Document Preview (hiển thị trang đang chọn) -->
-      <div class="doc-capture-guide" id="docPreviewArea">
-        <div id="docPreviewImgWrap" style="width: 100%; max-height: 50vh; display: flex; align-items: center; justify-content: center; padding: 8px;">
-          <img id="docPreviewImg" style="max-width: 100%; max-height: 48vh; border-radius: 8px; box-shadow: var(--shadow-md); display: none;" alt="Trang đang xem">
+      <!-- Document Preview (hiển thị trang đang chọn + crop overlay) -->
+      <div class="doc-capture-guide" id="docPreviewArea" style="position: relative;">
+        <div id="docPreviewImgWrap" style="width: 100%; max-height: 50vh; display: flex; align-items: center; justify-content: center; padding: 8px; position: relative;">
+          <img id="docPreviewImg" style="max-width: 100%; max-height: 48vh; border-radius: 8px; box-shadow: var(--shadow-md); display: none; transition: transform 0.2s ease;" alt="Trang đang xem">
+          <!-- Crop overlay (hiện khi bấm Cắt) -->
+          <div id="docCropOverlay" style="display: none; position: absolute; inset: 0; z-index: 10;">
+            <canvas id="docCropCanvas" style="width: 100%; height: 100%; touch-action: none;"></canvas>
+          </div>
         </div>
         <div id="docEmptyState" style="text-align: center; padding: 24px;">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; opacity: 0.5;">
@@ -305,6 +308,33 @@
           <p class="guide-title" style="font-size: 16px; margin-bottom: 6px;">Chụp Giấy Tờ & Tài Liệu</p>
           <p class="guide-desc">Chụp từng trang giấy tờ (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.</p>
         </div>
+      </div>
+
+      <!-- Page Edit Toolbar (khi có ít nhất 1 trang) -->
+      <div class="doc-edit-toolbar" id="docEditToolbar" style="display: none;">
+        <button type="button" class="doc-edit-btn" id="btnDocMoveLeft" title="Chuyển sang trước">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          <span>Trước</span>
+        </button>
+        <button type="button" class="doc-edit-btn" id="btnDocRotate" title="Xoay 90°">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          <span>Xoay</span>
+        </button>
+        <button type="button" class="doc-edit-btn" id="btnDocCrop" title="Cắt xén">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>
+          <span>Cắt</span>
+        </button>
+        <button type="button" class="doc-edit-btn" id="btnDocMoveRight" title="Chuyển sang sau">
+          <span>Sau</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <!-- Crop Confirm Bar (chỉ hiện khi đang cắt) -->
+      <div class="doc-crop-confirm" id="docCropConfirm" style="display: none;">
+        <button type="button" class="doc-crop-cancel" id="btnCropCancel">Hủy</button>
+        <span class="doc-crop-hint">Kéo góc để chọn vùng cắt</span>
+        <button type="button" class="doc-crop-apply" id="btnCropApply">Áp dụng</button>
       </div>
 
       <!-- Controls: Preset + Size Estimate + Page Counter -->
@@ -327,27 +357,71 @@
         </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="doc-actions-row">
-        <button type="button" class="btn-doc-capture" id="btnDocCapture">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-          </svg>
-          <span>Chụp trang</span>
-        </button>
-        <button type="button" class="btn-doc-send-pdf" id="btnDocSendPdf" disabled>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span id="btnDocSendText">Xuất PDF & Gửi</span>
-        </button>
+      <!-- Action Buttons (2 hàng rõ ràng, dễ bấm) -->
+      <div class="doc-actions-container">
+        <div class="doc-actions-row">
+          <button type="button" class="btn-doc-capture" id="btnDocCapture">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span>Chụp ảnh</span>
+          </button>
+          <button type="button" class="btn-doc-gallery" id="btnDocGallery">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>Thư viện</span>
+          </button>
+        </div>
+        <div class="doc-actions-row">
+          <button type="button" class="btn-doc-preview" id="btnDocPreview" disabled>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span>Xem trước PDF</span>
+          </button>
+          <button type="button" class="btn-doc-send-pdf" id="btnDocSendPdf" disabled>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span id="btnDocSendText">Gửi lên HIS</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Hidden file input for document capture -->
+      <!-- Hidden file inputs -->
       <input type="file" id="docCameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
-      <input type="file" id="docGalleryInput" accept="image/jpeg,image/png,image/*,.heic,.heif,.HEIC,.HEIF" style="display: none;">
+      <input type="file" id="docGalleryInput" accept="image/jpeg,image/png,image/*,.heic,.heif,.HEIC,.HEIF" multiple style="display: none;">
     </section>
   </main>
+
+  <!-- Modal Xem trước toàn bộ PDF -->
+  <div id="docPreviewModal" class="doc-preview-modal" style="display: none;">
+    <div class="doc-preview-modal-card">
+      <div class="doc-preview-modal-header">
+        <div class="doc-preview-modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span>Xem trước tài liệu PDF</span>
+        </div>
+        <button type="button" class="doc-preview-modal-close" id="btnDocPreviewClose" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="doc-preview-modal-body" id="docPreviewModalBody">
+        <!-- Render các trang PDF -->
+      </div>
+      <div class="doc-preview-modal-footer">
+        <div class="doc-preview-meta-line" id="docPreviewMetaLine">0 trang • Ước tính ~0 KB</div>
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button type="button" class="btn-doc-modal-cancel" id="btnDocModalClose">Quay lại</button>
+          <button type="button" class="btn-doc-modal-send" id="btnDocModalSend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>Gửi lên HIS</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Upload Progress Modal / Overlay -->
   <div id="uploadProgressModal" class="upload-progress-modal" style="display: none;">
@@ -1125,49 +1199,98 @@
     const docThumbnailStrip = document.getElementById('docThumbnailStrip');
     const btnDocAddPage = document.getElementById('btnDocAddPage');
     const btnDocCapture = document.getElementById('btnDocCapture');
+    const btnDocGallery = document.getElementById('btnDocGallery');
+    const btnDocPreview = document.getElementById('btnDocPreview');
     const btnDocSendPdf = document.getElementById('btnDocSendPdf');
     const btnDocSendText = document.getElementById('btnDocSendText');
     const docCameraInput = document.getElementById('docCameraInput');
     const docGalleryInput = document.getElementById('docGalleryInput');
     const docPreviewImg = document.getElementById('docPreviewImg');
+    const docPreviewImgWrap = document.getElementById('docPreviewImgWrap');
     const docEmptyState = document.getElementById('docEmptyState');
     const docPageNum = document.getElementById('docPageNum');
     const docSizeEstimate = document.getElementById('docSizeEstimate');
+    const docEditToolbar = document.getElementById('docEditToolbar');
+    const btnDocRotate = document.getElementById('btnDocRotate');
+    const btnDocCrop = document.getElementById('btnDocCrop');
+    const btnDocMoveLeft = document.getElementById('btnDocMoveLeft');
+    const btnDocMoveRight = document.getElementById('btnDocMoveRight');
+    const docCropOverlay = document.getElementById('docCropOverlay');
+    const docCropCanvas = document.getElementById('docCropCanvas');
+    const docCropConfirm = document.getElementById('docCropConfirm');
+    const btnCropCancel = document.getElementById('btnCropCancel');
+    const btnCropApply = document.getElementById('btnCropApply');
 
-    // Render thumbnail strip
+    // PDF Preview Modal elements
+    const docPreviewModal = document.getElementById('docPreviewModal');
+    const btnDocPreviewClose = document.getElementById('btnDocPreviewClose');
+    const btnDocModalClose = document.getElementById('btnDocModalClose');
+    const btnDocModalSend = document.getElementById('btnDocModalSend');
+    const docPreviewModalBody = document.getElementById('docPreviewModalBody');
+    const docPreviewMetaLine = document.getElementById('docPreviewMetaLine');
+
+    // Helper: load HTMLImageElement from File or Blob
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = (err) => {
+          URL.revokeObjectURL(url);
+          reject(err || new Error('Không thể tải ảnh gốc'));
+        };
+        img.src = url;
+      });
+    }
+
+    // ---- Render thumbnails & workspace ----
     function renderDocThumbnails() {
-      // Xóa thumbnails cũ (giữ lại nút "Thêm")
       const existing = docThumbnailStrip.querySelectorAll('.doc-thumb-item');
       existing.forEach(el => el.remove());
 
       docPages.forEach((page, idx) => {
         const item = document.createElement('div');
         item.className = 'doc-thumb-item' + (idx === docSelectedIndex ? ' active' : '');
+        item.dataset.idx = idx;
+        const rotStyle = page.rotation ? `transform: rotate(${page.rotation}deg);` : '';
         item.innerHTML = `
-          <img src="${page.thumbnail}" alt="Trang ${idx + 1}">
+          <img src="${page.thumbnail}" alt="Trang ${idx + 1}" style="${rotStyle}">
           <span class="doc-thumb-page-num">${idx + 1}</span>
+          ${page.rotation ? `<span class="doc-thumb-rotation">${page.rotation}°</span>` : ''}
           <button type="button" class="doc-thumb-remove" data-idx="${idx}" aria-label="Xóa trang">&times;</button>
         `;
+
         item.addEventListener('click', (e) => {
           if (e.target.closest('.doc-thumb-remove')) return;
           selectDocPage(idx);
         });
+
         item.querySelector('.doc-thumb-remove').addEventListener('click', (e) => {
           e.stopPropagation();
           removeDocPage(idx);
         });
+
+        attachThumbnailDragListeners(item, idx);
         docThumbnailStrip.insertBefore(item, btnDocAddPage);
       });
 
-      // Cập nhật counter & size estimate
       docPageNum.textContent = docPages.length;
       updateDocSizeEstimate();
 
-      // Cập nhật trạng thái nút gửi
-      btnDocSendPdf.disabled = docPages.length === 0 || !p2p.isConnected;
+      const hasPages = docPages.length > 0;
+      if (btnDocPreview) btnDocPreview.disabled = !hasPages;
+      if (btnDocSendPdf) btnDocSendPdf.disabled = !hasPages || !p2p.isConnected;
 
-      // Cập nhật preview
-      if (docPages.length === 0) {
+      // Edit toolbar
+      docEditToolbar.style.display = hasPages ? 'flex' : 'none';
+      btnDocMoveLeft.disabled = docSelectedIndex <= 0;
+      btnDocMoveRight.disabled = docSelectedIndex >= docPages.length - 1 || docSelectedIndex < 0;
+
+      // Preview Workspace
+      if (!hasPages) {
         docPreviewImg.style.display = 'none';
         docEmptyState.style.display = 'block';
         docSelectedIndex = -1;
@@ -1176,21 +1299,110 @@
         if (docSelectedIndex < 0 || docSelectedIndex >= docPages.length) {
           docSelectedIndex = docPages.length - 1;
         }
-        docPreviewImg.src = docPages[docSelectedIndex].thumbnail;
+        const page = docPages[docSelectedIndex];
+        docPreviewImg.src = page.previewUrl || page.thumbnail;
         docPreviewImg.style.display = 'block';
+        docPreviewImg.style.transform = page.rotation ? `rotate(${page.rotation}deg)` : '';
       }
     }
 
+    // Touch & Desktop drag reordering on thumbnails
+    let dragSourceIdx = -1;
+    function attachThumbnailDragListeners(item, idx) {
+      item.setAttribute('draggable', 'true');
+
+      // Desktop Drag & Drop
+      item.addEventListener('dragstart', (e) => {
+        dragSourceIdx = idx;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        document.querySelectorAll('.doc-thumb-item').forEach(el => el.classList.remove('drag-over'));
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+      });
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+        if (dragSourceIdx >= 0 && dragSourceIdx !== idx) {
+          const moved = docPages.splice(dragSourceIdx, 1)[0];
+          docPages.splice(idx, 0, moved);
+          docSelectedIndex = idx;
+          renderDocThumbnails();
+        }
+        dragSourceIdx = -1;
+      });
+
+      // Mobile Touch Drag
+      let touchMoved = false;
+      let startX = 0;
+      let currentOverEl = null;
+
+      item.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.doc-thumb-remove')) return;
+        startX = e.touches[0].clientX;
+        dragSourceIdx = idx;
+        touchMoved = false;
+      }, { passive: true });
+
+      item.addEventListener('touchmove', (e) => {
+        if (dragSourceIdx < 0) return;
+        const touch = e.touches[0];
+        if (Math.abs(touch.clientX - startX) > 10) {
+          touchMoved = true;
+          item.classList.add('dragging');
+        }
+        if (touchMoved) {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          const thumbTarget = target?.closest('.doc-thumb-item');
+          if (thumbTarget !== currentOverEl) {
+            if (currentOverEl) currentOverEl.classList.remove('drag-over');
+            currentOverEl = thumbTarget;
+            if (currentOverEl && currentOverEl !== item) {
+              currentOverEl.classList.add('drag-over');
+            }
+          }
+        }
+      }, { passive: true });
+
+      item.addEventListener('touchend', () => {
+        item.classList.remove('dragging');
+        if (currentOverEl) {
+          currentOverEl.classList.remove('drag-over');
+          const targetIdx = parseInt(currentOverEl.dataset.idx, 10);
+          if (!isNaN(targetIdx) && dragSourceIdx >= 0 && dragSourceIdx !== targetIdx) {
+            const moved = docPages.splice(dragSourceIdx, 1)[0];
+            docPages.splice(targetIdx, 0, moved);
+            docSelectedIndex = targetIdx;
+            renderDocThumbnails();
+          }
+        }
+        dragSourceIdx = -1;
+        currentOverEl = null;
+      });
+    }
+
     function selectDocPage(idx) {
+      exitCropMode();
       docSelectedIndex = idx;
       renderDocThumbnails();
     }
 
     function removeDocPage(idx) {
-      docPages.splice(idx, 1);
-      if (docSelectedIndex >= docPages.length) {
-        docSelectedIndex = docPages.length - 1;
+      exitCropMode();
+      const removed = docPages.splice(idx, 1)[0];
+      if (removed?.previewUrl) {
+        try { URL.revokeObjectURL(removed.previewUrl); } catch (e) {}
       }
+      if (docSelectedIndex >= docPages.length) docSelectedIndex = docPages.length - 1;
       renderDocThumbnails();
     }
 
@@ -1203,29 +1415,28 @@
       }
       const sizeMB = (estimate.estimatedKB / 1024).toFixed(1);
       docSizeEstimate.textContent = `≈ ${estimate.estimatedKB < 1024 ? estimate.estimatedKB + ' KB' : sizeMB + ' MB'}`;
-      if (!estimate.withinLimit) {
-        docSizeEstimate.className = 'doc-size-estimate danger';
-      } else if (estimate.estimatedKB > 3500) {
-        docSizeEstimate.className = 'doc-size-estimate warning';
-      } else {
-        docSizeEstimate.className = 'doc-size-estimate';
-      }
+      docSizeEstimate.className = 'doc-size-estimate' +
+        (!estimate.withinLimit ? ' danger' : estimate.estimatedKB > 3500 ? ' warning' : '');
     }
 
-    // Xử lý thêm trang mới vào document
+    // ---- Add pages ----
     async function addDocPage(file) {
       if (!file) return;
       try {
         const processedFile = await convertHeicToJpegIfNecessary(file);
         showLoading('Đang tạo thumbnail...');
         const thumbnail = await createThumbnail(processedFile);
+        const previewUrl = URL.createObjectURL(processedFile);
         hideLoading();
 
-        docPages.push({ file: processedFile, thumbnail });
+        docPages.push({
+          file: processedFile,
+          thumbnail,
+          previewUrl,
+          rotation: 0
+        });
         docSelectedIndex = docPages.length - 1;
         renderDocThumbnails();
-
-        // Scroll thumbnail strip to end
         requestAnimationFrame(() => {
           docThumbnailStrip.scrollLeft = docThumbnailStrip.scrollWidth;
         });
@@ -1235,20 +1446,387 @@
       }
     }
 
-    // Document capture triggers
-    btnDocCapture.addEventListener('click', () => docCameraInput.click());
-    btnDocAddPage.addEventListener('click', () => docCameraInput.click());
+    // Camera & Gallery triggers
+    btnDocCapture?.addEventListener('click', () => docCameraInput.click());
+    btnDocAddPage?.addEventListener('click', () => docCameraInput.click());
+    btnDocGallery?.addEventListener('click', () => docGalleryInput.click());
 
-    docCameraInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (file) addDocPage(file);
+    docCameraInput?.addEventListener('change', (e) => {
+      if (e.target.files?.[0]) addDocPage(e.target.files[0]);
       docCameraInput.value = '';
     });
 
-    docGalleryInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (file) addDocPage(file);
+    // Gallery: multi-select files
+    docGalleryInput?.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const file of files) {
+        await addDocPage(file);
+      }
       docGalleryInput.value = '';
+    });
+
+    // ---- Rotate 90° ----
+    btnDocRotate?.addEventListener('click', () => {
+      if (docSelectedIndex < 0 || docSelectedIndex >= docPages.length) return;
+      const page = docPages[docSelectedIndex];
+      page.rotation = (page.rotation + 90) % 360;
+      renderDocThumbnails();
+    });
+
+    // ---- Move Left / Right (reorder) ----
+    btnDocMoveLeft?.addEventListener('click', () => {
+      if (docSelectedIndex <= 0) return;
+      const idx = docSelectedIndex;
+      [docPages[idx - 1], docPages[idx]] = [docPages[idx], docPages[idx - 1]];
+      docSelectedIndex = idx - 1;
+      renderDocThumbnails();
+    });
+
+    btnDocMoveRight?.addEventListener('click', () => {
+      if (docSelectedIndex >= docPages.length - 1 || docSelectedIndex < 0) return;
+      const idx = docSelectedIndex;
+      [docPages[idx], docPages[idx + 1]] = [docPages[idx + 1], docPages[idx]];
+      docSelectedIndex = idx + 1;
+      renderDocThumbnails();
+    });
+
+    // =========================================================================
+    // Touch-Based Crop Workspace (Full Resolution)
+    // =========================================================================
+    let cropMode = false;
+    let cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 }; // Normalized [0, 1]
+    let activeDragHandle = null; // 'tl', 'tr', 'bl', 'br', 'move', 'new'
+    let cropTouchStart = null;
+
+    function enterCropMode() {
+      if (docSelectedIndex < 0) return;
+      cropMode = true;
+      cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+
+      // Align overlay exactly over docPreviewImg
+      const imgRect = docPreviewImg.getBoundingClientRect();
+      const wrapRect = docPreviewImgWrap.getBoundingClientRect();
+      const left = imgRect.left - wrapRect.left;
+      const top = imgRect.top - wrapRect.top;
+      const width = imgRect.width;
+      const height = imgRect.height;
+
+      docCropOverlay.style.left = `${left}px`;
+      docCropOverlay.style.top = `${top}px`;
+      docCropOverlay.style.width = `${width}px`;
+      docCropOverlay.style.height = `${height}px`;
+      docCropOverlay.style.display = 'block';
+
+      docCropCanvas.width = width;
+      docCropCanvas.height = height;
+
+      docCropConfirm.style.display = 'flex';
+      docEditToolbar.style.display = 'none';
+
+      drawCropCanvas();
+    }
+
+    function exitCropMode() {
+      cropMode = false;
+      activeDragHandle = null;
+      docCropOverlay.style.display = 'none';
+      docCropConfirm.style.display = 'none';
+      if (docPages.length > 0) docEditToolbar.style.display = 'flex';
+    }
+
+    function drawCropCanvas() {
+      const canvas = docCropCanvas;
+      const ctx = canvas.getContext('2d');
+      const cw = canvas.width;
+      const ch = canvas.height;
+      ctx.clearRect(0, 0, cw, ch);
+
+      // 1. Dark semi-transparent mask
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+      ctx.fillRect(0, 0, cw, ch);
+
+      if (!cropRect) return;
+
+      const rx = cropRect.x * cw;
+      const ry = cropRect.y * ch;
+      const rw = cropRect.w * cw;
+      const rh = cropRect.h * ch;
+
+      // 2. Clear inner crop window
+      ctx.clearRect(rx, ry, rw, rh);
+
+      // 3. Rule of thirds subtle grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rx + rw / 3, ry); ctx.lineTo(rx + rw / 3, ry + rh);
+      ctx.moveTo(rx + (rw * 2) / 3, ry); ctx.lineTo(rx + (rw * 2) / 3, ry + rh);
+      ctx.moveTo(rx, ry + rh / 3); ctx.lineTo(rx + rw, ry + rh / 3);
+      ctx.moveTo(rx, ry + (rh * 2) / 3); ctx.lineTo(rx + rw, ry + (rh * 2) / 3);
+      ctx.stroke();
+
+      // 4. Crop boundary
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+      // 5. Four Corner Handles
+      const hs = 14;
+      const corners = [
+        [rx, ry],
+        [rx + rw, ry],
+        [rx, ry + rh],
+        [rx + rw, ry + rh]
+      ];
+      corners.forEach(([cx, cy]) => {
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, hs / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+
+    function getCropHandleAt(px, py) {
+      if (!cropRect) return 'new';
+      const cw = docCropCanvas.width;
+      const ch = docCropCanvas.height;
+      const rx = cropRect.x * cw;
+      const ry = cropRect.y * ch;
+      const rw = cropRect.w * cw;
+      const rh = cropRect.h * ch;
+      const threshold = 36; // Touch-friendly radius
+
+      if (Math.hypot(px - rx, py - ry) < threshold) return 'tl';
+      if (Math.hypot(px - (rx + rw), py - ry) < threshold) return 'tr';
+      if (Math.hypot(px - rx, py - (ry + rh)) < threshold) return 'bl';
+      if (Math.hypot(px - (rx + rw), py - (ry + rh)) < threshold) return 'br';
+      if (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh) return 'move';
+      return 'new';
+    }
+
+    function handleCropPointerDown(px, py) {
+      if (!cropMode) return;
+      const cw = docCropCanvas.width;
+      const ch = docCropCanvas.height;
+      activeDragHandle = getCropHandleAt(px, py);
+      cropTouchStart = {
+        px, py,
+        nx: px / cw,
+        ny: py / ch,
+        initialRect: { ...cropRect }
+      };
+      if (activeDragHandle === 'new') {
+        cropRect = { x: px / cw, y: py / ch, w: 0.02, h: 0.02 };
+      }
+      drawCropCanvas();
+    }
+
+    function handleCropPointerMove(px, py) {
+      if (!cropMode || !activeDragHandle || !cropTouchStart) return;
+      const cw = docCropCanvas.width;
+      const ch = docCropCanvas.height;
+      const nx = Math.max(0, Math.min(1, px / cw));
+      const ny = Math.max(0, Math.min(1, py / ch));
+      const init = cropTouchStart.initialRect;
+
+      if (activeDragHandle === 'move') {
+        const dx = nx - cropTouchStart.nx;
+        const dy = ny - cropTouchStart.ny;
+        let newX = Math.max(0, Math.min(1 - init.w, init.x + dx));
+        let newY = Math.max(0, Math.min(1 - init.h, init.y + dy));
+        cropRect = { x: newX, y: newY, w: init.w, h: init.h };
+      } else if (activeDragHandle === 'tl') {
+        const right = init.x + init.w;
+        const bottom = init.y + init.h;
+        const newX = Math.min(right - 0.05, nx);
+        const newY = Math.min(bottom - 0.05, ny);
+        cropRect = { x: newX, y: newY, w: right - newX, h: bottom - newY };
+      } else if (activeDragHandle === 'tr') {
+        const left = init.x;
+        const bottom = init.y + init.h;
+        const newW = Math.max(0.05, nx - left);
+        const newY = Math.min(bottom - 0.05, ny);
+        cropRect = { x: left, y: newY, w: newW, h: bottom - newY };
+      } else if (activeDragHandle === 'bl') {
+        const right = init.x + init.w;
+        const top = init.y;
+        const newX = Math.min(right - 0.05, nx);
+        const newH = Math.max(0.05, ny - top);
+        cropRect = { x: newX, y: top, w: right - newX, h: newH };
+      } else if (activeDragHandle === 'br') {
+        cropRect = {
+          x: init.x,
+          y: init.y,
+          w: Math.max(0.05, nx - init.x),
+          h: Math.max(0.05, ny - init.y)
+        };
+      } else if (activeDragHandle === 'new') {
+        cropRect = {
+          x: Math.min(cropTouchStart.nx, nx),
+          y: Math.min(cropTouchStart.ny, ny),
+          w: Math.abs(nx - cropTouchStart.nx),
+          h: Math.abs(ny - cropTouchStart.ny)
+        };
+      }
+      drawCropCanvas();
+    }
+
+    function handleCropPointerUp() {
+      activeDragHandle = null;
+      cropTouchStart = null;
+    }
+
+    // Touch listeners on crop canvas
+    docCropCanvas?.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const rect = docCropCanvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      handleCropPointerDown(touch.clientX - rect.left, touch.clientY - rect.top);
+    }, { passive: false });
+
+    docCropCanvas?.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = docCropCanvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      handleCropPointerMove(touch.clientX - rect.left, touch.clientY - rect.top);
+    }, { passive: false });
+
+    docCropCanvas?.addEventListener('touchend', handleCropPointerUp);
+
+    // Mouse fallback
+    let mouseIsDown = false;
+    docCropCanvas?.addEventListener('mousedown', (e) => {
+      mouseIsDown = true;
+      const rect = docCropCanvas.getBoundingClientRect();
+      handleCropPointerDown(e.clientX - rect.left, e.clientY - rect.top);
+    });
+    docCropCanvas?.addEventListener('mousemove', (e) => {
+      if (!mouseIsDown) return;
+      const rect = docCropCanvas.getBoundingClientRect();
+      handleCropPointerMove(e.clientX - rect.left, e.clientY - rect.top);
+    });
+    docCropCanvas?.addEventListener('mouseup', () => {
+      mouseIsDown = false;
+      handleCropPointerUp();
+    });
+
+    btnDocCrop?.addEventListener('click', enterCropMode);
+    btnCropCancel?.addEventListener('click', exitCropMode);
+
+    // Apply Crop (Full Resolution)
+    btnCropApply?.addEventListener('click', async () => {
+      if (!cropRect || cropRect.w < 0.05 || cropRect.h < 0.05 || docSelectedIndex < 0) {
+        exitCropMode();
+        return;
+      }
+      try {
+        showLoading('Đang cắt ảnh độ nét cao...');
+        const page = docPages[docSelectedIndex];
+
+        // Load FULL-RESOLUTION image from page.file
+        const fullImg = await loadImageFromFile(page.file);
+        const rot = ((page.rotation % 360) + 360) % 360;
+        const swapped = (rot === 90 || rot === 270);
+        const natW = fullImg.naturalWidth;
+        const natH = fullImg.naturalHeight;
+        const rotW = swapped ? natH : natW;
+        const rotH = swapped ? natW : natH;
+
+        // Draw rotated full-res image
+        const rotCanvas = document.createElement('canvas');
+        rotCanvas.width = rotW;
+        rotCanvas.height = rotH;
+        const rotCtx = rotCanvas.getContext('2d');
+        if (rot) {
+          rotCtx.translate(rotW / 2, rotH / 2);
+          rotCtx.rotate(rot * Math.PI / 180);
+          rotCtx.drawImage(fullImg, -natW / 2, -natH / 2);
+        } else {
+          rotCtx.drawImage(fullImg, 0, 0);
+        }
+
+        // Crop coordinates
+        const cropX = Math.round(cropRect.x * rotW);
+        const cropY = Math.round(cropRect.y * rotH);
+        const cropW = Math.round(cropRect.w * rotW);
+        const cropH = Math.round(cropRect.h * rotH);
+
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = cropW;
+        outCanvas.height = cropH;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.drawImage(rotCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        // Convert to high-quality JPEG Blob
+        const blob = await new Promise(r => outCanvas.toBlob(r, 'image/jpeg', 0.92));
+        const croppedFile = new File([blob], page.file.name || 'scan_page.jpg', { type: 'image/jpeg' });
+
+        // Revoke old previewUrl
+        if (page.previewUrl) {
+          try { URL.revokeObjectURL(page.previewUrl); } catch (e) {}
+        }
+
+        page.file = croppedFile;
+        page.previewUrl = URL.createObjectURL(croppedFile);
+        page.thumbnail = await createThumbnail(croppedFile);
+        page.rotation = 0; // Baked into cropped image
+
+        rotCanvas.width = 0;
+        rotCanvas.height = 0;
+        outCanvas.width = 0;
+        outCanvas.height = 0;
+
+        hideLoading();
+        exitCropMode();
+        renderDocThumbnails();
+      } catch (err) {
+        hideLoading();
+        exitCropMode();
+        showErrorBanner('Lỗi cắt ảnh: ' + (err.message || err));
+      }
+    });
+
+    // =========================================================================
+    // PDF Preview Modal
+    // =========================================================================
+    function openDocPreviewModal() {
+      if (docPages.length === 0) return;
+      docPreviewModalBody.innerHTML = '';
+
+      const isGrayscale = (docPreset === 'document');
+      const estimate = estimatePdfSize(docPages.length, docPreset);
+      const sizeMB = (estimate.estimatedKB / 1024).toFixed(1);
+      const sizeStr = estimate.estimatedKB < 1024 ? `${estimate.estimatedKB} KB` : `${sizeMB} MB`;
+      docPreviewMetaLine.textContent = `${docPages.length} trang • Chế độ: ${isGrayscale ? 'Tài liệu (Trắng đen)' : 'Ảnh màu'} • Ước tính ~${sizeStr}`;
+
+      docPages.forEach((page, idx) => {
+        const card = document.createElement('div');
+        card.className = 'doc-preview-page-card';
+        const rotStyle = page.rotation ? `transform: rotate(${page.rotation}deg);` : '';
+        const filterStyle = isGrayscale ? 'filter: grayscale(100%) contrast(110%);' : '';
+        card.innerHTML = `
+          <img class="doc-preview-page-img" src="${page.previewUrl || page.thumbnail}" alt="Trang ${idx + 1}" style="${rotStyle} ${filterStyle}">
+          <div class="doc-preview-page-label">Trang ${idx + 1} / ${docPages.length} ${page.rotation ? `(${page.rotation}°)` : ''}</div>
+        `;
+        docPreviewModalBody.appendChild(card);
+      });
+
+      docPreviewModal.style.display = 'flex';
+    }
+
+    function closeDocPreviewModal() {
+      docPreviewModal.style.display = 'none';
+    }
+
+    btnDocPreview?.addEventListener('click', openDocPreviewModal);
+    btnDocPreviewClose?.addEventListener('click', closeDocPreviewModal);
+    btnDocModalClose?.addEventListener('click', closeDocPreviewModal);
+    btnDocModalSend?.addEventListener('click', () => {
+      closeDocPreviewModal();
+      btnDocSendPdf.click();
     });
 
     // Preset selection
@@ -1261,8 +1839,8 @@
       });
     });
 
-    // Xuất PDF & Gửi lên HIS
-    btnDocSendPdf.addEventListener('click', async () => {
+    // ---- Xuất PDF & Gửi lên HIS ----
+    btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
       if (!p2p.isConnected) {
         showErrorBanner('Chưa kết nối với máy bàn HIS. Vui lòng quét lại QR.');
@@ -1276,9 +1854,8 @@
         uploadTitle.textContent = 'Đang tạo file PDF...';
         uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu'})...`;
 
-        // Build PDF
         const pdfResult = await buildPdf(
-          docPages.map(p => ({ file: p.file })),
+          docPages.map(p => ({ file: p.file, rotation: p.rotation || 0 })),
           {
             preset: docPreset,
             filename: `scan_${p2p.patientInfo?.id || 'doc'}_${Date.now()}.pdf`,
@@ -1293,12 +1870,9 @@
         uploadPctBadge.textContent = '55%';
         uploadTitle.textContent = 'Đang truyền PDF lên HIS...';
         uploadMeta.textContent = `Dung lượng: ${pdfResult.sizeKB} KB (${pdfResult.pageCount} trang)`;
-
         hideErrorBanner();
         hideWarningBanner();
 
-        // Gửi PDF qua P2P (dùng cùng kênh truyền ảnh, nhưng metadata khác)
-        const patient = p2p.patientInfo;
         const res = await p2p.sendImage(pdfResult.blob, {
           name: pdfResult.filename,
           type: 'application/pdf',
@@ -1316,7 +1890,6 @@
           }
         });
 
-        // Xử lý kết quả
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressModal.style.display = 'none';
           showWarningBanner('PDF đã gửi đến máy bàn. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
@@ -1331,11 +1904,7 @@
           return;
         }
 
-        // Thành công
-        if (navigator.vibrate) {
-          try { navigator.vibrate([40, 60, 40]); } catch (e) {}
-        }
-
+        if (navigator.vibrate) { try { navigator.vibrate([40, 60, 40]); } catch (e) {} }
         uploadPctBadge.textContent = '100%';
         uploadTitle.textContent = 'Đã gửi PDF vào HIS';
         uploadMeta.textContent = `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`;
@@ -1344,13 +1913,16 @@
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
           toast.classList.add('visible');
-
-          // Reset document pages
+          // Revoke preview URLs
+          docPages.forEach(p => {
+            if (p.previewUrl) {
+              try { URL.revokeObjectURL(p.previewUrl); } catch (e) {}
+            }
+          });
           docPages = [];
           docSelectedIndex = -1;
           renderDocThumbnails();
           btnDocSendPdf.disabled = false;
-
           setTimeout(() => { toast.classList.remove('visible'); }, 1500);
         }, 500);
 
@@ -1360,6 +1932,7 @@
         btnDocSendPdf.disabled = false;
       }
     });
+
 
     window.addEventListener('beforeunload', () => {
       try { p2p.destroy(); } catch (e) {}
