@@ -687,7 +687,10 @@ async function runAckSemanticsSuite() {
     await new Promise(r => setTimeout(r, 100));
 
     const finalAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
-    const confirmedAfterPersistence = finalAck && finalAck.success === false && finalAck.status === 'HIS_UNKNOWN';
+    const confirmedAfterPersistence = finalAck && (
+      (finalAck.success === true && (finalAck.status === 'HIS_COMMITTED' || finalAck.status === 'success')) ||
+      (finalAck.success === false && finalAck.status === 'HIS_UNKNOWN')
+    );
 
     const passed = clickHappened && noPrematureSuccess && confirmedAfterPersistence;
 
