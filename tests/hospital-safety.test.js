@@ -55,6 +55,15 @@ maBADoc.fields.txtMaBA = { value: 'BA123' };
 const guard = loadProductionDesktopModules({ document: maBADoc }).clinical;
 assert.equal(guard.getClinicalContextFromDOM(() => maBADoc).valid, false, 'maBA is not encounterId');
 
+// VNPT HIS CLS (CDHA / MauBenhPham) encounter resolution verification
+const clsDoc = hisDocument({ encounterId: '', orderId: '' });
+clsDoc.fields.hdfIDMauBenhPham = { value: '13417333' };
+clsDoc.fields.hdfSoPhieu = { value: '260926899749' };
+const clsContext = guard.getClinicalContextFromDOM(() => clsDoc);
+assert.equal(clsContext.valid, true, 'VNPT HIS CLS specimen ID is accepted as clinical encounter context');
+assert.equal(clsContext.encounter.id, '13417333');
+assert.equal(clsContext.encounter.orderId, '260926899749');
+
 const uploadFrame = hisDocument({ patientId: 'P1', encounterId: 'E1' });
 const parent = hisDocument({ patientId: 'P2', encounterId: 'E2' });
 delete parent.fields.btnUpload;

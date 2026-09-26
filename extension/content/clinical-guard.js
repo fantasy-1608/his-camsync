@@ -102,10 +102,21 @@
           ...collectFields(targetDoc, ['maBenhNhan', 'txtMaBN', 'patientId']),
           ...collectText(bannerText, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
-        const encounters = unique([
+        let directEncounters = unique([
           ...collectFields(targetDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId']),
           ...collectText(bannerText, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
+        if (!directEncounters.length) {
+          const urlParams = targetDoc.location?.search ? new URLSearchParams(targetDoc.location.search) : null;
+          const mbpId = validId(targetDoc.getElementById?.('hdfIDMauBenhPham')?.value) || validId(urlParams?.get('idmaubenhpham'));
+          const kqId = validId(targetDoc.getElementById?.('hdfIDKetQuaCLS')?.value) || validId(urlParams?.get('idketquacls'));
+          const dvId = validId(targetDoc.getElementById?.('hdfIDDichVuKB')?.value) || validId(urlParams?.get('iddichvukb'));
+          const clsId = mbpId || kqId || dvId;
+          if (clsId) {
+            directEncounters = [clsId];
+          }
+        }
+        const encounters = directEncounters;
         const orders = unique([
           ...collectFields(targetDoc, ['maPhieuChiDinh', 'soPhieu', 'txtMaPhieu', 'orderId', 'hdfSoPhieu']),
           ...collectText(bannerText, /(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
