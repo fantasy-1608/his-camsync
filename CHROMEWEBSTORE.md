@@ -27,26 +27,28 @@ HIS CamSync - Đồng Bộ Ảnh & ECG Cận Lâm Sàng
 *(Dán toàn bộ đoạn văn bản bên dưới vào ô Detailed Description. Lưu ý: Cửa hàng Chrome không hỗ trợ định dạng Markdown, hãy giữ nguyên các dòng ngắt đoạn rõ ràng)*
 
 ```text
-HIS CamSync là giải pháp đồng bộ hình ảnh cận lâm sàng tức thì, giúp bác sĩ và điều dưỡng đưa ảnh chụp dải băng Điện tâm đồ (ECG), kết quả siêu âm hoặc nội soi từ điện thoại di động thẳng vào phần mềm quản lý bệnh viện VNPT HIS mà không cần dây cáp hay thao tác trung gian phức tạp.
+HIS CamSync là giải pháp chụp và đồng bộ hình ảnh cận lâm sàng tức thì, hỗ trợ đắc lực cho Bác sĩ, Kỹ thuật viên và Điều dưỡng đưa ảnh dải băng Điện tâm đồ (ECG), kết quả siêu âm hoặc nội soi từ điện thoại di động trực tiếp vào phần mềm quản lý bệnh viện VNPT HIS chỉ trong 10-15 giây mà không cần dây cáp hay cài đặt ứng dụng phức tạp.
 
 CÁC TÍNH NĂNG NỔI BẬT:
-• Quét mã QR kết nối tức thì: Mở nhanh phiên làm việc trực tiếp trên giao diện nhập kết quả chẩn đoán hình ảnh VNPT HIS.
-• Tự động tối ưu hóa ảnh chụp y tế: Bộ lọc tăng cường nét chì điện tim, khử nền nhiệt giấy in, bảo toàn lưới milimet chuẩn (5mm / 1mm).
-• Chuyên khoa Siêu âm & CĐHA: Hỗ trợ khung cắt đầu dò Convex, Linear, tỷ lệ 4:3, tăng cường tương phản mô và đảo màu âm bản xem rõ vi vôi hóa.
-• Đóng dấu chìm lâm sàng (Clinical Watermark): Tự động gắn Mã BN, Thời gian chụp và Nguồn gốc ảnh với độ trong suốt tinh tế, không che khuất sóng P-QRS-T.
-• Chuẩn hóa JPEG tự động: Tương thích hoàn toàn với định dạng ảnh yêu cầu của biểu mẫu HIS, tự động chuyển đổi định dạng HEIC/HEIF từ iPhone sang JPEG chuẩn.
+• Quét mã QR kết nối tức thì (Zero-Install): Quét mã trực tiếp từ màn hình kết quả chẩn đoán hình ảnh VNPT HIS để mở trình chụp ảnh trên điện thoại, không cần tải ứng dụng từ App Store / Google Play.
+• Chuyển đổi định dạng ảnh GPU siêu tốc: Tự động giải mã và chuyển đổi ảnh iPhone (HEIC/HEIF) sang chuẩn JPEG y tế (92%) trực tiếp trên phần cứng điện thoại (< 50ms), loại bỏ hoàn toàn cảnh báo lỗi định dạng từ hệ thống HIS.
+• Bộ lọc ảnh chuyên khoa y tế: Tăng cường độ nét sóng chì điện tim (B&W ECG filter), khử nhiễu nền nhiệt giấy in, bảo toàn chính xác lưới milimet chuẩn (5mm / 1mm).
+• Công cụ biên tập lâm sàng: Hỗ trợ xoay ảnh, căn chỉnh góc chụp 4 điểm linh hoạt cho đầu dò Siêu âm, Nội soi và dải giấy ECG kéo dài.
+• Đóng dấu chìm an toàn (Clinical Watermark): Tự động gắn Mã BN, Thời gian chụp và Nguồn gốc ảnh tinh tế ở viền ảnh, bảo đảm tính pháp lý và toàn vẹn mà không che khuất các chi tiết chẩn đoán quan trọng.
+• Đồng bộ mượt mà trên mọi đường truyền (Dual-Transport): Tự động chuyển đổi thông minh giữa mạng Wi-Fi nội bộ bệnh viện (WebRTC P2P) và mạng dữ liệu di động (4G/5G Cloud Relay), hiển thị tiến trình tải 3 giai đoạn trực quan và truyền dữ liệu thông suốt.
+• Chống trùng lặp ảnh & Thao tác liền mạch: Cơ chế nhận diện bằng chứng lưu trữ thật giúp nạp đúng 1 ảnh cho mỗi lần gửi, tự động hoàn tất và hiển thị thông báo trượt nhẹ nhàng, không gây gián đoạn thao tác của nhân viên y tế.
 
-AN TOÀN & BẢO MẬT LÂM SÀNG (ZERO-RETENTION):
-• Truyền tải trực tiếp trong mạng nội bộ (LAN): Ưu tiên kênh truyền ngang hàng WebRTC P2P DataChannel giữa điện thoại và máy tính.
-• Kênh truyền dự phòng Cloud Relay an toàn: Trung chuyển dữ liệu trực tiếp trong bộ nhớ RAM qua WebSocket mã hóa, tuyệt đối không lưu trữ hay tích tụ rác dữ liệu trên máy chủ đám mây (Zero Cloud Retention).
-• Bảo mật thông tin bệnh nhân: Mã QR và đường dẫn quét trên điện thoại không chứa thông tin định danh cá nhân (PHI).
+BẢO MẬT & AN TOÀN LÂM SÀNG CẤP ĐỘ Y TẾ (ZERO-RETENTION):
+• Mã hóa đầu cuối (E2EE): Áp dụng chuẩn mật mã WebCrypto AES-256-GCM với IV 96-bit duy nhất cho từng gói tin; toàn bộ thông tin bệnh nhân được mã hóa an toàn, Zero wire PHI trên đường truyền công cộng.
+• Không lưu trữ trung gian: Dữ liệu trung chuyển RAM-to-RAM trực tiếp giữa điện thoại và máy tính, tuyệt đối không lưu trữ hình ảnh hay hồ sơ trên máy chủ đám mây.
+• Rào chắn an toàn 3 lớp (Clinical Guard): Khóa cứng phiên làm việc theo mã bệnh nhân; tự động hủy phiên an toàn nếu nhân viên y tế đổi bệnh nhân khác trên máy tính, triệt tiêu hoàn toàn nguy cơ nạp nhầm bệnh án.
 
 HƯỚNG DẪN SỬ DỤNG NHANH:
-1. Mở màn hình Cận lâm sàng / Chẩn đoán hình ảnh trên VNPT HIS.
-2. Bấm nút "📸 Quét QR Đồng Bộ (HIS CamSync)" xuất hiện cạnh ô tải ảnh.
-3. Dùng camera điện thoại quét mã QR hiển thị trên màn hình máy tính.
-4. Chụp dải băng điện tim hoặc màn hình siêu âm, căn chỉnh khung cắt và bấm "Gửi Lên HIS".
-5. Ảnh kết quả sẽ xuất hiện ngay lập tức trên máy tính để lưu vào hồ sơ bệnh án.
+1. Mở hồ sơ bệnh nhân trên VNPT HIS ➔ Chuyển qua tab "Hình ảnh".
+2. Bấm nút "Quét từ ĐT" trên thanh công cụ ảnh cạnh nút Upload để hiển thị mã QR.
+3. Dùng camera điện thoại quét mã QR để mở trang chụp ảnh.
+4. Chụp dải băng ECG hoặc màn hình máy siêu âm/nội soi, căn chỉnh khung hình và bấm "Gửi Lên HIS".
+5. Ảnh sẽ tự động xuất hiện trên màn hình máy tính và sẵn sàng lưu vào hồ sơ bệnh án.
 ```
 
 ### Danh mục (Category) `[BẮT BUỘC]`
