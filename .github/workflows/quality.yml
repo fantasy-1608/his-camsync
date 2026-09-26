@@ -29,7 +29,7 @@ jobs:
           test -f extension/content/clinical-guard.js
           (cd extension && zip -qr ../camsync-extension.zip .)
           unzip -tq camsync-extension.zip
-          unzip -Z1 camsync-extension.zip | rg -x manifest.json
+          unzip -Z1 camsync-extension.zip | grep -x manifest.json
           sha256sum camsync-extension.zip > camsync-extension.sha256
       - uses: actions/upload-artifact@v4
         with:
