@@ -351,7 +351,7 @@ export class P2PClient {
   async connect() {
     this.isSessionIntentionallyClosed = false;
     await this.initCrypto();
-    console.log('[CamSync] Khởi tạo kết nối cho phiên:', this.sessionId);
+    console.log('[CamSync] Khởi tạo kết nối');
 
     // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
     this.initRealtimeBroadcast();
@@ -366,6 +366,7 @@ export class P2PClient {
    * Kênh Cloud Relay: Supabase Realtime Broadcast qua WebSocket (Zero-Retention, RAM-to-RAM)
    */
   initRealtimeBroadcast() {
+    if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;
     if (!this.sessionId || typeof WebSocket === 'undefined') return;
 
     this.closeRealtime();
@@ -378,7 +379,7 @@ export class P2PClient {
       this.realtimeRefCounter = 0;
 
       this.realtimeWs.onopen = () => {
-        console.log('[Realtime] WebSocket đã kết nối, gia nhập topic:', topic);
+        console.log('[Realtime] WebSocket đã kết nối');
         this.reconnectAttempts = 0;
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
@@ -710,6 +711,10 @@ export class P2PClient {
    * Gửi ảnh sang máy tính bàn (Tự động chọn WebRTC hoặc Cloud Relay)
    */
   async sendImage(blob, metadata = {}, onProgress = null) {
+    if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
+      return { success: false, status: 'HIS_UNKNOWN', retry: false,
+        reason: 'Phiên QR thiếu định danh thế hệ; quét lại mã trên HIS' };
+    }
     if (blob && blob.size > MAX_IMAGE_BYTES) {
       const mb = (blob.size / (1024 * 1024)).toFixed(1);
       throw new Error(`Kích thước ảnh (${mb}MB) vượt quá giới hạn an toàn 15MB`);
@@ -722,26 +727,18 @@ export class P2PClient {
     // 1. Nếu WebRTC DataChannel đang thông suốt (Wi-Fi), gửi P2P siêu tốc
     if (this.conn && this.conn.open) {
       try {
-        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P...', transferId);
+        console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P');
         const res = await this.sendImageViaWebRTC(blob, meta, onProgress);
-        if (res && res.success) {
-          return res;
-        }
-        // RÀO CHẮN CHỐNG GHI ĐÚP LÂM SÀNG:
-        // Nếu kết quả trả về là HIS_UNKNOWN, máy chủ HIS có thể đã lưu hoặc đang lưu ảnh.
-        // Tuyệt đối KHÔNG tự động chuyển tiếp qua Cloud Relay để tránh ghi trùng lặp 2 ảnh!
-        if (res && res.status === 'HIS_UNKNOWN') {
-          console.warn('[CamSync] WebRTC trả về HIS_UNKNOWN: Không chuyển tiếp sang Cloud để bảo vệ tính toàn vẹn hồ sơ.');
-          return res;
-        }
-        console.warn('[CamSync] P2P không thành công, tự động chuyển hướng qua Cloud Relay:', res?.error);
-      } catch (err) {
-        console.warn('[CamSync] P2P gặp lỗi, tự động chuyển hướng qua Cloud Relay:', err);
+        return res?.status ? res : { success: false, status: 'HIS_UNKNOWN', retry: false,
+          reason: 'Chưa xác định trạng thái lưu; kiểm tra HIS trước khi gửi lại' };
+      } catch (_err) {
+        return { success: false, status: 'HIS_UNKNOWN', retry: false,
+          reason: 'Kết nối gián đoạn; kiểm tra HIS trước khi gửi lại' };
       }
     }
 
     // 2. Chuyển sang Supabase Cloud Relay (4G/5G/LAN)
-    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay...', transferId);
+    console.log('[CamSync] Đang truyền ảnh qua Cloud Relay');
     return await this.sendImageViaCloud(blob, meta, onProgress);
   }
 
@@ -749,6 +746,9 @@ export class P2PClient {
    * Truyền ảnh qua Supabase Realtime Broadcast (Zero-Retention, 64KB Chunking, RAM-to-RAM)
    */
   async sendImageViaCloud(blob, metadata = {}, onProgress = null) {
+    if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
+      return { success: false, status: 'HIS_UNKNOWN', retry: false };
+    }
     if (typeof onProgress === 'function') onProgress(10);
 
     // Chuyển blob thành chuỗi Base64
@@ -907,8 +907,12 @@ export class P2PClient {
         });
       }, 25000);
 
+      const expectedSid = this.sessionId;
+      const expectedGeneration = this.generation;
       this.onTransferAck = (ackData) => {
-        if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
+        if (ackData?.transferId === transferId &&
+            ackData?.sid === expectedSid &&
+            ackData?.generation === expectedGeneration) {
           // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
           if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
             if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
@@ -931,21 +935,23 @@ export class P2PClient {
           } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
             resolve({
               success: false,
-              status: ackData.status || 'HIS_REJECTED',
+              status: ackData.status === 'HIS_REJECTED' ? 'HIS_REJECTED' : 'HIS_UNKNOWN',
               method: 'realtime_broadcast',
               error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
               reason: ackData.reason || null,
               retry: ackData.retry !== undefined ? ackData.retry : false,
               ack: ackData
             });
-          } else {
+          } else if (ackData?.status === 'HIS_COMMITTED' && ackData?.success === true) {
             if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
             resolve({
               success: true,
-              status: ackData?.status || 'HIS_COMMITTED',
+              status: 'HIS_COMMITTED',
               method: 'realtime_broadcast',
               ack: ackData
             });
+          } else {
+            resolve({ success: false, status: 'HIS_UNKNOWN', retry: false, ack: ackData });
           }
         }
       };
@@ -956,6 +962,9 @@ export class P2PClient {
    * Truyền ảnh qua WebRTC DataChannel theo cơ chế Chunking 16KB
    */
   async sendImageViaWebRTC(blob, metadata = {}, onProgress = null) {
+    if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
+      return { success: false, status: 'HIS_UNKNOWN', retry: false };
+    }
     const reader = new FileReader();
     const base64Data = await new Promise((resolve, reject) => {
       reader.onloadend = () => resolve(reader.result);
@@ -1094,8 +1103,12 @@ export class P2PClient {
         });
       }, 25000);
 
+      const expectedSid = this.sessionId;
+      const expectedGeneration = this.generation;
       this.onTransferAck = (ackData) => {
-        if (!ackData || !ackData.transferId || ackData.transferId === transferId) {
+        if (ackData?.transferId === transferId &&
+            ackData?.sid === expectedSid &&
+            ackData?.generation === expectedGeneration) {
           // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
           if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
             if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
@@ -1117,21 +1130,23 @@ export class P2PClient {
           } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
             resolve({
               success: false,
-              status: ackData.status || 'HIS_REJECTED',
+              status: ackData.status === 'HIS_REJECTED' ? 'HIS_REJECTED' : 'HIS_UNKNOWN',
               method: 'webrtc_chunked',
               error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
               reason: ackData.reason || null,
               retry: ackData.retry !== undefined ? ackData.retry : false,
               ack: ackData
             });
-          } else {
+          } else if (ackData?.status === 'HIS_COMMITTED' && ackData?.success === true) {
             if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
             resolve({
               success: true,
-              status: ackData?.status || 'HIS_COMMITTED',
+              status: 'HIS_COMMITTED',
               method: 'webrtc_chunked',
               ack: ackData
             });
+          } else {
+            resolve({ success: false, status: 'HIS_UNKNOWN', retry: false, ack: ackData });
           }
         }
       };
