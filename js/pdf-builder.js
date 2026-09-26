@@ -1,0 +1,491 @@
+/**
+ * HIS-CamSync: PDF Builder Module
+ * Chuyển đổi nhiều ảnh thành 1 file PDF client-side.
+ * Tuân thủ giới hạn HIS: max 5MB, extension .pdf
+ *
+ * Preset nén:
+ * - "document": Grayscale, JPEG 60%, resize A4@150DPI → ~150KB/trang
+ * - "color":    Giữ màu, JPEG 75%, resize A4@200DPI → ~300KB/trang
+ */
+
+// jsPDF được load qua <script> tag (UMD), truy cập qua window.jspdf
+const HIS_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+// Kích thước A4 tính bằng mm
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+
+// DPI cho từng preset
+const PRESET_CONFIG = {
+  enhance: {
+    dpi: 150,
+    quality: 0.65,
+    mode: 'enhance',
+    label: 'Sắc nét',
+  },
+  document: {
+    dpi: 150,
+    quality: 0.60,
+    mode: 'grayscale',
+    label: 'Tài liệu',
+  },
+  color: {
+    dpi: 200,
+    quality: 0.75,
+    mode: 'color',
+    label: 'Ảnh màu',
+  },
+};
+
+/**
+ * Nén ảnh xuống kích thước phù hợp theo preset
+ * @param {HTMLImageElement | ImageBitmap} img
+ * @param {string} preset - 'enhance' | 'document' | 'color'
+ * @returns {Promise<{dataUrl: string, width: number, height: number}>}
+ */
+function compressImage(img, preset = 'enhance', rotation = 0) {
+  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.enhance;
+  const dpi = config.dpi;
+
+  // Tính kích thước pixel tối đa dựa trên DPI và khổ A4
+  const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);
+  const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi);
+
+  // Kích thước gốc (sau xoay)
+  const imgW = img.width || img.naturalWidth;
+  const imgH = img.height || img.naturalHeight;
+  const rot = ((rotation % 360) + 360) % 360;
+  const swapped = (rot === 90 || rot === 270);
+  const srcW = swapped ? imgH : imgW;
+  const srcH = swapped ? imgW : imgH;
+
+  // Tính tỷ lệ scale để fit vào khổ A4
+  let scale = 1;
+  if (srcW > maxWidthPx || srcH > maxHeightPx) {
+    scale = Math.min(maxWidthPx / srcW, maxHeightPx / srcH);
+  }
+
+  const outW = Math.round(srcW * scale);
+  const outH = Math.round(srcH * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+
+  // Nền trắng
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, outW, outH);
+
+  // Xoay ảnh nếu cần
+  if (rot) {
+    ctx.save();
+    ctx.translate(outW / 2, outH / 2);
+    ctx.rotate(rot * Math.PI / 180);
+    const drawW = swapped ? outH : outW;
+    const drawH = swapped ? outW : outH;
+    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, 0, 0, outW, outH);
+  }
+
+  // Áp dụng bộ lọc theo preset
+  if (config.mode === 'enhance') {
+    const imageData = ctx.getImageData(0, 0, outW, outH);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const sat = max - min;
+      const y = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      if (sat > 32) {
+        const factor = y > 160 ? 1.25 : 0.85;
+        data[i] = Math.min(255, Math.max(0, Math.round(r * factor)));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(g * factor)));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(b * factor)));
+      } else {
+        let outY;
+        if (y >= 175) {
+          outY = 255 - (255 - y) * 0.15;
+        } else if (y <= 115) {
+          outY = y * 0.6;
+        } else {
+          const t = (y - 115) / 60;
+          const s = t * t * (3 - 2 * t);
+          outY = (115 * 0.6) * (1 - s) + 245 * s;
+        }
+        const v = Math.min(255, Math.max(0, Math.round(outY)));
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } else if (config.mode === 'grayscale' || config.grayscale) {
+    const imageData = ctx.getImageData(0, 0, outW, outH);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const enhanced = gray < 128
+        ? Math.max(0, gray * 0.85)
+        : Math.min(255, gray * 1.1);
+      data[i] = enhanced;
+      data[i + 1] = enhanced;
+      data[i + 2] = enhanced;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  const dataUrl = canvas.toDataURL('image/jpeg', config.quality);
+
+  // Cleanup
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return { dataUrl, width: outW, height: outH };
+}
+
+// Khởi tạo Web Worker cho xử lý nén ảnh nền (0% giật lag giao diện)
+let compressionWorker = null;
+let workerJobCounter = 0;
+const workerCallbacks = new Map();
+
+function initWorkerIfSupported() {
+  if (compressionWorker) return compressionWorker;
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
+    return null;
+  }
+  try {
+    const workerScript = `
+      self.onmessage = async (e) => {
+        const { id, blob, rotation, maxWidthPx, maxHeightPx, quality, mode, grayscale } = e.data;
+        try {
+          const bmp = await createImageBitmap(blob);
+          const imgW = bmp.width;
+          const imgH = bmp.height;
+
+          const rot = ((rotation % 360) + 360) % 360;
+          const swapped = (rot === 90 || rot === 270);
+          const srcW = swapped ? imgH : imgW;
+          const srcH = swapped ? imgW : imgH;
+
+          let scale = 1;
+          if (srcW > maxWidthPx || srcH > maxHeightPx) {
+            scale = Math.min(maxWidthPx / srcW, maxHeightPx / srcH);
+          }
+          const outW = Math.round(srcW * scale);
+          const outH = Math.round(srcH * scale);
+
+          const canvas = new OffscreenCanvas(outW, outH);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, outW, outH);
+
+          if (rot) {
+            ctx.save();
+            ctx.translate(outW / 2, outH / 2);
+            ctx.rotate(rot * Math.PI / 180);
+            const drawW = swapped ? outH : outW;
+            const drawH = swapped ? outW : outH;
+            ctx.drawImage(bmp, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          } else {
+            ctx.drawImage(bmp, 0, 0, outW, outH);
+          }
+          bmp.close();
+
+          if (mode === 'enhance') {
+            const imageData = ctx.getImageData(0, 0, outW, outH);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i], g = data[i + 1], b = data[i + 2];
+              const max = Math.max(r, g, b);
+              const min = Math.min(r, g, b);
+              const sat = max - min;
+              const y = 0.299 * r + 0.587 * g + 0.114 * b;
+
+              if (sat > 32) {
+                const factor = y > 160 ? 1.25 : 0.85;
+                data[i] = Math.min(255, Math.max(0, Math.round(r * factor)));
+                data[i + 1] = Math.min(255, Math.max(0, Math.round(g * factor)));
+                data[i + 2] = Math.min(255, Math.max(0, Math.round(b * factor)));
+              } else {
+                let outY;
+                if (y >= 175) {
+                  outY = 255 - (255 - y) * 0.15;
+                } else if (y <= 115) {
+                  outY = y * 0.6;
+                } else {
+                  const t = (y - 115) / 60;
+                  const s = t * t * (3 - 2 * t);
+                  outY = (115 * 0.6) * (1 - s) + 245 * s;
+                }
+                const v = Math.min(255, Math.max(0, Math.round(outY)));
+                data[i] = v;
+                data[i + 1] = v;
+                data[i + 2] = v;
+              }
+            }
+            ctx.putImageData(imageData, 0, 0);
+          } else if (mode === 'grayscale' || grayscale) {
+            const imageData = ctx.getImageData(0, 0, outW, outH);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+              const enhanced = gray < 128 ? Math.max(0, gray * 0.85) : Math.min(255, gray * 1.1);
+              data[i] = enhanced;
+              data[i + 1] = enhanced;
+              data[i + 2] = enhanced;
+            }
+            ctx.putImageData(imageData, 0, 0);
+          }
+
+          const outBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            self.postMessage({ id, success: true, dataUrl: reader.result, width: outW, height: outH });
+          };
+          reader.onerror = () => {
+            self.postMessage({ id, success: false, error: 'FileReader failed' });
+          };
+          reader.readAsDataURL(outBlob);
+        } catch (err) {
+          self.postMessage({ id, success: false, error: err.message || String(err) });
+        }
+      };
+    `;
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    compressionWorker = new Worker(url);
+    compressionWorker.onmessage = (e) => {
+      const { id, success, dataUrl, width, height, error } = e.data;
+      const cb = workerCallbacks.get(id);
+      if (cb) {
+        workerCallbacks.delete(id);
+        if (success) cb.resolve({ dataUrl, width, height });
+        else cb.reject(new Error(error));
+      }
+    };
+    compressionWorker.onerror = (err) => {
+      console.warn('[PDFBuilder] Worker error, falling back to main-thread canvas:', err);
+    };
+    return compressionWorker;
+  } catch (e) {
+    console.warn('[PDFBuilder] Failed to initialize worker, fallback to main thread:', e);
+    return null;
+  }
+}
+
+/**
+ * Xử lý nén ảnh bất đồng bộ qua Web Worker nếu có thể, fallback sang Main Thread
+ */
+async function compressImageAsync(fileOrBlob, preset = 'enhance', rotation = 0) {
+  const config = PRESET_CONFIG[preset] || PRESET_CONFIG.enhance;
+  const dpi = config.dpi;
+  const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);
+  const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi);
+
+  const worker = initWorkerIfSupported();
+  if (worker && fileOrBlob instanceof Blob) {
+    return new Promise((resolve, reject) => {
+      const id = ++workerJobCounter;
+      workerCallbacks.set(id, { resolve, reject });
+      worker.postMessage({
+        id,
+        blob: fileOrBlob,
+        rotation,
+        maxWidthPx,
+        maxHeightPx,
+        quality: config.quality,
+        mode: config.mode,
+        grayscale: config.mode === 'grayscale'
+      });
+    }).catch(async (err) => {
+      console.warn('[PDFBuilder] Worker processing failed, using fallback:', err);
+      const img = await loadImageFromFile(fileOrBlob);
+      return compressImage(img, preset, rotation);
+    });
+  }
+
+  // Fallback đồng bộ trên Main Thread
+  let img;
+  if (fileOrBlob instanceof Blob) {
+    img = await loadImageFromFile(fileOrBlob);
+  } else {
+    img = fileOrBlob;
+  }
+  return compressImage(img, preset, rotation);
+}
+
+/**
+ * Load File object thành HTMLImageElement
+ * @param {File | Blob} file
+ * @returns {Promise<HTMLImageElement>}
+ */
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err || new Error('Không thể tải ảnh'));
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Load dataURL thành HTMLImageElement
+ * @param {string} dataUrl
+ * @returns {Promise<HTMLImageElement>}
+ */
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = (err) => reject(err || new Error('Không thể tải ảnh'));
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Xây dựng PDF từ danh sách ảnh
+ * @param {Array<{file?: File, dataUrl?: string, rotation?: number}>} pages
+ * @param {object} options
+ * @param {string} options.preset - 'document' | 'color'
+ * @param {string} [options.filename] - Tên file PDF
+ * @param {function} [options.onProgress] - Callback(pageIndex, totalPages)
+ * @returns {Promise<{blob: Blob, filename: string, pageCount: number, sizeKB: number}>}
+ */
+export async function buildPdf(pages, options = {}) {
+  if (!pages || pages.length === 0) {
+    throw new Error('Không có trang nào để tạo PDF');
+  }
+
+  const preset = options.preset || 'document';
+  const filename = options.filename || 'scan_camsync.pdf';
+  const onProgress = options.onProgress || (() => {});
+
+  // Kiểm tra jsPDF đã load
+  const jsPDFClass = window.jspdf?.jsPDF;
+  if (!jsPDFClass) {
+    throw new Error('Thư viện jsPDF chưa được tải. Vui lòng kiểm tra kết nối mạng.');
+  }
+
+  // Khởi tạo PDF A4 portrait
+  const doc = new jsPDFClass({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  });
+
+  for (let i = 0; i < pages.length; i++) {
+    onProgress(i, pages.length);
+
+    // Nén ảnh bất đồng bộ qua Web Worker chạy ngầm (hoặc fallback Canvas nếu máy cũ)
+    const compressed = await compressImageAsync(
+      pages[i].file || pages[i].dataUrl,
+      preset,
+      pages[i].rotation || 0
+    );
+
+    // Tính kích thước fit vào trang A4 (giữ tỉ lệ, có margin 5mm)
+    const margin = 5;
+    const pageW = A4_WIDTH_MM - margin * 2;
+    const pageH = A4_HEIGHT_MM - margin * 2;
+
+    const imgAspect = compressed.width / compressed.height;
+    const pageAspect = pageW / pageH;
+
+    let drawW, drawH;
+    if (imgAspect > pageAspect) {
+      // Ảnh rộng hơn → fit theo width
+      drawW = pageW;
+      drawH = pageW / imgAspect;
+    } else {
+      // Ảnh cao hơn → fit theo height
+      drawH = pageH;
+      drawW = pageH * imgAspect;
+    }
+
+    // Căn giữa ảnh trong trang
+    const offsetX = margin + (pageW - drawW) / 2;
+    const offsetY = margin + (pageH - drawH) / 2;
+
+    // Thêm trang mới nếu không phải trang đầu
+    if (i > 0) {
+      doc.addPage('a4', 'portrait');
+    }
+
+    doc.addImage(compressed.dataUrl, 'JPEG', offsetX, offsetY, drawW, drawH);
+  }
+
+  onProgress(pages.length, pages.length);
+
+  // Xuất PDF blob
+  const pdfBlob = doc.output('blob');
+  const sizeKB = Math.round(pdfBlob.size / 1024);
+
+  // Kiểm tra giới hạn HIS
+  if (pdfBlob.size > HIS_MAX_FILE_SIZE) {
+    const sizeMB = (pdfBlob.size / 1024 / 1024).toFixed(1);
+    throw new Error(
+      `File PDF (${sizeMB}MB) vượt quá giới hạn ${HIS_MAX_FILE_SIZE / 1024 / 1024}MB của HIS. ` +
+      `Giảm số trang hoặc chuyển sang chế độ "Tài liệu" để nén mạnh hơn.`
+    );
+  }
+
+  return {
+    blob: pdfBlob,
+    filename,
+    pageCount: pages.length,
+    sizeKB,
+  };
+}
+
+/**
+ * Tạo thumbnail từ File/Blob ảnh
+ * @param {File | Blob} file
+ * @param {number} maxSize - Kích thước tối đa thumbnail (px)
+ * @returns {Promise<string>} dataURL của thumbnail
+ */
+export async function createThumbnail(file, maxSize = 120) {
+  const img = await loadImageFromFile(file);
+  const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+  canvas.width = 0;
+  canvas.height = 0;
+  return dataUrl;
+}
+
+/**
+ * Ước tính kích thước PDF trước khi build
+ * @param {number} pageCount
+ * @param {string} preset
+ * @returns {{estimatedKB: number, withinLimit: boolean}}
+ */
+export function estimatePdfSize(pageCount, preset = 'enhance') {
+  const avgPerPage = preset === 'color' ? 320 : 160; // KB (enhance & document ~160KB)
+  const overhead = 50; // PDF structure overhead (KB)
+  const estimatedKB = pageCount * avgPerPage + overhead;
+  return {
+    estimatedKB,
+    withinLimit: estimatedKB * 1024 < HIS_MAX_FILE_SIZE,
+  };
+}
