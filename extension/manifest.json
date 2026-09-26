@@ -22,6 +22,7 @@
         "content/crypto-utils.js",
         "content/audit-logger.js",
         "content/clinical-guard.js",
+        "content/his-adapter.js",
         "content/transfer-receiver.js",
         "content/camsync-content.js"
       ],

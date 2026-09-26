@@ -184,11 +184,29 @@ function createContentScriptEnvironment(options = {}) {
   btnUpload.id = 'btnUpload';
   elements['btnUpload'] = btnUpload;
 
+  const patientText = options.patientText || 'Mã bệnh nhân: 12345 - Tên bệnh nhân: TRAN THI B - Tuổi: 32 Tuổi';
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+  }
+
   parentDiv.appendChild(fileUpload);
   parentDiv.appendChild(btnUpload);
 
+  const gridUploadResults = createElement('div');
+  gridUploadResults.id = 'gridUploadResults';
+  elements['gridUploadResults'] = gridUploadResults;
+  parentDiv.appendChild(gridUploadResults);
+
   const mockDoc = {
     readyState: 'complete',
+    __simulatePersistenceCommit: true,
     getElementById: (id) => elements[id] || null,
     querySelector: (sel) => {
       if (sel.startsWith('#')) return elements[sel.slice(1)] || null;
@@ -207,7 +225,7 @@ function createContentScriptEnvironment(options = {}) {
         if (c.id) delete elements[c.id];
         return c;
       },
-      innerText: options.patientText || 'Mã bệnh nhân: 12345 - Tên bệnh nhân: TRAN THI B - Tuổi: 32 Tuổi'
+      innerText: patientText
     },
     addEventListener: () => {}
   };
@@ -362,6 +380,7 @@ function createContentScriptEnvironment(options = {}) {
   const cryptoCode = fs.readFileSync(path.join(rootDir, 'extension/content/crypto-utils.js'), 'utf8');
   const auditCode = fs.readFileSync(path.join(rootDir, 'extension/content/audit-logger.js'), 'utf8');
   const clinicalCode = fs.readFileSync(path.join(rootDir, 'extension/content/clinical-guard.js'), 'utf8');
+  const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Inject hooks to directly inspect internal variables for empirical testing
@@ -377,11 +396,16 @@ function createContentScriptEnvironment(options = {}) {
     'let photoCount = 0;',
     'let photoCount = 0; window.__getPhotoCount = () => photoCount;'
   );
+  code = code.replace(
+    'let activeClinicalSession = null;',
+    'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;'
+  );
 
   vm.createContext(sandbox);
   vm.runInContext(cryptoCode, sandbox);
   vm.runInContext(auditCode, sandbox);
   vm.runInContext(clinicalCode, sandbox);
+  vm.runInContext(hisCode, sandbox);
   vm.runInContext(transferCode, sandbox);
   vm.runInContext(code, sandbox);
 
@@ -390,6 +414,7 @@ function createContentScriptEnvironment(options = {}) {
     fileUpload,
     btnUpload,
     getActiveWs: () => activeWebSocket,
+    getClinicalSession: () => sandbox.window.__getClinicalSession?.(),
     mockSockets,
     interceptedTimeouts,
     sandbox,
@@ -584,7 +609,7 @@ async function runAdversarialSuite() {
       m.event === 'broadcast' &&
       m.payload?.event === 'transfer_ack' &&
       m.payload?.payload?.transferId === tid &&
-      m.payload?.payload?.status === 'success'
+      (m.payload?.payload?.status === 'HIS_COMMITTED' || m.payload?.payload?.status === 'success')
     );
 
     reporter.record(
@@ -1209,10 +1234,14 @@ async function runAdversarialSuite() {
     );
   }
 
-  // TC-ADV-5.3: Patient demographic isolation
+  // TC-ADV-5.3: Patient demographic isolation & Zero Plaintext Wire Invariant
   {
     const envA = createContentScriptEnvironment({ patientText: 'Mã bệnh nhân: 88888 - Tên bệnh nhân: LE THI BÍ MẬT' });
     const wsA = await envA.openModal();
+
+    // Create session B to verify cryptographic cross-session isolation
+    const envB = createContentScriptEnvironment({ patientText: 'Mã bệnh nhân: 99999 - Tên bệnh nhân: TRAN THI B' });
+    const wsB = await envB.openModal();
 
     // Session A receives patient_req on its own channel
     wsA.simulateBroadcast('patient_req', {});
@@ -1222,14 +1251,41 @@ async function runAdversarialSuite() {
       m.event === 'broadcast' &&
       m.payload?.event === 'patient_info'
     );
-    const patientData = patientInfoMsg?.payload?.payload?.patient;
+    const wirePayload = patientInfoMsg?.payload?.payload;
 
-    const passed = patientData && patientData.id === '88888' && patientData.name === 'LE THI BÍ MẬT';
+    let patientData = null;
+    let bFailedToDecrypt = false;
+
+    if (wirePayload?.encrypted && (wirePayload?.data || wirePayload?.ciphertext) && wirePayload?.iv) {
+      const cryptoA = envA.sandbox.window.__CamSyncCrypto;
+      const sessionA = envA.getClinicalSession();
+      const keyA = sessionA?.cryptoKey || (sessionA?.encryptionKeyHex ? await cryptoA.importAesGcmKey(sessionA.encryptionKeyHex) : null);
+      const aadA = { v: wirePayload.v || 2, sid: sessionA?.sessionId, contentType: 'application/json' };
+      const ciphertext = wirePayload.ciphertext || wirePayload.data;
+      const decryptedStr = await cryptoA.decryptAesGcmPayload(keyA, wirePayload.iv, ciphertext, aadA);
+      const decrypted = JSON.parse(decryptedStr);
+      patientData = decrypted.patient;
+
+      // Assert Session B cannot decrypt Session A's payload
+      const cryptoB = envB.sandbox.window.__CamSyncCrypto;
+      const sessionB = envB.getClinicalSession();
+      const keyB = sessionB?.cryptoKey || (sessionB?.encryptionKeyHex ? await cryptoB.importAesGcmKey(sessionB.encryptionKeyHex) : null);
+      const aadB = { v: wirePayload.v || 2, sid: sessionB?.sessionId, contentType: 'application/json' };
+      try {
+        await cryptoB.decryptAesGcmPayload(keyB, wirePayload.iv, ciphertext, aadB);
+        bFailedToDecrypt = false;
+      } catch (e) {
+        bFailedToDecrypt = true;
+      }
+    }
+
+    const wireHasNoPlaintext = wirePayload?.patient === undefined && wirePayload?.encounter === undefined && wirePayload?.fingerprint === undefined;
+    const passed = wireHasNoPlaintext && wirePayload?.encrypted === true && patientData && patientData.id === '88888' && patientData.name === 'LE THI BÍ MẬT' && bFailedToDecrypt;
     reporter.record(
       'TC-ADV-5.3',
-      'Patient demographic broadcast responds strictly on the authenticated session topic',
+      'Patient demographic broadcast responds strictly on authenticated topic with zero wire plaintext and cryptographic isolation',
       passed,
-      `Returned patient: ID ${patientData?.id} - ${patientData?.name}`
+      `Decrypted patient: ID ${patientData?.id} - ${patientData?.name}, Plaintext stripped: ${wireHasNoPlaintext}, Cross-session decrypt rejected: ${bFailedToDecrypt}`
     );
   }
 

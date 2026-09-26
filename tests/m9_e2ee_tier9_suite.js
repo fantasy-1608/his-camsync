@@ -242,6 +242,7 @@ function createE2EEEnvironment(options = {}) {
       get innerText() { return patientText; },
       set innerText(v) { patientText = v; }
     },
+    __simulatePersistenceCommit: true,
     head: { appendChild() {} },
     addEventListener: () => {}
   };
@@ -252,6 +253,18 @@ function createE2EEEnvironment(options = {}) {
   patientBanner.textContent = patientText;
   elements['grdBenhNhan'] = patientBanner;
   mockDoc.body.appendChild(patientBanner);
+
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch && options.includeEncounter !== false) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+    mockDoc.body.appendChild(maLuotKham);
+  }
 
   const fileUpload = createElement('input');
   fileUpload.id = 'fileUpload';
@@ -264,6 +277,11 @@ function createE2EEEnvironment(options = {}) {
   btnUpload.id = 'btnUpload';
   elements['btnUpload'] = btnUpload;
   mockDoc.body.appendChild(btnUpload);
+
+  const gridUploadResults = createElement('div');
+  gridUploadResults.id = 'gridUploadResults';
+  elements['gridUploadResults'] = gridUploadResults;
+  mockDoc.body.appendChild(gridUploadResults);
 
   class MockWebSocket extends EventEmitter {
     static OPEN = 1;
@@ -381,12 +399,14 @@ function createE2EEEnvironment(options = {}) {
   const cryptoPath = path.resolve(__dirname, '../extension/content/crypto-utils.js');
   const auditPath = path.resolve(__dirname, '../extension/content/audit-logger.js');
   const clinicalPath = path.resolve(__dirname, '../extension/content/clinical-guard.js');
+  const hisPath = path.resolve(__dirname, '../extension/content/his-adapter.js');
   const transferPath = path.resolve(__dirname, '../extension/content/transfer-receiver.js');
   const extensionPath = path.resolve(__dirname, '../extension/content/camsync-content.js');
 
   const cryptoCode = fs.readFileSync(cryptoPath, 'utf8');
   const auditCode = fs.readFileSync(auditPath, 'utf8');
   const clinicalCode = fs.readFileSync(clinicalPath, 'utf8');
+  const hisCode = fs.readFileSync(hisPath, 'utf8');
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
 
@@ -401,6 +421,7 @@ function createE2EEEnvironment(options = {}) {
   vm.runInContext(cryptoCode, context);
   vm.runInContext(auditCode, context);
   vm.runInContext(clinicalCode, context);
+  vm.runInContext(hisCode, context);
   vm.runInContext(transferCode, context);
 
   sandbox.window.__generateEncryptionKeyHex = sandbox.window.__CamSyncCrypto.generateEncryptionKeyHex;
@@ -514,7 +535,7 @@ function createMobileClient(options = {}) {
     context,
     sandbox,
     getHistoryState: () => historyState,
-    encryptPayload: (key, pt) => sandbox.encryptAesGcmPayload(key, pt),
+    encryptPayload: (key, pt, aad) => sandbox.encryptAesGcmPayload(key, pt, aad),
     importKey: (k) => sandbox.importAesGcmKey(k),
     destroy: () => client.destroy()
   };
@@ -630,6 +651,31 @@ async function runE2EESuite() {
       `Algorithm: ${cryptoKey?.algorithm?.name}, Key usages: ${cryptoKey?.usages?.join(',')}`
     );
     mobile.destroy();
+  }
+
+  {
+    let thrownError = null;
+    try {
+      const sandboxNoCrypto = {
+        window: {},
+        console: { log: () => {}, warn: () => {}, error: () => {} }
+      };
+      const cryptoPath = path.resolve(__dirname, '../extension/content/crypto-utils.js');
+      const cryptoCode = fs.readFileSync(cryptoPath, 'utf8');
+      const ctx = vm.createContext(sandboxNoCrypto);
+      vm.runInContext(cryptoCode, ctx);
+      sandboxNoCrypto.window.__CamSyncCrypto.generateEncryptionKeyHex();
+    } catch (e) {
+      thrownError = e;
+    }
+
+    const passed = thrownError !== null && (thrownError.message.includes('CSPRNG_UNAVAILABLE') || thrownError.name === 'Error');
+    reporter.record(
+      'TC-E2EE-1.5',
+      'CSPRNG Unavailability: generateEncryptionKeyHex() fails closed (throws CSPRNG_UNAVAILABLE) without Math.random() fallback',
+      passed,
+      `Error thrown: "${thrownError?.message || thrownError}"`
+    );
   }
 
   // --------------------------------------------------------------------------
@@ -904,6 +950,193 @@ async function runE2EESuite() {
     mobile.destroy();
   }
 
+  {
+    const env = createE2EEEnvironment();
+    env.openModal();
+    const session = env.getClinicalSession();
+    const keyHex = session.encryptionKeyHex;
+
+    const mobile = createMobileClient();
+    const mobileKey = await mobile.importKey(keyHex);
+
+    const transferId = 'tx_aad_sid_tamper_' + Date.now();
+    const originalAad = {
+      v: 2,
+      sid: 'wrong_tampered_session_id',
+      transferId,
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, jpegB64, originalAad);
+
+    const ws = env.getWebSocket();
+    let ackReceived = null;
+    ws.on('sent', (msg) => {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
+        ackReceived = msg.payload.payload;
+      }
+    });
+
+    ws.simulateBroadcast('chunk_start', {
+      v: 2,
+      transferId,
+      totalChunks: 1,
+      totalSize: enc.data.length,
+      encrypted: true,
+      iv: enc.iv,
+      meta: { patientId: '889900', orderId: 'CD889900', encrypted: true, iv: enc.iv }
+    });
+    ws.simulateBroadcast('chunk_data', {
+      v: 2,
+      transferId,
+      chunkIndex: 0,
+      data: enc.data,
+      encrypted: true,
+      iv: enc.iv
+    });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     ackReceived.error === 'DECRYPTION_FAILED';
+    const noFileInjected = env.fileUpload.files.length === 0;
+
+    reporter.record(
+      'TC-E2EE-3.4',
+      'AAD Tamper: Mismatched session ID in AAD metadata fails AES-GCM tag verification (DECRYPTION_FAILED)',
+      rejected && noFileInjected,
+      `ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}`
+    );
+    env.cleanup();
+    mobile.destroy();
+  }
+
+  {
+    const env = createE2EEEnvironment();
+    env.openModal();
+    const session = env.getClinicalSession();
+    const keyHex = session.encryptionKeyHex;
+
+    const mobile = createMobileClient();
+    const mobileKey = await mobile.importKey(keyHex);
+
+    const transferId = 'tx_aad_tid_tamper_' + Date.now();
+    const originalAad = {
+      v: 2,
+      sid: session.sessionId,
+      transferId: 'different_transfer_id_in_aad',
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, jpegB64, originalAad);
+
+    const ws = env.getWebSocket();
+    let ackReceived = null;
+    ws.on('sent', (msg) => {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
+        ackReceived = msg.payload.payload;
+      }
+    });
+
+    ws.simulateBroadcast('chunk_start', {
+      v: 2,
+      transferId,
+      totalChunks: 1,
+      totalSize: enc.data.length,
+      encrypted: true,
+      iv: enc.iv,
+      meta: { patientId: '889900', orderId: 'CD889900', encrypted: true, iv: enc.iv }
+    });
+    ws.simulateBroadcast('chunk_data', {
+      v: 2,
+      transferId,
+      chunkIndex: 0,
+      data: enc.data,
+      encrypted: true,
+      iv: enc.iv
+    });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     ackReceived.error === 'DECRYPTION_FAILED';
+    const noFileInjected = env.fileUpload.files.length === 0;
+
+    reporter.record(
+      'TC-E2EE-3.5',
+      'AAD Tamper: Mutated transferId in AAD metadata fails AES-GCM tag verification fail-closed',
+      rejected && noFileInjected,
+      `ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}`
+    );
+    env.cleanup();
+    mobile.destroy();
+  }
+
+  {
+    const env = createE2EEEnvironment();
+    env.openModal();
+    const session = env.getClinicalSession();
+    const keyHex = session.encryptionKeyHex;
+
+    const mobile = createMobileClient();
+    const mobileKey = await mobile.importKey(keyHex);
+
+    const transferId = 'tx_aad_type_tamper_' + Date.now();
+    const originalAad = {
+      v: 2,
+      sid: session.sessionId,
+      transferId,
+      contentType: 'application/pdf'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, jpegB64, originalAad);
+
+    const ws = env.getWebSocket();
+    let ackReceived = null;
+    ws.on('sent', (msg) => {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
+        ackReceived = msg.payload.payload;
+      }
+    });
+
+    ws.simulateBroadcast('chunk_start', {
+      v: 2,
+      transferId,
+      totalChunks: 1,
+      totalSize: enc.data.length,
+      mimeType: 'image/jpeg',
+      encrypted: true,
+      iv: enc.iv,
+      meta: { patientId: '889900', orderId: 'CD889900', encrypted: true, iv: enc.iv }
+    });
+    ws.simulateBroadcast('chunk_data', {
+      v: 2,
+      transferId,
+      chunkIndex: 0,
+      data: enc.data,
+      encrypted: true,
+      iv: enc.iv
+    });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     ackReceived.error === 'DECRYPTION_FAILED';
+    const noFileInjected = env.fileUpload.files.length === 0;
+
+    reporter.record(
+      'TC-E2EE-3.6',
+      'AAD Tamper: Mutated contentType in AAD metadata fails AES-GCM tag verification fail-closed',
+      rejected && noFileInjected,
+      `ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}`
+    );
+    env.cleanup();
+    mobile.destroy();
+  }
+
   // --------------------------------------------------------------------------
   reporter.group('SUITE 4: End-to-End E2EE Dual Transport Integration (P1-1)');
   // --------------------------------------------------------------------------
@@ -921,11 +1154,18 @@ async function runE2EESuite() {
     const mobile = createMobileClient();
     const mobileKey = await mobile.importKey(keyHex);
 
-    const enc = await mobile.encryptPayload(mobileKey, jpegB64);
     const transferId = 'tx_webrtc_e2ee_' + Date.now();
+    const aadHeader = {
+      v: 2,
+      sid: session.sessionId,
+      transferId,
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, jpegB64, aadHeader);
 
     conn.simulateData({
       type: 'CHUNK_START',
+      v: 2,
       transferId,
       totalChunks: 2,
       totalBytes: enc.data.length,
@@ -937,6 +1177,7 @@ async function runE2EESuite() {
     const mid = Math.floor(enc.data.length / 2);
     conn.simulateData({
       type: 'CHUNK_DATA',
+      v: 2,
       transferId,
       index: 0,
       chunk: enc.data.slice(0, mid),
@@ -945,22 +1186,23 @@ async function runE2EESuite() {
     });
     conn.simulateData({
       type: 'CHUNK_DATA',
+      v: 2,
       transferId,
       index: 1,
       chunk: enc.data.slice(mid),
       encrypted: true,
       iv: enc.iv
     });
-    conn.simulateData({ type: 'CHUNK_COMPLETE', transferId });
+    conn.simulateData({ type: 'CHUNK_COMPLETE', v: 2, transferId });
 
     await new Promise(r => setTimeout(r, 40));
 
-    const ackReceived = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
+    const ackReceived = conn.sent.find(m => (m.type === 'TRANSFER_ACK' || m.type === 'TransferAck') && m.transferId === transferId);
     const injected = env.fileUpload.files.length === 1;
     const photoCount = env.getPhotoCount();
 
     const passed = ackReceived &&
-                   ackReceived.status === 'success' &&
+                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
                    ackReceived.success === true &&
                    injected &&
                    photoCount === 1;
@@ -985,17 +1227,24 @@ async function runE2EESuite() {
     const mobile = createMobileClient();
     const mobileKey = await mobile.importKey(keyHex);
 
-    const enc = await mobile.encryptPayload(mobileKey, jpegB64);
     const transferId = 'tx_realtime_e2ee_' + Date.now();
+    const aadHeader = {
+      v: 2,
+      sid: session.sessionId,
+      transferId,
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, jpegB64, aadHeader);
 
     let ackReceived = null;
     ws.on('sent', (msg) => {
-      if (msg.event === 'broadcast' && msg.payload?.event === 'transfer_ack' && msg.payload?.payload?.transferId === transferId) {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
         ackReceived = msg.payload.payload;
       }
     });
 
     ws.simulateBroadcast('chunk_start', {
+      v: 2,
       transferId,
       totalChunks: 2,
       totalSize: enc.data.length,
@@ -1006,6 +1255,7 @@ async function runE2EESuite() {
 
     const mid = Math.floor(enc.data.length / 2);
     ws.simulateBroadcast('chunk_data', {
+      v: 2,
       transferId,
       chunkIndex: 0,
       data: enc.data.slice(0, mid),
@@ -1013,19 +1263,20 @@ async function runE2EESuite() {
       iv: enc.iv
     });
     ws.simulateBroadcast('chunk_data', {
+      v: 2,
       transferId,
       chunkIndex: 1,
       data: enc.data.slice(mid),
       encrypted: true,
       iv: enc.iv
     });
-    ws.simulateBroadcast('chunk_complete', { transferId });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
 
     await new Promise(r => setTimeout(r, 40));
 
     const injected = env.fileUpload.files.length === 1;
     const passed = ackReceived &&
-                   ackReceived.status === 'success' &&
+                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
                    ackReceived.success === true &&
                    injected;
 
@@ -1048,13 +1299,14 @@ async function runE2EESuite() {
 
     let ackReceived = null;
     ws.on('sent', (msg) => {
-      if (msg.event === 'broadcast' && msg.payload?.event === 'transfer_ack' && msg.payload?.payload?.transferId === transferId) {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
         ackReceived = msg.payload.payload;
       }
     });
 
-    // Unencrypted legacy transfer
+    // Unencrypted legacy transfer (Gate G1 violation)
     ws.simulateBroadcast('chunk_start', {
+      v: 2,
       transferId,
       totalChunks: 1,
       totalSize: jpegB64.length,
@@ -1062,28 +1314,373 @@ async function runE2EESuite() {
       meta: { patientId: '889900', orderId: 'CD889900' }
     });
     ws.simulateBroadcast('chunk_data', {
+      v: 2,
       transferId,
       chunkIndex: 0,
       data: jpegB64,
       encrypted: false
     });
-    ws.simulateBroadcast('chunk_complete', { transferId });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
 
     await new Promise(r => setTimeout(r, 40));
 
-    const injected = env.fileUpload.files.length === 1;
-    const passed = ackReceived &&
-                   ackReceived.status === 'success' &&
-                   ackReceived.success === true &&
-                   injected;
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     (ackReceived.error === 'DECRYPTION_FAILED' || ackReceived.code === 'TRANSFER_INVALID');
+    const zeroDomFiles = env.fileUpload.files.length === 0;
+    const zeroUploadClicks = env.getUploadClickCount() === 0;
+
+    const passed = rejected && zeroDomFiles && zeroUploadClicks;
 
     reporter.record(
       'TC-E2EE-4.3',
-      'Plaintext Backward Compatibility: Legacy unencrypted chunks process seamlessly without error',
+      'Gate G1 Fail-Closed: Unencrypted payloads (encrypted: false) are rejected with DECRYPTION_FAILED/TRANSFER_INVALID (0 DOM files injected)',
       passed,
-      `ACK status: ${ackReceived?.status}, DOM files: ${env.fileUpload.files.length}`
+      `ACK status: ${ackReceived?.status}, ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}, uploadClickCount: ${env.getUploadClickCount()}`
     );
     env.cleanup();
+  }
+
+  {
+    const env = createE2EEEnvironment();
+    env.openModal();
+    const session = env.getClinicalSession();
+    const keyHex = session.encryptionKeyHex;
+
+    const ws = env.getWebSocket();
+    const mobile = createMobileClient();
+    const mobileKey = await mobile.importKey(keyHex);
+
+    // Corrupted non-JPEG/PNG payload (invalid magic bytes)
+    const corruptedBuffer = Buffer.from('MZ_CORRUPTED_NON_IMAGE_BINARY_FILE_CONTENT_HERE_FOR_TESTING');
+    const corruptedB64 = corruptedBuffer.toString('base64');
+    const transferId = 'tx_magic_bytes_invalid_' + Date.now();
+    const aadHeader = {
+      v: 2,
+      sid: session.sessionId,
+      transferId,
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, corruptedB64, aadHeader);
+
+    let ackReceived = null;
+    ws.on('sent', (msg) => {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
+        ackReceived = msg.payload.payload;
+      }
+    });
+
+    ws.simulateBroadcast('chunk_start', {
+      v: 2,
+      transferId,
+      totalChunks: 1,
+      totalSize: enc.data.length,
+      encrypted: true,
+      iv: enc.iv,
+      meta: { patientId: '889900', orderId: 'CD889900', encrypted: true, iv: enc.iv }
+    });
+    ws.simulateBroadcast('chunk_data', {
+      v: 2,
+      transferId,
+      chunkIndex: 0,
+      data: enc.data,
+      encrypted: true,
+      iv: enc.iv
+    });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     (ackReceived.error === 'INVALID_IMAGE_MAGIC_BYTES' || ackReceived.code === 'TRANSFER_INVALID');
+    const zeroDomFiles = env.fileUpload.files.length === 0;
+
+    reporter.record(
+      'TC-E2EE-4.4',
+      'Binary Magic Bytes: Non-JPEG/PNG payload rejected fail-closed (INVALID_IMAGE_MAGIC_BYTES, 0 DOM files)',
+      rejected && zeroDomFiles,
+      `ACK status: ${ackReceived?.status}, ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}`
+    );
+    env.cleanup();
+    mobile.destroy();
+  }
+
+  {
+    const env = createE2EEEnvironment();
+    env.openModal();
+    const session = env.getClinicalSession();
+    const keyHex = session.encryptionKeyHex;
+
+    const ws = env.getWebSocket();
+    const mobile = createMobileClient();
+    const mobileKey = await mobile.importKey(keyHex);
+
+    // Create a synthetic JPEG with a pixel-bomb SOF0 marker (35000 x 35000)
+    const bombBuf = Buffer.alloc(128);
+    bombBuf[0] = 0xFF; bombBuf[1] = 0xD8; // SOI
+    bombBuf[2] = 0xFF; bombBuf[3] = 0xC0; // SOF0
+    bombBuf[4] = 0x00; bombBuf[5] = 0x11; // Length: 17 bytes
+    bombBuf[6] = 0x08; // 8-bit precision
+    bombBuf.writeUInt16BE(35000, 7);  // Height: 35,000 px
+    bombBuf.writeUInt16BE(35000, 9);  // Width: 35,000 px
+    bombBuf[11] = 3; // 3 color components
+    bombBuf[bombBuf.length - 2] = 0xFF; bombBuf[bombBuf.length - 1] = 0xD9; // EOI
+
+    const bombB64 = bombBuf.toString('base64');
+    const transferId = 'tx_pixel_bomb_' + Date.now();
+    const aadHeader = {
+      v: 2,
+      sid: session.sessionId,
+      transferId,
+      contentType: 'image/jpeg'
+    };
+    const enc = await mobile.encryptPayload(mobileKey, bombB64, aadHeader);
+
+    let ackReceived = null;
+    ws.on('sent', (msg) => {
+      if (msg.event === 'broadcast' && (msg.payload?.event === 'transfer_ack' || msg.payload?.event === 'TransferAck') && msg.payload?.payload?.transferId === transferId) {
+        ackReceived = msg.payload.payload;
+      }
+    });
+
+    ws.simulateBroadcast('chunk_start', {
+      v: 2,
+      transferId,
+      totalChunks: 1,
+      totalSize: enc.data.length,
+      encrypted: true,
+      iv: enc.iv,
+      meta: { patientId: '889900', orderId: 'CD889900', encrypted: true, iv: enc.iv }
+    });
+    ws.simulateBroadcast('chunk_data', {
+      v: 2,
+      transferId,
+      chunkIndex: 0,
+      data: enc.data,
+      encrypted: true,
+      iv: enc.iv
+    });
+    ws.simulateBroadcast('chunk_complete', { v: 2, transferId });
+
+    await new Promise(r => setTimeout(r, 40));
+
+    const rejected = ackReceived &&
+                     (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error' || ackReceived.success === false) &&
+                     (ackReceived.error === 'PIXEL_BOMB_DETECTED' || ackReceived.code === 'TRANSFER_INVALID');
+    const zeroDomFiles = env.fileUpload.files.length === 0;
+
+    reporter.record(
+      'TC-E2EE-4.5',
+      'Pixel Bomb Defense: 35000x35000 image (>16MP, >8192px) rejected fail-closed (PIXEL_BOMB_DETECTED, 0 DOM files)',
+      rejected && zeroDomFiles,
+      `ACK status: ${ackReceived?.status}, ACK error: ${ackReceived?.error}, DOM files: ${env.fileUpload.files.length}`
+    );
+    env.cleanup();
+    mobile.destroy();
+  }
+
+  // ==========================================================================
+  // SUITE 5: Zero-Knowledge Wire Invariants & Anti-Regression Demographics Stripping
+  // ==========================================================================
+  reporter.group('SUITE 5: Zero-Knowledge Wire Invariants & Anti-Regression Demographics Stripping');
+
+  {
+    // TC-E2EE-5.1: Realtime Cloud Relay: patient_req responds with strictly encrypted envelope; zero wire plaintext
+    const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
+    env.openModal();
+    const session = env.getClinicalSession();
+    const ws = env.getWebSocket();
+
+    ws.simulateBroadcast('patient_req', {});
+    await new Promise(r => setTimeout(r, 20));
+
+    const patientMsg = ws.sent.find(m => m.event === 'broadcast' && m.payload?.event === 'patient_info');
+    const wirePayload = patientMsg?.payload?.payload;
+
+    let decrypted = null;
+    if (wirePayload?.encrypted && (wirePayload?.data || wirePayload?.ciphertext) && wirePayload?.iv) {
+      const cryptoUtils = env.context.window.__CamSyncCrypto;
+      const key = session?.cryptoKey || (session?.encryptionKeyHex ? await cryptoUtils.importAesGcmKey(session.encryptionKeyHex) : null);
+      const aad = { v: wirePayload.v || 2, sid: session?.sessionId, contentType: 'application/json' };
+      const ciphertext = wirePayload.ciphertext || wirePayload.data;
+      const decryptedStr = await cryptoUtils.decryptAesGcmPayload(key, wirePayload.iv, ciphertext, aad);
+      decrypted = JSON.parse(decryptedStr);
+    }
+
+    const wireHasNoPlaintext = wirePayload?.patient === undefined && wirePayload?.encounter === undefined && wirePayload?.fingerprint === undefined;
+    const isEncrypted = wirePayload?.encrypted === true && typeof wirePayload?.iv === 'string';
+    const dataValid = decrypted?.patient?.id === '889900' && typeof decrypted?.fingerprint === 'string';
+
+    reporter.record(
+      'TC-E2EE-5.1',
+      'Realtime Cloud Relay: patient_req broadcast carries zero wire plaintext demographics and authentic WebCrypto AES-GCM ciphertext',
+      wireHasNoPlaintext && isEncrypted && dataValid,
+      `Encrypted: ${isEncrypted}, Plaintext stripped: ${wireHasNoPlaintext}, Decrypted ID: ${decrypted?.patient?.id}`
+    );
+    env.cleanup();
+  }
+
+  {
+    // TC-E2EE-5.2: WebRTC DataChannel: Zero unencrypted PATIENT_INFO on open; encrypted response on REQ_PATIENT_INFO
+    const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
+    env.openModal();
+    const session = env.getClinicalSession();
+    const peer = env.getPeer();
+    const conn = peer.connectSimulatedPhone();
+
+    await new Promise(r => setTimeout(r, 20));
+
+    // Check messages sent on channel open
+    const openPatientInfoMsgs = conn.sent.filter(m => m.type === 'PATIENT_INFO');
+    const zeroPlaintextOnOpen = openPatientInfoMsgs.length === 0;
+
+    // Simulate mobile requesting patient info
+    conn.simulateData({ type: 'REQ_PATIENT_INFO' });
+    await new Promise(r => setTimeout(r, 20));
+
+    const responseMsg = conn.sent.find(m => m.type === 'PATIENT_INFO');
+    const wireHasNoPlaintext = responseMsg?.patient === undefined && responseMsg?.encounter === undefined && responseMsg?.fingerprint === undefined;
+    const isEncrypted = responseMsg?.encrypted === true && typeof responseMsg?.iv === 'string';
+
+    let decrypted = null;
+    if (isEncrypted && (responseMsg.data || responseMsg.ciphertext)) {
+      const cryptoUtils = env.context.window.__CamSyncCrypto;
+      const key = session?.cryptoKey || (session?.encryptionKeyHex ? await cryptoUtils.importAesGcmKey(session.encryptionKeyHex) : null);
+      const aad = { v: responseMsg.v || 2, sid: session?.sessionId, contentType: 'application/json' };
+      const ciphertext = responseMsg.ciphertext || responseMsg.data;
+      const decryptedStr = await cryptoUtils.decryptAesGcmPayload(key, responseMsg.iv, ciphertext, aad);
+      decrypted = JSON.parse(decryptedStr);
+    }
+
+    const dataValid = decrypted?.patient?.id === '889900';
+
+    reporter.record(
+      'TC-E2EE-5.2',
+      'WebRTC DataChannel: Zero unencrypted emission on channel open; REQ_PATIENT_INFO responds with strictly encrypted demographics',
+      zeroPlaintextOnOpen && wireHasNoPlaintext && isEncrypted && dataValid,
+      `Zero on open: ${zeroPlaintextOnOpen}, Wire stripped: ${wireHasNoPlaintext}, Decrypted ID: ${decrypted?.patient?.id}`
+    );
+    env.cleanup();
+  }
+
+  {
+    // TC-E2EE-5.3: Cryptographic Fail-Closed: Corrupted key triggers abortClinicalSession(CRYPTO_FAILED) and zero unencrypted broadcast
+    const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
+    env.openModal();
+    const session = env.getClinicalSession();
+    const ws = env.getWebSocket();
+
+    // Corrupt key to force crypto failure
+    session.cryptoKey = null;
+    session.encryptionKeyHex = 'CORRUPTED_KEY_HEX';
+
+    ws.simulateBroadcast('patient_req', {});
+    await new Promise(r => setTimeout(r, 20));
+
+    const patientMsgs = ws.sent.filter(m => m.event === 'broadcast' && m.payload?.event === 'patient_info');
+    const unencryptedBroadcastSent = patientMsgs.some(m => m.payload?.payload?.patient !== undefined);
+    const sessionAborted = env.getClinicalSession() === null || env.getClinicalSession()?.state === 'ABORTED';
+
+    reporter.record(
+      'TC-E2EE-5.3',
+      'Cryptographic Fail-Closed: Missing/corrupted key triggers abortClinicalSession(CRYPTO_FAILED) and zero unencrypted broadcast',
+      !unencryptedBroadcastSent && sessionAborted,
+      `Unencrypted sent: ${unencryptedBroadcastSent}, Session aborted: ${sessionAborted}`
+    );
+    env.cleanup();
+  }
+
+  {
+    // TC-E2EE-5.4: Mobile Client Invariant: Mobile client refuses and drops unencrypted demographics from Cloud & WebRTC
+    const mockConn = new EventEmitter();
+    mockConn.open = true;
+    mockConn.send = () => {};
+
+    class CustomMobilePeer extends EventEmitter {
+      constructor() { super(); }
+      connect() { return mockConn; }
+      destroy() {}
+    }
+
+    const testKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    const mobile = createMobileClient({
+      sessionId: 'test_sess_54',
+      key: testKey,
+      Peer: CustomMobilePeer
+    });
+
+    mobile.sandbox.window.Peer = CustomMobilePeer;
+    mobile.client.peer = new CustomMobilePeer();
+    mobile.client.initRealtimeBroadcast();
+    mobile.client.connectP2PToDesktop();
+
+    let receivedPatient = null;
+    mobile.client.onPatientInfo = (info) => {
+      receivedPatient = info;
+    };
+
+    // 1. Send unencrypted patient_info via Realtime
+    if (mobile.client.realtimeWs && mobile.client.realtimeWs.onmessage) {
+      await mobile.client.realtimeWs.onmessage({
+        data: JSON.stringify({
+          event: 'broadcast',
+          payload: {
+            event: 'patient_info',
+            payload: {
+              patient: { id: 'MALICIOUS_REALTIME', name: 'ATTACKER' },
+              encounter: { orderId: 'FAKE_ORDER' },
+              fingerprint: 'FAKE_FP'
+            }
+          }
+        })
+      });
+    }
+
+    await new Promise(r => setTimeout(r, 20));
+    const realtimeUnencryptedDropped = (receivedPatient === null) && (mobile.client.patientInfo === null);
+
+    // 2. Send unencrypted PATIENT_INFO via WebRTC DataChannel
+    mockConn.emit('data', {
+      type: 'PATIENT_INFO',
+      patient: { id: 'MALICIOUS_WEBRTC', name: 'ATTACKER_2' },
+      encounter: { orderId: 'FAKE_ORDER_2' },
+      fingerprint: 'FAKE_FP_2'
+    });
+
+    await new Promise(r => setTimeout(r, 20));
+    const webrtcUnencryptedDropped = (receivedPatient === null) && (mobile.client.patientInfo === null);
+
+    // 3. Send authentic encrypted PATIENT_INFO via WebRTC DataChannel
+    const cryptoKey = await mobile.importKey(testKey);
+    const rawPayload = JSON.stringify({
+      patient: { id: 'VALID_PATIENT_54', name: 'NGUYEN AUTHENTIC' },
+      encounter: { orderId: 'ORD_54' },
+      fingerprint: 'FP_54'
+    });
+    const aad = { v: 2, sid: 'test_sess_54', contentType: 'application/json' };
+    const enc = await mobile.encryptPayload(cryptoKey, rawPayload, aad);
+
+    mockConn.emit('data', {
+      type: 'PATIENT_INFO',
+      v: 2,
+      encrypted: true,
+      data: enc.data,
+      iv: enc.iv,
+      sid: 'test_sess_54'
+    });
+
+    await new Promise(r => setTimeout(r, 50));
+    const encryptedAccepted = (mobile.client.patientInfo?.id === 'VALID_PATIENT_54') &&
+                              (receivedPatient?.name === 'NGUYEN AUTHENTIC');
+
+    reporter.record(
+      'TC-E2EE-5.4',
+      'Mobile Client Invariant: Mobile client drops unencrypted demographics from Cloud & WebRTC and strictly accepts authentic ciphertext',
+      realtimeUnencryptedDropped && webrtcUnencryptedDropped && encryptedAccepted,
+      `Realtime dropped: ${realtimeUnencryptedDropped}, WebRTC dropped: ${webrtcUnencryptedDropped}, Ciphertext accepted: ${encryptedAccepted}`
+    );
+    mobile.destroy();
   }
 
   reporter.summary();

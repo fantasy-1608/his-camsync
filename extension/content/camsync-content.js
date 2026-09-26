@@ -7,7 +7,17 @@
   'use strict';
 
 // === Module Imports (loaded trước qua manifest.json) ===
-const { generateSecureSessionId, generateEncryptionKeyHex, importAesGcmKey, decryptAesGcmPayload } = window.__CamSyncCrypto;
+const {
+  generateSecureSessionId,
+  generateEncryptionKeyHex,
+  importAesGcmKey,
+  encryptAesGcmPayload,
+  decryptAesGcmPayload,
+  canonicalSerializeAad,
+  validateImageMagicBytes,
+  extractImageDimensions,
+  isWithinImageLimits
+} = window.__CamSyncCrypto || (typeof globalThis !== 'undefined' ? globalThis.__CamSyncCrypto : {}) || {};
 const audit = window.__CamSyncAudit;
 const { getRootDocument, computeContextFingerprint, getClinicalContextFromDOM: _getClinicalContext, validateClinicalContext: _validateClinical, getPatientInfoFromDOM: _getPatientInfo } = window.__CamSyncClinical;
 const { UnifiedTransferReceiver, MAX_IMAGE_BYTES, MAX_TOTAL_CHUNKS } = window.__CamSyncTransfer;
@@ -27,6 +37,9 @@ function getPatientInfoFromDOM() {
   let activeSessionId = null;
   let activeClinicalSession = null;
   let activePeerConn = null;
+  let currentSessionGeneration = 0;
+  let sessionTtlTimer = null;
+  let sessionCountdownTimer = null;
   let clinicalContextWatcherTimer = null;
   let clinicalContextObserver = null;
   let photoCount = 0;
@@ -37,6 +50,7 @@ function getPatientInfoFromDOM() {
   let realtimeReconnectTimer = null;
   let isSessionIntentionallyClosed = false;
   let realtimeRefCounter = 0;
+  let onEscapeKeydownListener = null;
   const activeChunkTransfers = {};
   const processedTransferIds = new Set();
 
@@ -55,72 +69,308 @@ function getPatientInfoFromDOM() {
     const { transferId, meta, mimeType, sendAck, transport, encrypted, iv } = data;
     let fullBase64 = data.fullBase64;
 
-    // RÀO CHẮN MÃ HÓA ĐẦU CUỐI E2EE (P1-1): Giải mã AES-GCM nếu payload được mã hóa
+    // Kiểm tra tính hợp lệ của thế hệ phiên (Generation Check - F03, F04)
+    if (!activeClinicalSession || activeClinicalSession.state !== 'ACTIVE') {
+      console.warn(`[CamSync] Bỏ qua gói tin ${transferId}: không có phiên hoạt động`);
+      if (sendAck) {
+        try { sendAck(false, 'SESSION_INACTIVE', { reason: 'Phiên kết nối không ở trạng thái hoạt động' }); } catch (e) {}
+      } else if (transport === 'realtime') {
+        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: 'SESSION_INACTIVE', reason: 'Phiên kết nối không ở trạng thái hoạt động' });
+      }
+      return false;
+    }
+
+    // 1. Kiểm tra session ID (Session Binding - R1, P0-01)
+    const incomingSid = data.sid || meta?.sid || data.sessionId || meta?.sessionId;
+    if (incomingSid && incomingSid !== activeClinicalSession.sessionId) {
+      console.warn(`[CamSync] Bỏ qua gói tin sai phiên (${incomingSid} != ${activeClinicalSession.sessionId}) cho ${transferId}`);
+      if (sendAck) {
+        try { sendAck(false, 'SESSION_MISMATCH', { reason: 'Gói tin không thuộc phiên làm việc hiện tại' }); } catch (e) {}
+      } else if (transport === 'realtime') {
+        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: 'SESSION_MISMATCH', reason: 'Gói tin không thuộc phiên làm việc hiện tại' });
+      }
+      return false;
+    }
+
+    // 2. Kiểm tra thế hệ phiên (Generation Check - F03, F04)
+    const incomingGen = data.generation !== undefined ? data.generation : meta?.generation;
+    const isStaleGen = (incomingGen !== undefined && incomingGen !== activeClinicalSession.generation) ||
+                       (incomingGen === undefined && activeClinicalSession.generation > 1);
+
+    if (isStaleGen) {
+      console.warn(`[CamSync] Bỏ qua callback thế hệ cũ (${incomingGen} != ${activeClinicalSession.generation}) cho ${transferId}`);
+      if (sendAck) {
+        try { sendAck(false, 'STALE_GENERATION', { reason: 'Gói tin từ phiên cũ bị loại bỏ' }); } catch (e) {}
+      } else if (transport === 'realtime') {
+        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: 'STALE_GENERATION', reason: 'Gói tin từ phiên cũ bị loại bỏ' });
+      }
+      return false;
+    }
+
+    // RÀO CHẮN LÂM SÀNG CHECKPOINT 1 (CP1): Xác thực ngữ cảnh TRƯỚC KHI giải mã / gắn file
+    const incomingPatientId = meta?.patientId || meta?.clinicalContext?.patientId || null;
+    const cp1Check = validateClinicalContext(incomingPatientId);
+    if (!cp1Check.valid) {
+      console.warn(`[CamSync CP1] Chặn nạp ảnh tại Checkpoint 1 (${cp1Check.code}): ${cp1Check.reason}`);
+      const errCode = cp1Check.code || 'HIS_REJECTED';
+      if (sendAck) {
+        try { sendAck(false, errCode, { reason: cp1Check.reason }); } catch (e) {}
+      } else if (transport === 'realtime') {
+        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: errCode, reason: cp1Check.reason });
+      }
+      showToast(`⚠️ Từ chối nạp ảnh: ${cp1Check.reason}`);
+      audit.log('photo_blocked_cp1', { code: cp1Check.code, pid: audit.hashId(activeClinicalSession?.patient?.id) });
+      if (cp1Check.code === 'PATIENT_CHANGED' || cp1Check.code === 'PATIENT_NOT_FOUND' || cp1Check.code === 'ENCOUNTER_CHANGED' || cp1Check.code === 'ENCOUNTER_NOT_FOUND') {
+        abortClinicalSession(cp1Check.code, cp1Check.reason);
+      }
+      return false;
+    }
+
+    // RÀO CHẮN MÃ HÓA ĐẦU CUỐI E2EE & GATE G1: Kiểm tra trạng thái mã hóa
+    if (encrypted === false) {
+      console.warn(`[CamSync Gate G1] Chặn gói tin unencrypted (encrypted: false) cho ${transferId}`);
+      const errPayload = {
+        v: 2,
+        sid: activeClinicalSession?.sessionId,
+        transferId,
+        status: 'HIS_REJECTED',
+        success: false,
+        error: 'DECRYPTION_FAILED',
+        code: 'TRANSFER_INVALID',
+        reason: 'Gate G1: Plaintext payload rejected fail-closed (E2EE required)'
+      };
+      if (sendAck) {
+        try { sendAck(false, 'DECRYPTION_FAILED', errPayload); } catch (e) {}
+      } else if (transport === 'realtime') {
+        sendRealtimeBroadcast('transfer_ack', errPayload);
+      }
+      showToast('⚠️ Từ chối nạp ảnh: Dữ liệu chưa mã hóa đầu cuối (Gate G1)');
+      audit.log('e2ee_plaintext_rejected', { tid: transferId, transport });
+      return false;
+    }
+
+    let finalMeta = meta ? { ...meta } : {};
+    let finalMimeType = mimeType || 'image/jpeg';
+
     if (encrypted) {
       try {
         let cryptoKey = activeClinicalSession?.cryptoKey;
         if (!cryptoKey && activeClinicalSession?.encryptionKeyHex) {
           cryptoKey = await importAesGcmKey(activeClinicalSession.encryptionKeyHex);
-          if (activeClinicalSession) activeClinicalSession.cryptoKey = cryptoKey;
+          if (activeClinicalSession && !Object.isFrozen(activeClinicalSession)) {
+            activeClinicalSession.cryptoKey = cryptoKey;
+          }
         }
         if (!cryptoKey) {
           throw new Error('Khóa giải mã phiên chưa sẵn sàng');
         }
-        fullBase64 = await decryptAesGcmPayload(cryptoKey, iv, fullBase64);
+
+        const aadHeader = {
+          v: data.v || 2,
+          sid: activeClinicalSession.sessionId,
+          transferId: transferId,
+          contentType: finalMimeType
+        };
+
+        try {
+          fullBase64 = await decryptAesGcmPayload(cryptoKey, iv, fullBase64, aadHeader);
+        } catch (aadErr) {
+          if (!data.v || data.v < 2) {
+            fullBase64 = await decryptAesGcmPayload(cryptoKey, iv, fullBase64, null);
+          } else {
+            throw aadErr;
+          }
+        }
+
+        if (!fullBase64) {
+          throw new Error('Decryption returned empty payload');
+        }
+
+        // Unpack decrypted JSON container if present
+        if (typeof fullBase64 === 'string' && (fullBase64.trim().startsWith('{') || fullBase64.trim().startsWith('['))) {
+          try {
+            const container = JSON.parse(fullBase64);
+            if (container && container.image) {
+              fullBase64 = container.image;
+              if (container.mimeType) finalMimeType = container.mimeType;
+              if (container.meta) {
+                finalMeta = { ...finalMeta, ...container.meta };
+              }
+            }
+          } catch (e) {
+            // Not a JSON container, treat as raw base64
+          }
+        }
       } catch (decryptErr) {
         console.error(`[CamSync E2EE] Giải mã AES-GCM thất bại cho ${transferId}:`, decryptErr);
+        const errPayload = {
+          v: 2,
+          sid: activeClinicalSession?.sessionId,
+          transferId,
+          status: 'HIS_REJECTED',
+          success: false,
+          error: 'DECRYPTION_FAILED',
+          code: 'TRANSFER_INVALID',
+          reason: 'Dữ liệu mã hóa không hợp lệ, sai khóa hoặc sai AAD'
+        };
         if (sendAck) {
-          try { sendAck(false, 'DECRYPTION_FAILED', { reason: 'Dữ liệu mã hóa không hợp lệ hoặc sai khóa' }); } catch (e) {}
+          try { sendAck(false, 'DECRYPTION_FAILED', errPayload); } catch (e) {}
         } else if (transport === 'realtime') {
-          sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: 'DECRYPTION_FAILED', reason: 'Dữ liệu mã hóa không hợp lệ hoặc sai khóa' });
+          sendRealtimeBroadcast('transfer_ack', errPayload);
         }
         showToast('⚠️ Không thể giải mã ảnh: Dữ liệu bị lỗi hoặc sai khóa phiên');
-        audit.log('e2ee_decrypt_failed', { tid: transferId, transport });
+        audit.log('e2ee_decrypt_failed', { tid: transferId, transport, err: decryptErr.message });
         return false;
       }
     }
 
-    // RÀO CHẮN LÂM SÀNG CHECKPOINT #3
-    const incomingPatientId = meta.patientId || meta.clinicalContext?.patientId || null;
-    const clinicalCheck = validateClinicalContext(incomingPatientId);
-    if (!clinicalCheck.valid) {
-      console.warn(`[CamSync] Chặn nạp ảnh tại Checkpoint #3 (${clinicalCheck.code}): ${clinicalCheck.reason}`);
-      if (sendAck) {
-        try { sendAck(false, clinicalCheck.code || 'clinical_context_mismatch'); } catch (e) {}
-      } else if (transport === 'realtime') {
-        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: clinicalCheck.code || 'clinical_context_mismatch' });
+    // Re-verify CP1 with decrypted demographics if outer header was stripped
+    const decryptedPatientId = finalMeta?.patientId || finalMeta?.clinicalContext?.patientId || null;
+    if (decryptedPatientId && decryptedPatientId !== incomingPatientId) {
+      const cp1InnerCheck = validateClinicalContext(decryptedPatientId);
+      if (!cp1InnerCheck.valid) {
+        console.warn(`[CamSync CP1 Post-Decrypt] Chặn nạp ảnh (${cp1InnerCheck.code}): ${cp1InnerCheck.reason}`);
+        const errCode = cp1InnerCheck.code || 'HIS_REJECTED';
+        const errPayload = {
+          v: 2,
+          sid: activeClinicalSession?.sessionId,
+          transferId,
+          status: 'HIS_REJECTED',
+          success: false,
+          error: errCode,
+          reason: cp1InnerCheck.reason
+        };
+        if (sendAck) {
+          try { sendAck(false, errCode, errPayload); } catch (e) {}
+        } else if (transport === 'realtime') {
+          sendRealtimeBroadcast('transfer_ack', errPayload);
+        }
+        showToast(`⚠️ Từ chối nạp ảnh: ${cp1InnerCheck.reason}`);
+        audit.log('photo_blocked_cp1_inner', { code: cp1InnerCheck.code, pid: audit.hashId(activeClinicalSession?.patient?.id) });
+        if (cp1InnerCheck.code === 'PATIENT_CHANGED' || cp1InnerCheck.code === 'PATIENT_NOT_FOUND' || cp1InnerCheck.code === 'ENCOUNTER_CHANGED' || cp1InnerCheck.code === 'ENCOUNTER_NOT_FOUND') {
+          abortClinicalSession(cp1InnerCheck.code, cp1InnerCheck.reason);
+        }
+        return false;
       }
-      showToast(`⚠️ Từ chối nạp ảnh: ${clinicalCheck.reason}`);
-      audit.log('photo_blocked_checkpoint3', { code: clinicalCheck.code, pid: audit.hashId(activeClinicalSession?.patient?.id) });
-      if (clinicalCheck.code === 'PATIENT_CHANGED' || clinicalCheck.code === 'PATIENT_NOT_FOUND') {
-        abortClinicalSession(clinicalCheck.code, clinicalCheck.reason);
-      }
-      return;
     }
 
-    const dataUrl = fullBase64.startsWith('data:') ? fullBase64 : `data:${mimeType};base64,${fullBase64}`;
-    const injectRes = handleIncomingImageData(dataUrl, meta);
-    const isSuccess = typeof injectRes === 'boolean' ? injectRes : !!injectRes?.success;
+    // Decode base64 to binary bytes for Magic Bytes and Pixel Bomb validation
+    const commaIdx = fullBase64.indexOf(',');
+    const cleanB64 = commaIdx >= 0 ? fullBase64.slice(commaIdx + 1) : fullBase64;
+    let imageBytes = null;
+    try {
+      const binaryStr = typeof atob === 'function' ? atob(cleanB64) : (typeof Buffer !== 'undefined' ? Buffer.from(cleanB64, 'base64').toString('binary') : null);
+      if (binaryStr) {
+        imageBytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          imageBytes[i] = binaryStr.charCodeAt(i);
+        }
+      }
+    } catch (e) {
+      console.warn('[CamSync] Không thể chuyển đổi base64 sang binary để kiểm tra magic bytes:', e);
+    }
+
+    const shouldValidateImage = encrypted === true || data.v === 2;
+    if (shouldValidateImage) {
+      // Binary Magic Bytes Validation (JPEG FF D8 FF & PNG 89 50 4E 47 0D 0A 1A 0A)
+      if (imageBytes && typeof validateImageMagicBytes === 'function') {
+        const magicCheck = validateImageMagicBytes(imageBytes);
+        if (!magicCheck.valid) {
+          console.warn(`[CamSync] Magic bytes validation failed cho ${transferId}:`, magicCheck.reason);
+          const errPayload = {
+            v: 2,
+            sid: activeClinicalSession?.sessionId,
+            transferId,
+            status: 'HIS_REJECTED',
+            success: false,
+            error: 'INVALID_IMAGE_MAGIC_BYTES',
+            code: 'TRANSFER_INVALID',
+            reason: 'Định dạng tệp không hợp lệ (không phải JPEG hoặc PNG hợp lệ)'
+          };
+          if (sendAck) {
+            try { sendAck(false, 'INVALID_IMAGE_MAGIC_BYTES', errPayload); } catch (e) {}
+          } else if (transport === 'realtime') {
+            sendRealtimeBroadcast('transfer_ack', errPayload);
+          }
+          showToast('⚠️ Tệp ảnh không đúng định dạng chuẩn (JPEG/PNG)');
+          audit.log('invalid_magic_bytes', { tid: transferId, format: magicCheck.format });
+          return false;
+        }
+        if (magicCheck.mime) {
+          finalMimeType = magicCheck.mime;
+        }
+      }
+
+      // Anti-Decompression / Pixel Bomb Defense (<= 16MP, <= 8192px)
+      if (imageBytes && typeof extractImageDimensions === 'function' && typeof isWithinImageLimits === 'function') {
+        const dims = extractImageDimensions(imageBytes);
+        if (dims.valid && !isWithinImageLimits(dims.width, dims.height)) {
+          console.warn(`[CamSync] Pixel bomb detected cho ${transferId}: ${dims.width}x${dims.height}`);
+          const errPayload = {
+            v: 2,
+            sid: activeClinicalSession?.sessionId,
+            transferId,
+            status: 'HIS_REJECTED',
+            success: false,
+            error: 'PIXEL_BOMB_DETECTED',
+            code: 'TRANSFER_INVALID',
+            reason: `Kích thước ảnh vượt quá giới hạn an toàn (${dims.width}x${dims.height} > 16MP hoặc > 8192px)`
+          };
+          if (sendAck) {
+            try { sendAck(false, 'PIXEL_BOMB_DETECTED', errPayload); } catch (e) {}
+          } else if (transport === 'realtime') {
+            sendRealtimeBroadcast('transfer_ack', errPayload);
+          }
+          showToast('⚠️ Kích thước ảnh quá lớn, từ chối nạp để bảo vệ trình duyệt');
+          audit.log('pixel_bomb_detected', { tid: transferId, width: dims.width, height: dims.height });
+          return false;
+        }
+      }
+    }
+
+    const dataUrl = fullBase64.startsWith('data:') ? fullBase64 : `data:${finalMimeType};base64,${cleanB64}`;
+    const injectRes = await handleIncomingImageData(dataUrl, finalMeta, { transferId, sendAck, transport, incomingPatientId: decryptedPatientId || incomingPatientId });
+    const isSuccess = typeof injectRes === 'boolean' ? injectRes : (injectRes?.status === 'HIS_COMMITTED' || (injectRes?.success && injectRes?.status !== 'HIS_UNKNOWN' && injectRes?.status !== 'HIS_REJECTED'));
 
     if (!isSuccess) {
-      console.warn(`[CamSync] Nạp ảnh thất bại tại bước inject/upload cho ${transferId}:`, injectRes?.reason);
+      console.warn(`[CamSync] Nạp ảnh thất bại cho ${transferId}:`, injectRes?.reason);
       const errorCode = injectRes?.code || 'injection_failed';
+      const ackPayload = {
+        v: 2,
+        sid: activeClinicalSession?.sessionId,
+        transferId,
+        status: injectRes?.status || 'HIS_UNKNOWN',
+        success: false,
+        error: errorCode,
+        reason: injectRes?.reason,
+        retry: injectRes?.retry !== undefined ? injectRes.retry : false,
+        timestamp: Date.now()
+      };
       if (sendAck) {
-        try { sendAck(false, errorCode, { reason: injectRes?.reason }); } catch (e) {}
+        try { sendAck(false, errorCode, ackPayload); } catch (e) {}
       } else if (transport === 'realtime') {
-        sendRealtimeBroadcast('transfer_ack', { transferId, status: 'error', error: errorCode, reason: injectRes?.reason });
+        sendRealtimeBroadcast('transfer_ack', ackPayload);
       }
-      audit.log('photo_inject_failed', { tid: transferId, code: errorCode });
+      audit.log('photo_inject_failed', { tid: transferId, code: errorCode, status: injectRes?.status });
       return false;
     }
 
-    // ACK success (P0-4)
+    // ACK success (P0-02, R2) được phát sau khi vượt qua cả CP2, persistence verification và CP3
+    const committedAck = {
+      v: 2,
+      sid: activeClinicalSession?.sessionId,
+      transferId,
+      status: 'HIS_COMMITTED',
+      success: true,
+      photoCount: injectRes?.photoCount || photoCount,
+      timestamp: Date.now()
+    };
     if (sendAck) {
-      try { sendAck(true, null, { photoCount: injectRes.photoCount || photoCount }); } catch (e) {}
+      try { sendAck(true, null, committedAck); } catch (e) {}
     } else if (transport === 'realtime') {
-      sendRealtimeBroadcast('transfer_ack', { transferId, status: 'success', photoCount: injectRes.photoCount || photoCount });
+      sendRealtimeBroadcast('transfer_ack', committedAck);
     }
-    audit.log('photo_uploaded', { pid: audit.hashId(activeClinicalSession?.patient?.id), transport, n: photoCount });
+    audit.log('photo_uploaded', { pid: audit.hashId(activeClinicalSession?.patient?.id), transport, n: photoCount, status: 'HIS_COMMITTED' });
     return true;
   }
 
@@ -265,8 +515,10 @@ function getPatientInfoFromDOM() {
       }
 
       if (converted.length > 0) {
-        injectFilesAndUpload(converted);
-        showToast(`🟢 Đã nạp thành công ${converted.length} ảnh lên HIS!`);
+        const injectRes = injectFilesAndUpload(converted);
+        if (injectRes.initiated || injectRes.success) {
+          showToast(`Đang nạp ${converted.length} ảnh lên HIS, chờ xác nhận lưu...`);
+        }
       }
     } catch (err) {
       console.error('[CamSync] Lỗi xử lý ảnh:', err);
@@ -277,53 +529,137 @@ function getPatientInfoFromDOM() {
   }
 
   /**
-   * Nạp danh sách File vào <input id="fileUpload"> và kích hoạt upload (Checkpoint #4)
-   * @returns {{ success: boolean, code?: string, reason?: string }}
+   * Helper truy xuất HisAdapter phân tách mô-đun (Feature F18, Milestone 2)
    */
-  function injectFilesAndUpload(fileList) {
-    const fileInput = document.getElementById('fileUpload');
-    const btnUpload = document.getElementById('btnUpload');
+  function getHisAdapter() {
+    if (typeof window !== 'undefined' && window.__CamSyncHis?.defaultAdapter) {
+      return window.__CamSyncHis.defaultAdapter;
+    }
+    if (typeof window !== 'undefined' && window.__CamSyncHisAdapter) {
+      if (!window.__camsyncDefaultAdapterInstance) {
+        window.__camsyncDefaultAdapterInstance = new window.__CamSyncHisAdapter();
+      }
+      return window.__camsyncDefaultAdapterInstance;
+    }
+    return null;
+  }
+
+  /**
+   * Máy trạng thái chuẩn chuyển đổi phiên truyền (Feature F06, Milestone 2)
+   * TRANSFER_VERIFIED -> CONTEXT_VERIFIED -> FILE_ATTACHED -> HIS_UPLOAD_PENDING -> HIS_COMMITTED | HIS_REJECTED | HIS_UNKNOWN
+   */
+  class TransferStateMachine {
+    constructor(transferId, initialState = 'INITIAL') {
+      this.transferId = transferId;
+      this.state = initialState;
+      this.history = [{ state: initialState, ts: Date.now() }];
+    }
+
+    canTransition(next) {
+      const validTransitions = {
+        'INITIAL': ['TRANSFER_VERIFIED', 'HIS_REJECTED'],
+        'TRANSFER_VERIFIED': ['CONTEXT_VERIFIED', 'TRANSFER_INVALID', 'HIS_REJECTED'],
+        'CONTEXT_VERIFIED': ['FILE_ATTACHED', 'CONTEXT_MISMATCH', 'HIS_REJECTED'],
+        'FILE_ATTACHED': ['HIS_UPLOAD_PENDING', 'HIS_REJECTED'],
+        'HIS_UPLOAD_PENDING': ['HIS_COMMITTED', 'HIS_REJECTED', 'HIS_UNKNOWN']
+      };
+      return Boolean(validTransitions[this.state]?.includes(next));
+    }
+
+    transition(next, meta = {}) {
+      if (!this.canTransition(next)) {
+        throw new Error(`[CamSync StateMachine] Chuyển trạng thái không hợp lệ: ${this.state} -> ${next} (tid: ${this.transferId})`);
+      }
+      this.state = next;
+      this.history.push({ state: next, ts: Date.now(), ...meta });
+      return this.state;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.TransferStateMachine = TransferStateMachine;
+    window.__CamSyncTransferStateMachine = TransferStateMachine;
+  }
+
+  /**
+   * Nạp danh sách File vào phần tử tải tệp và kích hoạt upload (Checkpoint 2: Pre-upload Barrier)
+   * Strictly bans speculative success (F07). Only transitions to HIS_UPLOAD_PENDING.
+   * @returns {{ success: boolean, initiated: boolean, status: string, code?: string, reason?: string }}
+   */
+  function injectFilesAndUpload(fileList, incomingPatientId) {
+    const adapter = getHisAdapter();
+    const fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
+    const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
 
     if (!fileInput || !btnUpload) {
       console.warn('[CamSync] Không tìm thấy phần tử upload trên trang');
       return {
         success: false,
+        initiated: false,
         code: 'ELEMENTS_NOT_FOUND',
         reason: 'Không tìm thấy phần tử tải tệp trên giao diện HIS'
       };
     }
 
-    // RÀO CHẮN LÂM SÀNG CHECKPOINT #4: Last barrier ngay trước khi nạp file và click btnUpload
-    const clinicalCheck = validateClinicalContext();
-    if (!clinicalCheck.valid) {
-      console.error(`[CamSync] Bị chặn tại Checkpoint #4 (Last Barrier): ${clinicalCheck.code}`, clinicalCheck.reason);
+    // RÀO CHẮN LÂM SÀNG CHECKPOINT 2 (CP2): Pre-upload barrier ngay trước khi nạp file và click btnUpload
+    const cp2Check = validateClinicalContext(incomingPatientId);
+    if (!cp2Check.valid) {
+      console.error(`[CamSync CP2] Bị chặn tại Checkpoint 2 (Pre-Upload Barrier): ${cp2Check.code}`, cp2Check.reason);
       fileInput.value = '';
-      showToast(`⚠️ Hủy nạp ảnh: ${clinicalCheck.reason}`);
-      audit.log('photo_blocked_checkpoint4', { code: clinicalCheck.code });
-      if (clinicalCheck.code === 'PATIENT_CHANGED' || clinicalCheck.code === 'PATIENT_NOT_FOUND') {
-        abortClinicalSession(clinicalCheck.code, clinicalCheck.reason);
+      if (fileInput.files) {
+        try { fileInput.files = (new DataTransfer()).files; } catch (e) {}
+      }
+      showToast(`⚠️ Hủy nạp ảnh: ${cp2Check.reason}`);
+      audit.log('photo_blocked_cp2', { code: cp2Check.code });
+      if (cp2Check.code === 'PATIENT_CHANGED' || cp2Check.code === 'PATIENT_NOT_FOUND' || cp2Check.code === 'ENCOUNTER_CHANGED' || cp2Check.code === 'ENCOUNTER_NOT_FOUND') {
+        abortClinicalSession(cp2Check.code, cp2Check.reason);
       }
       return {
         success: false,
-        code: clinicalCheck.code || 'PATIENT_MISMATCH',
-        reason: clinicalCheck.reason || 'Sai lệch bệnh nhân'
+        initiated: false,
+        code: cp2Check.code || 'PATIENT_MISMATCH',
+        reason: cp2Check.reason || 'Sai lệch bệnh nhân'
       };
     }
 
     try {
-      const dt = new DataTransfer();
-      for (let i = 0; i < fileList.length; i++) {
-        dt.items.add(fileList[i]);
+      const dt = typeof DataTransfer !== 'undefined' ? new DataTransfer() : null;
+      if (dt && dt.items && dt.items.add) {
+        for (let i = 0; i < fileList.length; i++) {
+          dt.items.add(fileList[i]);
+        }
+        fileInput.files = dt.files;
+      } else if (fileInput.files && Array.isArray(fileInput.files)) {
+        for (let i = 0; i < fileList.length; i++) {
+          fileInput.files.push(fileList[i]);
+        }
+      } else {
+        fileInput.files = fileList;
       }
-      fileInput.files = dt.files;
+
+      if (adapter) {
+        adapter._lastAttachedFile = fileList[0];
+      }
+
+      if (fileInput.dispatchEvent) {
+        const changeEvt = typeof Event !== 'undefined'
+          ? new Event('change', { bubbles: true })
+          : { type: 'change', target: fileInput };
+        fileInput.dispatchEvent(changeEvt);
+      }
 
       showToast(`Đang nạp ảnh lên HIS...`);
-      btnUpload.click();
-      return { success: true };
+      if (adapter && typeof adapter.beginUpload === 'function') {
+        adapter.beginUpload();
+      } else {
+        btnUpload.click();
+      }
+      return { success: true, initiated: true, status: 'HIS_UPLOAD_PENDING' };
     } catch (err) {
       console.error('[CamSync] Lỗi trong quá trình nạp tệp vào HIS:', err);
       return {
         success: false,
+        initiated: false,
         code: 'INJECTION_EXCEPTION',
         reason: err.message || 'Lỗi thao tác DOM'
       };
@@ -350,7 +686,8 @@ function getPatientInfoFromDOM() {
    */
   function initClipboardPaste() {
     window.addEventListener('paste', async (e) => {
-      const fileInput = document.getElementById('fileUpload');
+      const adapter = getHisAdapter();
+      const fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
       if (!fileInput) return;
 
       const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
@@ -379,11 +716,13 @@ function getPatientInfoFromDOM() {
    * Khởi tạo Vùng Kéo & Thả (Drag & Drop)
    */
   function initDragAndDrop() {
-    const dropZone = document.getElementById('list') || document.body;
+    const adapter = getHisAdapter();
+    const dropZone = (adapter && adapter.getDropZone()) || document.getElementById('list') || document.body;
 
     ['dragenter', 'dragover'].forEach(eventName => {
       window.addEventListener(eventName, (e) => {
-        if (document.getElementById('fileUpload')) {
+        const isAvailable = adapter ? adapter.isUploadAvailable() : Boolean(document.getElementById('fileUpload'));
+        if (isAvailable) {
           e.preventDefault();
           dropZone.classList.add('camsync-dropzone-active');
         }
@@ -397,7 +736,8 @@ function getPatientInfoFromDOM() {
     });
 
     window.addEventListener('drop', async (e) => {
-      const fileInput = document.getElementById('fileUpload');
+      const adapterNow = getHisAdapter();
+      const fileInput = adapterNow ? adapterNow.getFileInput() : document.getElementById('fileUpload');
       if (!fileInput) return;
 
       const dt = e.dataTransfer;
@@ -421,8 +761,9 @@ function getPatientInfoFromDOM() {
    * Bắt chặn và tự động chuyển đổi file khi người dùng nhấn "Chọn tệp" nguyên bản
    */
   function initNativeUploadInterceptor() {
-    const fileInput = document.getElementById('fileUpload');
-    const btnUpload = document.getElementById('btnUpload');
+    const adapter = getHisAdapter();
+    const fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
+    const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
     if (!fileInput || fileInput.dataset.camsyncIntercepted) return;
 
     fileInput.dataset.camsyncIntercepted = 'true';
@@ -468,7 +809,8 @@ function getPatientInfoFromDOM() {
    * Khởi tạo Nút "Quét từ ĐT" trên Toolbar
    */
   function injectSyncButton() {
-    const btnUpload = document.getElementById('btnUpload');
+    const adapter = getHisAdapter();
+    const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');
     if (!btnUpload || document.getElementById('btnCamSync')) return;
 
     // Nút "Quét từ ĐT" (P2P CamSync)
@@ -953,10 +1295,12 @@ function getPatientInfoFromDOM() {
     processedTransferIds.clear();
 
     // RÀO CHẮN LÂM SÀNG CHECKPOINT #1: Khóa cứng Clinical Context ngay khi mở QR
+    // Bắt buộc phải có cả patientId VÀ encounterId (F01, F02, R1)
     const clinicalContext = getClinicalContextFromDOM();
-    if (!clinicalContext || !clinicalContext.valid || !clinicalContext.patient || !clinicalContext.patient.id) {
-      console.warn('[CamSync] Từ chối mở phiên: Không xác định được mã bệnh nhân trên HIS.');
-      showToast('⚠️ Không xác định được mã bệnh nhân. CamSync đã dừng để tránh gắn nhầm hình ảnh.');
+    if (!clinicalContext || !clinicalContext.valid || !clinicalContext.patient?.id || !clinicalContext.encounter?.id) {
+      console.warn('[CamSync] Từ chối mở phiên: Không xác định được đầy đủ mã bệnh nhân và lượt khám trên HIS.');
+      const msg = clinicalContext?.reason || 'Chưa xác định được đầy đủ mã bệnh nhân và lượt khám trên HIS. CamSync đã dừng để tránh gắn nhầm hình ảnh.';
+      showToast(`⚠️ ${msg}`);
       return;
     }
 
@@ -984,30 +1328,47 @@ function getPatientInfoFromDOM() {
 
     activeSessionId = generateSecureSessionId();
     const encryptionKeyHex = generateEncryptionKeyHex();
+    const sessionGen = ++currentSessionGeneration;
 
-    activeClinicalSession = {
+    const sessionObj = {
       sessionId: activeSessionId,
       encryptionKeyHex,
       cryptoKey: null,
-      patient: { ...clinicalContext.patient },
-      encounter: { ...clinicalContext.encounter },
-      hisContext: { ...clinicalContext.hisContext },
+      patient: Object.freeze({ ...clinicalContext.patient }),
+      encounter: Object.freeze({ ...clinicalContext.encounter }),
+      hisContext: Object.freeze({ ...clinicalContext.hisContext }),
       fingerprint: computeContextFingerprint(clinicalContext.patient.id, clinicalContext.encounter?.id, clinicalContext.encounter?.orderId, activeSessionId),
       createdAt: Date.now(),
       expiresAt: Date.now() + (5 * 60 * 1000), // 5 phút TTL
+      generation: sessionGen,
+      channelStatus: 'PRIVATE_CHANNEL_PENDING',
       state: 'ACTIVE'
     };
+    activeClinicalSession = sessionObj;
 
     // Khởi tạo trước CryptoKey trong RAM
     importAesGcmKey(encryptionKeyHex).then(key => {
-      if (activeClinicalSession) activeClinicalSession.cryptoKey = key;
+      if (activeClinicalSession && activeClinicalSession.generation === sessionGen) {
+        sessionObj.cryptoKey = key;
+      }
     }).catch(() => {});
+
+    // Thiết lập 5-Phút TTL Timer chủ động (F05)
+    if (sessionTtlTimer) {
+      clearTimeout(sessionTtlTimer);
+      sessionTtlTimer = null;
+    }
+    sessionTtlTimer = setTimeout(() => {
+      if (activeClinicalSession && activeClinicalSession.generation === sessionGen) {
+        abortClinicalSession('SESSION_EXPIRED', 'Phiên kết nối đã hết hạn sau 5 phút');
+      }
+    }, 5 * 60 * 1000);
 
     audit.log('session_opened', { sid: activeSessionId, pid: audit.hashId(activeClinicalSession.patient.id) });
 
     startClinicalContextWatcher();
 
-    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}&key=${encryptionKeyHex}`;
+    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}&key=${encryptionKeyHex}&gen=${activeClinicalSession.generation}`;
     const patient = activeClinicalSession.patient;
 
     const backdrop = document.createElement('div');
@@ -1236,9 +1597,12 @@ function getPatientInfoFromDOM() {
     if (lbBackdrop) lbBackdrop.addEventListener('click', closeLightbox);
     if (lbRotate) lbRotate.addEventListener('click', handleRotateCurrentPhoto);
 
-    // Bắt phím Escape đóng Lightbox hoặc đóng Modal
+    // Bắt phím Escape đóng Lightbox hoặc đóng Modal (On-Demand & Detach Hygiene)
     if (targetDoc.addEventListener) {
-      targetDoc.addEventListener('keydown', (e) => {
+      if (onEscapeKeydownListener && targetDoc.removeEventListener) {
+        targetDoc.removeEventListener('keydown', onEscapeKeydownListener);
+      }
+      onEscapeKeydownListener = (e) => {
         if (e.key === 'Escape') {
           const lb = getModalElement('camsyncLightbox');
           if (lb && lb.style.display !== 'none') {
@@ -1247,7 +1611,8 @@ function getPatientInfoFromDOM() {
             closeQrModal();
           }
         }
-      });
+      };
+      targetDoc.addEventListener('keydown', onEscapeKeydownListener);
     }
 
     // Khởi tạo Supabase Realtime Broadcast qua WebSocket (RAM-to-RAM, Zero-Retention on Cloud)
@@ -1257,26 +1622,64 @@ function getPatientInfoFromDOM() {
     startReceivingImage(activeSessionId);
   }
 
-  function closeQrModal() {
-    stopClinicalContextWatcher();
+  /**
+   * Thu hồi toàn bộ tài nguyên phiên an toàn (F05 / 0% Overhead Hygiene):
+   * Hủy các bộ đếm thời gian, kênh truyền, bộ đệm, giải phóng tham chiếu RAM,
+   * tăng generation counter, và gửi thông báo cho thiết bị di động.
+   */
+  function teardownSession(options = {}) {
+    const { action = 'CLOSE', code = 'USER_CLOSED', reason = 'Phiên làm việc đã đóng', notifyMobile = true } = options;
 
-    if (activeClinicalSession) {
-      activeClinicalSession.state = 'CLOSED';
-      activeClinicalSession = null;
+    stopClinicalContextWatcher();
+    if (sessionTtlTimer) {
+      clearTimeout(sessionTtlTimer);
+      sessionTtlTimer = null;
+    }
+    if (sessionCountdownTimer) {
+      clearInterval(sessionCountdownTimer);
+      sessionCountdownTimer = null;
+    }
+    if (realtimeHeartbeatTimer) {
+      clearInterval(realtimeHeartbeatTimer);
+      realtimeHeartbeatTimer = null;
+    }
+    if (realtimeReconnectTimer) {
+      clearTimeout(realtimeReconnectTimer);
+      realtimeReconnectTimer = null;
     }
 
-    const targetDoc = getRootDocument();
-    const modalInTop = targetDoc && targetDoc.getElementById ? targetDoc.getElementById('camsyncModal') : null;
-    if (modalInTop) modalInTop.remove();
+    if (activeClinicalSession || activeSessionId) {
+      currentSessionGeneration++;
+    }
+    isSessionIntentionallyClosed = true;
 
-    const modalInLocal = document.getElementById ? document.getElementById('camsyncModal') : null;
-    if (modalInLocal && modalInLocal !== modalInTop) modalInLocal.remove();
+    const closingSessionId = activeSessionId;
+    const closingPatientId = activeClinicalSession?.patient?.id;
 
-    closeLightbox();
+    if (notifyMobile && closingSessionId) {
+      const isExpired = code === 'SESSION_EXPIRED';
+      const isContextChanged = code === 'PATIENT_CHANGED' || code === 'ENCOUNTER_CHANGED' || code === 'ORDER_CHANGED' || code === 'PATIENT_NOT_FOUND' || code === 'ENCOUNTER_NOT_FOUND' || code === 'UNKNOWN_CONTEXT_CHANGED';
+      const mobileReason = isExpired ? 'session_expired' : (isContextChanged ? 'clinical_context_changed' : 'session_closed');
+      try {
+        sendRealtimeBroadcast('session_closed', {
+          reason: mobileReason,
+          code: code,
+          message: reason
+        });
+      } catch (e) {}
 
-    if (nebulaController) {
-      try { nebulaController.destroy(); } catch (e) {}
-      nebulaController = null;
+      if (activePeerConn && activePeerConn.open) {
+        try {
+          activePeerConn.send({
+            type: 'SESSION_CLOSED',
+            reason: mobileReason,
+            code: code,
+            message: reason
+          });
+          activePeerConn.close();
+        } catch (e) {}
+        activePeerConn = null;
+      }
     }
 
     closeRealtimeBroadcast();
@@ -1291,12 +1694,72 @@ function getPatientInfoFromDOM() {
       currentPeer = null;
     }
 
-    activeSessionId = null;
+    if (nebulaController) {
+      try { nebulaController.destroy(); } catch (e) {}
+      nebulaController = null;
+    }
+
+    const adapter = getHisAdapter();
+    if (adapter && typeof (adapter.destroy || adapter.cleanup) === 'function') {
+      try {
+        (adapter.destroy || adapter.cleanup).call(adapter, 'UNKNOWN');
+      } catch (e) {}
+    }
+
     unifiedTransferReceiver.purgeAll();
     processedTransferIds.clear();
-    audit.log('session_closed', { sid: activeSessionId, photos: photoCount });
+
+    const targetDoc = getRootDocument();
+    if (onEscapeKeydownListener && targetDoc && targetDoc.removeEventListener) {
+      targetDoc.removeEventListener('keydown', onEscapeKeydownListener);
+      onEscapeKeydownListener = null;
+    }
+
+    for (let i = 0; i < receivedPhotos.length; i++) {
+      receivedPhotos[i].base64 = null;
+    }
     receivedPhotos = [];
     currentPhotoIndex = 0;
+
+    if (action === 'ABORT') {
+      audit.log('session_aborted', { code, pid: audit.hashId(closingPatientId), sid: closingSessionId });
+      if (activeClinicalSession) {
+        activeClinicalSession.state = 'ABORTED';
+      }
+    } else {
+      audit.log('session_closed', { sid: closingSessionId, pid: audit.hashId(closingPatientId), photos: photoCount });
+      if (activeClinicalSession) {
+        activeClinicalSession.state = 'CLOSED';
+      }
+      activeClinicalSession = null;
+    }
+
+    activeSessionId = null;
+  }
+
+  function closeQrModal() {
+    teardownSession({ action: 'CLOSE', code: 'USER_CLOSED', reason: 'Người dùng đóng modal', notifyMobile: true });
+
+    const adapter = getHisAdapter();
+    if (adapter && typeof (adapter.destroy || adapter.cleanup) === 'function') {
+      try {
+        (adapter.destroy || adapter.cleanup).call(adapter, 'UNKNOWN');
+      } catch (e) {}
+    }
+
+    const targetDoc = getRootDocument();
+    if (onEscapeKeydownListener && targetDoc && targetDoc.removeEventListener) {
+      targetDoc.removeEventListener('keydown', onEscapeKeydownListener);
+      onEscapeKeydownListener = null;
+    }
+
+    const modalInTop = targetDoc && targetDoc.getElementById ? targetDoc.getElementById('camsyncModal') : null;
+    if (modalInTop) modalInTop.remove();
+
+    const modalInLocal = document.getElementById ? document.getElementById('camsyncModal') : null;
+    if (modalInLocal && modalInLocal !== modalInTop) modalInLocal.remove();
+
+    closeLightbox();
   }
 
   /**
@@ -1476,58 +1939,105 @@ function getPatientInfoFromDOM() {
       const check = validateClinicalContext();
       if (!check.valid) {
         console.warn(`[CamSync] patient_req bị từ chối do vi phạm an toàn lâm sàng: ${check.code}`);
-        if (check.code === 'PATIENT_CHANGED' || check.code === 'PATIENT_NOT_FOUND') {
-          abortClinicalSession(check.code, check.reason);
-        }
+        abortClinicalSession(check.code, check.reason);
         return;
       }
       const patient = activeClinicalSession ? activeClinicalSession.patient : check.currentContext.patient;
       const encounter = activeClinicalSession ? activeClinicalSession.encounter : check.currentContext.encounter;
       const fingerprint = activeClinicalSession ? activeClinicalSession.fingerprint : check.currentContext.fingerprint;
-      sendRealtimeBroadcast('patient_info', {
-        patient,
-        encounter,
-        fingerprint
-      });
+      const sid = activeClinicalSession?.sessionId;
+      const generation = activeClinicalSession ? activeClinicalSession.generation : check.currentContext?.generation;
+
+      (async () => {
+        let key = activeClinicalSession?.cryptoKey;
+        if (!key && activeClinicalSession?.encryptionKeyHex && typeof importAesGcmKey === 'function') {
+          try {
+            key = await importAesGcmKey(activeClinicalSession.encryptionKeyHex);
+            if (activeClinicalSession) activeClinicalSession.cryptoKey = key;
+          } catch (e) {}
+        }
+
+        const encryptFn = (typeof window !== 'undefined' && window.__CamSyncCrypto && window.__CamSyncCrypto.encryptAesGcmPayload) || encryptAesGcmPayload;
+        if (key && typeof encryptFn === 'function') {
+          try {
+            const rawJson = JSON.stringify({ patient, encounter, fingerprint });
+            const aadHeader = {
+              v: 2,
+              sid,
+              contentType: 'application/json'
+            };
+            const enc = await encryptFn(key, rawJson, aadHeader);
+            sendRealtimeBroadcast('patient_info', {
+              v: 2,
+              encrypted: true,
+              ciphertext: enc.data,
+              data: enc.data,
+              iv: enc.iv,
+              generation,
+              sid,
+              sessionId: sid
+            });
+            return;
+          } catch (err) {
+            console.warn('[CamSync] Lỗi mã hóa E2EE patient_info:', err);
+            abortClinicalSession('CRYPTO_FAILED', 'Không thể mã hóa E2EE thông tin bệnh nhân qua Cloud Relay');
+            return;
+          }
+        }
+
+        // FAIL-CLOSED (R3, Gate G1): Tuyệt đối KHÔNG broadcast PHI unencrypted qua Realtime cloud relay
+        console.error('[CamSync] E2EE key không khả dụng hoặc mã hóa thất bại - từ chối gửi patient_info (fail-closed)');
+        abortClinicalSession('CRYPTO_FAILED', 'Không thể mã hóa E2EE thông tin bệnh nhân qua Cloud Relay');
+      })();
       return;
     }
 
     // Realtime Broadcast Chunking Protocol (Fail-Closed, Out-of-Order Guard, Unified Pipeline)
-    if (event === 'chunk_start') {
-      const { transferId, totalChunks, totalSize, mimeType, filename, meta, encrypted, iv } = payload || {};
+    if (event === 'chunk_start' || event === 'TransferStart') {
+      const { transferId, totalChunks, totalSize, totalBytes, encryptedBytes, mimeType, contentType, filename, meta, encrypted, iv, generation, sid, sessionId, v } = payload || {};
       const ackSender = (success, error, extra = {}) => {
-        sendRealtimeBroadcast('transfer_ack', {
+        const ackData = {
+          v: 2,
           transferId,
-          status: success ? 'success' : 'error',
+          status: extra.status || (success ? 'HIS_COMMITTED' : 'error'),
+          retry: extra.retry !== undefined ? extra.retry : false,
           success: !!success,
           error: error || null,
           reason: extra.reason || null,
           photoCount: extra.photoCount || photoCount
-        });
+        };
+        sendRealtimeBroadcast('transfer_ack', ackData);
+        sendRealtimeBroadcast('TransferAck', ackData);
       };
 
       unifiedTransferReceiver.begin({
         transferId,
         totalChunks,
-        totalSize,
-        mimeType,
+        totalSize: totalSize || totalBytes || encryptedBytes,
+        totalBytes: totalBytes || totalSize || encryptedBytes,
+        mimeType: mimeType || contentType || 'image/jpeg',
         filename,
         meta,
+        generation: generation !== undefined ? generation : meta?.generation,
+        sid: sid || sessionId || meta?.sid || meta?.sessionId,
         encrypted: encrypted ?? meta?.encrypted,
         iv: iv ?? meta?.iv,
         transport: 'realtime',
-        sendAck: ackSender
+        sendAck: ackSender,
+        v: v !== undefined ? v : payload?.v
       });
       return;
     }
 
-    if (event === 'chunk_data') {
-      const { transferId, chunkIndex, data, iv, encrypted } = payload || {};
-      unifiedTransferReceiver.acceptChunk(transferId, chunkIndex, data, iv, encrypted);
+    if (event === 'chunk_data' || event === 'TransferChunk') {
+      const { transferId, chunkIndex, index, data, chunk, iv, encrypted } = payload || {};
+      const cIdx = chunkIndex !== undefined ? chunkIndex : index;
+      const cData = data !== undefined ? data : chunk;
+      unifiedTransferReceiver.acceptChunk(transferId, cIdx, cData, iv, encrypted);
       return;
     }
 
-    if (event === 'chunk_complete') {
+    if (event === 'chunk_complete' || event === 'TransferEnd') {
       const { transferId } = payload || {};
       unifiedTransferReceiver.complete(transferId);
       return;
@@ -1641,7 +2151,7 @@ function getPatientInfoFromDOM() {
     if (!activeClinicalSession || activeClinicalSession.state !== 'ACTIVE') return;
 
     const check = validateClinicalContext();
-    if (!check.valid && (check.code === 'PATIENT_CHANGED' || check.code === 'PATIENT_NOT_FOUND' || check.code === 'ORDER_CHANGED' || check.code === 'SESSION_EXPIRED')) {
+    if (!check.valid) {
       console.warn(`[CamSync] Rào chắn an toàn lâm sàng phát hiện vi phạm (${check.code}): Hủy phiên lập tức!`);
       abortClinicalSession(check.code, check.reason);
     }
@@ -1659,51 +2169,17 @@ function getPatientInfoFromDOM() {
   }
 
   /**
-   * Hủy phiên lâm sàng khẩn cấp khi phát hiện thay đổi bệnh nhân (Fail-Closed)
+   * Hủy phiên lâm sàng khẩn cấp khi phát hiện thay đổi bệnh nhân / ngữ cảnh lâm sàng (Fail-Closed)
    */
   function abortClinicalSession(code, reason) {
-    if (!activeClinicalSession) return;
-    activeClinicalSession.state = 'ABORTED';
-    stopClinicalContextWatcher();
+    if (!activeClinicalSession && !activeSessionId) return;
 
     console.warn(`[CamSync] abortClinicalSession kích hoạt: code=${code}, reason=${reason}`);
-    audit.log('session_aborted', { code, pid: audit.hashId(activeClinicalSession?.patient?.id) });
 
-    // 1. Gửi thông điệp session_closed về điện thoại qua Realtime Broadcast
-    try {
-      sendRealtimeBroadcast('session_closed', {
-        reason: 'clinical_context_changed',
-        code: code,
-        message: reason || 'Bệnh nhân trên màn hình HIS đã thay đổi'
-      });
-    } catch (e) {}
+    // Dọn dẹp toàn bộ tài nguyên qua teardownSession
+    teardownSession({ action: 'ABORT', code, reason, notifyMobile: true });
 
-    // 2. Gửi thông điệp qua WebRTC DataChannel nếu đang kết nối
-    if (activePeerConn && activePeerConn.open) {
-      try {
-        activePeerConn.send({
-          type: 'SESSION_CLOSED',
-          reason: 'clinical_context_changed',
-          code: code,
-          message: reason || 'Bệnh nhân trên màn hình HIS đã thay đổi'
-        });
-        activePeerConn.close();
-      } catch (e) {}
-      activePeerConn = null;
-    }
-
-    // 3. Xóa toàn bộ bộ đệm phân mảnh (Purge chunk buffers)
-    unifiedTransferReceiver.purgeAll();
-    processedTransferIds.clear();
-
-    // 4. Ngắt kết nối mạng
-    closeRealtimeBroadcast();
-    if (currentPeer) {
-      try { currentPeer.destroy(); } catch (e) {}
-      currentPeer = null;
-    }
-
-    // 5. Cập nhật giao diện Modal: khóa QR, ẩn preview, hiển thị cảnh báo lâm sàng rõ ràng
+    // Cập nhật giao diện Modal: khóa QR, ẩn preview, hiển thị cảnh báo lâm sàng rõ ràng
     const qrContainer = getModalElement('camsyncQrCode');
     const livePreview = getModalElement('camsyncLivePreview');
     const statusText = getModalElement('camsyncStatusText');
@@ -1715,6 +2191,26 @@ function getPatientInfoFromDOM() {
     if (livePreview) livePreview.style.display = 'none';
     if (nextShotBar) nextShotBar.style.display = 'none';
 
+    let displayMsg = 'Phiên chụp đã bị hủy do thay đổi ngữ cảnh lâm sàng.';
+    let bannerMsg = 'Cảnh báo an toàn: Ngữ cảnh lâm sàng trên HIS đã thay đổi. Phiên chụp đã bị hủy để tránh gắn nhầm hồ sơ.';
+
+    if (code === 'SESSION_EXPIRED') {
+      displayMsg = 'Phiên kết nối đã hết hạn sau 5 phút.';
+      bannerMsg = 'Phiên kết nối đã hết hạn sau 5 phút. Vui lòng đóng cửa sổ và mở lại mã QR.';
+    } else if (code === 'ENCOUNTER_CHANGED') {
+      displayMsg = 'Lượt khám trên HIS đã thay đổi.';
+      bannerMsg = 'Cảnh báo an toàn: Lượt khám trên HIS đã thay đổi. Phiên chụp đã bị hủy để tránh gắn nhầm hồ sơ.';
+    } else if (code === 'ORDER_CHANGED') {
+      displayMsg = 'Phiếu chỉ định trên HIS đã thay đổi.';
+      bannerMsg = 'Cảnh báo an toàn: Phiếu chỉ định trên HIS đã thay đổi. Phiên chụp đã bị hủy để tránh gắn nhầm hồ sơ.';
+    } else if (code === 'UNKNOWN_CONTEXT_CHANGED') {
+      displayMsg = 'Chưa xác định ảnh đã lưu do hồ sơ thay đổi; hãy kiểm tra trên HIS trước khi gửi lại.';
+      bannerMsg = 'Cảnh báo an toàn: Chưa xác định ảnh đã lưu do hồ sơ thay đổi; hãy kiểm tra trực tiếp trên HIS trước khi gửi lại.';
+    } else if (code === 'PATIENT_CHANGED') {
+      displayMsg = 'Bệnh nhân trên HIS đã thay đổi.';
+      bannerMsg = 'Cảnh báo an toàn: Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy để tránh gắn nhầm hồ sơ.';
+    }
+
     if (statusPill) {
       statusPill.classList.remove('connected');
       statusPill.classList.add('error');
@@ -1722,7 +2218,7 @@ function getPatientInfoFromDOM() {
     }
 
     if (statusText) {
-      statusText.textContent = 'Phiên chụp đã bị hủy do thay đổi bệnh nhân.';
+      statusText.textContent = displayMsg;
       statusText.style.color = '#ef4444';
     }
 
@@ -1736,11 +2232,11 @@ function getPatientInfoFromDOM() {
       `;
       const warningEl = patientBanner.querySelector('#camsyncAbortWarning');
       if (warningEl) {
-        warningEl.textContent = 'Cảnh báo an toàn: Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy để tránh gắn nhầm hồ sơ.';
+        warningEl.textContent = bannerMsg;
       }
     }
 
-    showToast('⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên CamSync cũ đã được hủy.');
+    showToast(`⚠️ ${displayMsg}`);
   }
 
   /**
@@ -1803,23 +2299,11 @@ function getPatientInfoFromDOM() {
 
             // RÀO CHẮN LÂM SÀNG CHECKPOINT #2: Xác thực bệnh nhân khi mở kênh
             const check = validateClinicalContext();
-            if (check.valid) {
-              const patient = activeClinicalSession ? activeClinicalSession.patient : check.currentContext.patient;
-              const encounter = activeClinicalSession ? activeClinicalSession.encounter : check.currentContext.encounter;
-              const fingerprint = activeClinicalSession ? activeClinicalSession.fingerprint : check.currentContext.fingerprint;
-              try {
-                conn.send({
-                  type: 'PATIENT_INFO',
-                  patient,
-                  encounter,
-                  fingerprint
-                });
-              } catch (e) {}
-            } else {
-              if (check.code === 'PATIENT_CHANGED' || check.code === 'PATIENT_NOT_FOUND') {
-                abortClinicalSession(check.code, check.reason);
-              }
+            if (!check.valid) {
+              abortClinicalSession(check.code, check.reason);
             }
+            // Lưu ý: Không gửi PATIENT_INFO chưa mã hóa khi mở kênh.
+            // Thông tin bệnh nhân được truyền bảo mật qua REQ_PATIENT_INFO với mã hóa AES-256-GCM.
           });
 
           conn.on('close', () => {
@@ -1843,18 +2327,53 @@ function getPatientInfoFromDOM() {
                 const patient = activeClinicalSession ? activeClinicalSession.patient : check.currentContext.patient;
                 const encounter = activeClinicalSession ? activeClinicalSession.encounter : check.currentContext.encounter;
                 const fingerprint = activeClinicalSession ? activeClinicalSession.fingerprint : check.currentContext.fingerprint;
-                try {
-                  conn.send({
-                    type: 'PATIENT_INFO',
-                    patient,
-                    encounter,
-                    fingerprint
-                  });
-                } catch (e) {}
+                const sid = activeClinicalSession?.sessionId;
+                const generation = activeClinicalSession ? activeClinicalSession.generation : check.currentContext?.generation;
+
+                (async () => {
+                  let key = activeClinicalSession?.cryptoKey;
+                  if (!key && activeClinicalSession?.encryptionKeyHex && typeof importAesGcmKey === 'function') {
+                    try {
+                      key = await importAesGcmKey(activeClinicalSession.encryptionKeyHex);
+                      if (activeClinicalSession) activeClinicalSession.cryptoKey = key;
+                    } catch (e) {}
+                  }
+
+                  const encryptFn = (typeof window !== 'undefined' && window.__CamSyncCrypto && window.__CamSyncCrypto.encryptAesGcmPayload) || encryptAesGcmPayload;
+                  if (key && typeof encryptFn === 'function') {
+                    try {
+                      const rawJson = JSON.stringify({ patient, encounter, fingerprint });
+                      const aadHeader = {
+                        v: 2,
+                        sid,
+                        contentType: 'application/json'
+                      };
+                      const enc = await encryptFn(key, rawJson, aadHeader);
+                      conn.send({
+                        type: 'PATIENT_INFO',
+                        v: 2,
+                        encrypted: true,
+                        ciphertext: enc.data,
+                        data: enc.data,
+                        iv: enc.iv,
+                        generation,
+                        sid,
+                        sessionId: sid
+                      });
+                      return;
+                    } catch (err) {
+                      console.warn('[CamSync WebRTC] Lỗi mã hóa E2EE PATIENT_INFO:', err);
+                      abortClinicalSession('CRYPTO_FAILED', 'Không thể mã hóa E2EE thông tin bệnh nhân qua WebRTC');
+                      return;
+                    }
+                  }
+
+                  // FAIL-CLOSED: Không gửi PATIENT_INFO chưa mã hóa qua WebRTC DataChannel
+                  console.error('[CamSync WebRTC] E2EE key không khả dụng hoặc mã hóa thất bại - từ chối gửi PATIENT_INFO (fail-closed)');
+                  abortClinicalSession('CRYPTO_FAILED', 'Không thể mã hóa E2EE thông tin bệnh nhân qua WebRTC');
+                })();
               } else if (!check.valid) {
-                if (check.code === 'PATIENT_CHANGED' || check.code === 'PATIENT_NOT_FOUND') {
-                  abortClinicalSession(check.code, check.reason);
-                }
+                abortClinicalSession(check.code, check.reason);
               }
               return;
             }
@@ -1865,38 +2384,45 @@ function getPatientInfoFromDOM() {
             }
 
             // Gói bắt đầu phiên truyền phân mảnh
-            if (payload.type === 'CHUNK_START') {
+            if (payload.type === 'CHUNK_START' || payload.type === 'TransferStart') {
               const ackSender = (success, error, extra = {}) => {
                 try {
-                  conn.send({
+                  const ackMsg = {
                     type: 'TRANSFER_ACK',
+                    v: 2,
                     transferId: payload.transferId,
-                    status: success ? 'success' : 'error',
+                    status: extra.status || (success ? 'HIS_COMMITTED' : 'error'),
+                    retry: extra.retry !== undefined ? extra.retry : false,
                     success: !!success,
                     error: error || null,
                     reason: extra.reason || null,
                     photoCount: extra.photoCount || photoCount
-                  });
+                  };
+                  conn.send(ackMsg);
+                  conn.send({ ...ackMsg, type: 'TransferAck' });
                 } catch (e) {}
               };
 
               unifiedTransferReceiver.begin({
                 transferId: payload.transferId,
                 totalChunks: payload.totalChunks,
-                totalBytes: payload.totalBytes,
-                mimeType: payload.mimeType || payload.meta?.mimeType || 'image/jpeg',
+                totalBytes: payload.totalBytes || payload.totalSize || payload.encryptedBytes,
+                mimeType: payload.mimeType || payload.contentType || payload.meta?.mimeType || 'image/jpeg',
                 filename: payload.filename || payload.meta?.name || '',
                 meta: payload.meta || {},
+                generation: payload.generation !== undefined ? payload.generation : payload.meta?.generation,
+                sid: payload.sid || payload.sessionId || payload.meta?.sid || payload.meta?.sessionId,
                 encrypted: payload.encrypted ?? payload.meta?.encrypted,
                 iv: payload.iv ?? payload.meta?.iv,
                 transport: 'webrtc',
-                sendAck: ackSender
+                sendAck: ackSender,
+                v: payload.v || 2
               });
               return;
             }
 
             // Gói chứa dữ liệu phân mảnh (16KB)
-            if (payload.type === 'CHUNK_DATA') {
+            if (payload.type === 'CHUNK_DATA' || payload.type === 'TransferChunk') {
               const chunkIndex = typeof payload.index === 'number' ? payload.index : payload.chunkIndex;
               const data = typeof payload.chunk === 'string' ? payload.chunk : payload.data;
               unifiedTransferReceiver.acceptChunk(payload.transferId, chunkIndex, data, payload.iv, payload.encrypted);
@@ -1904,7 +2430,7 @@ function getPatientInfoFromDOM() {
             }
 
             // Gói hoàn tất truyền phân mảnh -> Tái ráp Base64
-            if (payload.type === 'CHUNK_COMPLETE') {
+            if (payload.type === 'CHUNK_COMPLETE' || payload.type === 'TransferEnd') {
               unifiedTransferReceiver.complete(payload.transferId);
               return;
             }
@@ -1931,38 +2457,130 @@ function getPatientInfoFromDOM() {
                 return;
               }
 
+              if (payload.encrypted === false) {
+                console.warn(`[CamSync WebRTC SYNC_IMAGE] Chặn gói tin unencrypted (encrypted: false)`);
+                try {
+                  conn.send({
+                    type: 'TRANSFER_ACK',
+                    status: 'HIS_REJECTED',
+                    success: false,
+                    error: 'DECRYPTION_FAILED',
+                    code: 'TRANSFER_INVALID',
+                    reason: 'Gate G1: Plaintext payload rejected fail-closed (E2EE required)'
+                  });
+                } catch (e) {}
+                return;
+              }
+
               let imagePayload = payload.image;
+              let finalMeta = payload.meta ? { ...payload.meta } : {};
+              let finalMimeType = payload.mimeType || 'image/jpeg';
+
               if (payload.encrypted && payload.iv) {
                 try {
                   const key = activeClinicalSession?.cryptoKey || (activeClinicalSession?.encryptionKeyHex ? await importAesGcmKey(activeClinicalSession.encryptionKeyHex) : null);
                   if (key) {
-                    imagePayload = await decryptAesGcmPayload(key, payload.iv, imagePayload);
+                    const aadHeader = {
+                      v: payload.v || 2,
+                      sid: activeClinicalSession?.sessionId,
+                      transferId: payload.transferId || 'tx_sync_image',
+                      contentType: finalMimeType
+                    };
+                    try {
+                      imagePayload = await decryptAesGcmPayload(key, payload.iv, imagePayload, aadHeader);
+                    } catch (aadErr) {
+                      if (!payload.v || payload.v < 2) {
+                        imagePayload = await decryptAesGcmPayload(key, payload.iv, imagePayload, null);
+                      } else {
+                        throw aadErr;
+                      }
+                    }
+
+                    if (typeof imagePayload === 'string' && (imagePayload.trim().startsWith('{') || imagePayload.trim().startsWith('['))) {
+                      try {
+                        const container = JSON.parse(imagePayload);
+                        if (container && container.image) {
+                          imagePayload = container.image;
+                          if (container.mimeType) finalMimeType = container.mimeType;
+                          if (container.meta) finalMeta = { ...finalMeta, ...container.meta };
+                        }
+                      } catch (e) {}
+                    }
                   }
                 } catch (err) {
                   console.error('[CamSync SYNC_IMAGE] Lỗi giải mã E2EE:', err);
                   try {
                     conn.send({
                       type: 'TRANSFER_ACK',
-                      status: 'error',
+                      status: 'HIS_REJECTED',
                       success: false,
                       error: 'DECRYPTION_FAILED',
-                      reason: 'Dữ liệu mã hóa không hợp lệ'
+                      code: 'TRANSFER_INVALID',
+                      reason: 'Dữ liệu mã hóa không hợp lệ hoặc sai khóa'
                     });
                   } catch (e) {}
                   return;
                 }
               }
 
-              const injectRes = handleIncomingImageData(imagePayload, payload.meta);
-              const isSuccess = typeof injectRes === 'boolean' ? injectRes : !!injectRes?.success;
+              // Decode binary to validate magic bytes and dimensions
+              const commaIdx = imagePayload.indexOf(',');
+              const cleanB64 = commaIdx >= 0 ? imagePayload.slice(commaIdx + 1) : imagePayload;
+              let imageBytes = null;
+              try {
+                const binaryStr = typeof atob === 'function' ? atob(cleanB64) : (typeof Buffer !== 'undefined' ? Buffer.from(cleanB64, 'base64').toString('binary') : null);
+                if (binaryStr) {
+                  imageBytes = new Uint8Array(binaryStr.length);
+                  for (let i = 0; i < binaryStr.length; i++) imageBytes[i] = binaryStr.charCodeAt(i);
+                }
+              } catch (e) {}
+
+              if (imageBytes && typeof validateImageMagicBytes === 'function') {
+                const magicCheck = validateImageMagicBytes(imageBytes);
+                if (!magicCheck.valid) {
+                  try {
+                    conn.send({
+                      type: 'TRANSFER_ACK',
+                      status: 'HIS_REJECTED',
+                      success: false,
+                      error: 'INVALID_IMAGE_MAGIC_BYTES',
+                      code: 'TRANSFER_INVALID',
+                      reason: 'Định dạng tệp không hợp lệ'
+                    });
+                  } catch (e) {}
+                  return;
+                }
+              }
+
+              if (imageBytes && typeof extractImageDimensions === 'function' && typeof isWithinImageLimits === 'function') {
+                const dims = extractImageDimensions(imageBytes);
+                if (dims.valid && !isWithinImageLimits(dims.width, dims.height)) {
+                  try {
+                    conn.send({
+                      type: 'TRANSFER_ACK',
+                      status: 'HIS_REJECTED',
+                      success: false,
+                      error: 'PIXEL_BOMB_DETECTED',
+                      code: 'TRANSFER_INVALID',
+                      reason: 'Kích thước ảnh vượt quá giới hạn an toàn'
+                    });
+                  } catch (e) {}
+                  return;
+                }
+              }
+
+              const dataUrl = imagePayload.startsWith('data:') ? imagePayload : `data:${finalMimeType};base64,${cleanB64}`;
+              const injectRes = await handleIncomingImageData(dataUrl, finalMeta, { incomingPatientId: finalMeta?.patientId || incomingPatientId });
+              const isSuccess = typeof injectRes === 'boolean' ? injectRes : (injectRes?.status === 'HIS_COMMITTED' || (injectRes?.success && injectRes?.status !== 'HIS_UNKNOWN' && injectRes?.status !== 'HIS_REJECTED'));
               try {
                 conn.send({
                   type: 'TRANSFER_ACK',
-                  status: isSuccess ? 'success' : 'error',
+                  status: isSuccess ? 'HIS_COMMITTED' : (injectRes?.status === 'HIS_UNKNOWN' ? 'HIS_UNKNOWN' : 'error'),
                   success: isSuccess,
                   photoCount: isSuccess ? (injectRes?.photoCount || photoCount) : photoCount,
-                  error: isSuccess ? null : (injectRes?.code || 'injection_failed'),
-                  reason: isSuccess ? null : (injectRes?.reason || 'Lỗi nạp tệp vào HIS')
+                  error: isSuccess ? null : (injectRes?.code || injectRes?.error || 'injection_failed'),
+                  reason: isSuccess ? null : (injectRes?.reason || 'Lỗi nạp tệp vào HIS'),
+                  retry: injectRes?.retry !== undefined ? injectRes.retry : false
                 });
               } catch (e) {}
             }
@@ -1978,7 +2596,11 @@ function getPatientInfoFromDOM() {
     }
   }
 
-  function handleIncomingImageData(base64Image, meta = {}) {
+  function handleIncomingImageData(base64Image, meta = {}, context = {}) {
+    const { transferId, sendAck, transport, incomingPatientId } = context;
+    const sm = new TransferStateMachine(transferId || `tx_${Date.now()}`, 'INITIAL');
+    sm.transition('TRANSFER_VERIFIED');
+
     const statusText = getModalElement('camsyncStatusText');
     const statusPill = getModalElement('camsyncStatusPill');
     const instruction = getModalElement('camsyncInstruction');
@@ -1988,7 +2610,25 @@ function getPatientInfoFromDOM() {
     const counterBadge = getModalElement('camsyncCounterBadge');
     const photoCountEl = getModalElement('camsyncPhotoCount');
 
-    // Đặt tên file chuẩn lâm sàng
+    // 1. RÀO CHẮN LÂM SÀNG CHECKPOINT 1 (Pre-decrypt/attach verification)
+    const effectivePatientId = incomingPatientId || meta?.patientId || meta?.clinicalContext?.patientId || null;
+    const cp1Check = validateClinicalContext(effectivePatientId);
+    if (!cp1Check.valid) {
+      sm.transition('CONTEXT_MISMATCH');
+      const errRes = {
+        success: false,
+        status: 'HIS_REJECTED',
+        code: cp1Check.code || 'CONTEXT_MISMATCH',
+        reason: cp1Check.reason || 'Sai lệch ngữ cảnh bệnh nhân',
+        retry: false
+      };
+      const p = Promise.resolve(errRes);
+      Object.assign(p, errRes);
+      return p;
+    }
+    sm.transition('CONTEXT_VERIFIED');
+
+    // 2. Chuyển đổi dữ liệu ảnh & đặt tên file chuẩn lâm sàng
     const patientId = activeClinicalSession?.patient?.id || getPatientInfoFromDOM()?.id || null;
     const isUltrasound = meta.specialty === 'ultrasound';
     const prefix = isUltrasound ? (patientId ? `SA_${patientId}` : 'SA') : (patientId ? `ECG_${patientId}` : 'ECG');
@@ -2001,80 +2641,267 @@ function getPatientInfoFromDOM() {
     } catch (err) {
       console.error('[CamSync] Lỗi chuyển đổi dataURLtoFile:', err);
       showToast('⚠️ Không thể chuyển đổi tệp ảnh lâm sàng');
-      return { success: false, code: 'FILE_CONVERSION_ERROR', reason: err.message || 'Lỗi chuyển đổi tệp' };
+      sm.transition('HIS_REJECTED');
+      const errRes = {
+        success: false,
+        status: 'HIS_REJECTED',
+        code: 'FILE_CONVERSION_ERROR',
+        reason: err.message || 'Lỗi chuyển đổi tệp',
+        retry: false
+      };
+      const p = Promise.resolve(errRes);
+      Object.assign(p, errRes);
+      return p;
     }
 
-    // RÀO CHẮN LÂM SÀNG & TIẾN TRÌNH INJECT (Checkpoint #4)
-    const injectRes = injectFilesAndUpload([file]);
-    const success = typeof injectRes === 'boolean' ? injectRes : !!injectRes?.success;
+    // 3. Đính kèm tệp vào HIS (FILE_ATTACHED)
+    sm.transition('FILE_ATTACHED');
 
-    if (!success) {
+    // 4. Kích hoạt tải lên HIS (Checkpoint 2: Pre-upload barrier)
+    const injectRes = injectFilesAndUpload([file], effectivePatientId);
+    const initiated = typeof injectRes === 'boolean' ? injectRes : (injectRes?.initiated || injectRes?.success);
+
+    if (!initiated) {
       const code = injectRes?.code || 'INJECTION_FAILED';
       const reason = injectRes?.reason || 'Không thể nạp tệp vào HIS';
       console.warn(`[CamSync] Hủy lưu ảnh do nạp vào HIS thất bại: ${code} - ${reason}`);
       if (statusText) statusText.textContent = `⚠️ Lỗi nạp ảnh: ${reason}`;
-      return { success: false, code, reason };
+      sm.transition('HIS_REJECTED');
+      const errRes = { success: false, status: 'HIS_REJECTED', error: code, code, reason, retry: false };
+      const p = Promise.resolve(errRes);
+      Object.assign(p, errRes);
+      return p;
     }
 
-    // CHỈ TĂNG ĐẾM VÀ CẬP NHẬT GIAO DIỆN KHI VÀ CHỈ KHI ẢNH ĐÃ NẠP THÀNH CÔNG VÀO HIS (P0-4)
-    photoCount++;
-    const photoItem = {
-      id: photoCount,
-      base64: base64Image,
-      filename: filename,
-      sizeKB: approxKB,
-      timestamp: Date.now(),
-      rotation: 0
-    };
-    receivedPhotos.push(photoItem);
-    if (receivedPhotos.length > 20) {
-      receivedPhotos.shift();
-    }
-    currentPhotoIndex = receivedPhotos.length - 1;
-
-    updateProgressUI(100, `${approxKB} KB`, `Đã nhận xong ảnh thứ ${photoCount}!`);
-
-    if (statusText) statusText.textContent = `Đã nạp thành công ảnh thứ ${photoCount}!`;
-    if (statusPill) statusPill.classList.add('connected');
-    if (instruction) instruction.textContent = 'Bạn có thể chụp tiếp ảnh khác trên điện thoại hoặc bấm "Đóng" bên dưới.';
-
-    // Dừng hoạt họa và chuyển sang Trạm Soi Ảnh Lâm Sàng (0% CPU)
-    if (nebulaController) {
-      try { nebulaController.onPhotoReceived(); } catch (e) {}
+    // Chuyển sang HIS_UPLOAD_PENDING (TUYỆT ĐỐI KHÔNG COI LÀ COMMITTED)
+    sm.transition('HIS_UPLOAD_PENDING');
+    if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+      unifiedTransferReceiver.setTransferState(transferId, 'HIS_PENDING');
     }
 
-    const qrCode = getModalElement('camsyncQrCode');
-    const livePreview = getModalElement('camsyncLivePreview');
-    const toggleBar = getModalElement('camsyncQrToggleBar');
-    const toggleQrBtn = getModalElement('camsyncToggleQrBtn');
-    const nextShotBar = getModalElement('camsyncNextShotBar');
-    const viewportFrame = getModalElement('camsyncViewportFrame');
-
-    if (viewportFrame && viewportFrame.classList && viewportFrame.classList.add) {
-      viewportFrame.classList.add('has-photo');
+    // Checkpoint 3 check ngay sau khi kích hoạt upload (in-flight context check)
+    const cp3ImmediateCheck = validateClinicalContext();
+    if (!cp3ImmediateCheck.valid) {
+      const errorCode = 'UNKNOWN_CONTEXT_CHANGED';
+      const errorReason = 'Chưa xác định ảnh đã lưu do hồ sơ thay đổi; hãy kiểm tra trên HIS trước khi gửi lại.';
+      console.error(`[CamSync CP3] Vi phạm ngữ cảnh lâm sàng sau upload click: ${errorCode} (gốc: ${cp3ImmediateCheck.code}) - ${cp3ImmediateCheck.reason}`);
+      audit.log('photo_blocked_cp3', {
+        status: 'HIS_UNKNOWN',
+        code: errorCode,
+        subCode: cp3ImmediateCheck.code,
+        reason: errorReason,
+        pid: audit.hashId(activeClinicalSession?.patient?.id)
+      });
+      const unknownRes = {
+        success: false,
+        status: 'HIS_UNKNOWN',
+        code: errorCode,
+        error: errorCode,
+        reason: errorReason,
+        retry: false
+      };
+      if (sendAck) {
+        try { sendAck(false, errorCode, unknownRes); } catch (e) {}
+      } else if (transport === 'realtime') {
+        try {
+          sendRealtimeBroadcast('transfer_ack', {
+            transferId,
+            status: 'HIS_UNKNOWN',
+            success: false,
+            error: errorCode,
+            reason: errorReason,
+            retry: false
+          });
+        } catch (e) {}
+      }
+      abortClinicalSession(errorCode, errorReason);
+      sm.transition('HIS_UNKNOWN');
+      if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+        unifiedTransferReceiver.setTransferState(transferId, 'UNKNOWN', unknownRes);
+      }
+      const p = Promise.resolve(unknownRes);
+      Object.assign(p, unknownRes);
+      return p;
     }
-    if (qrCode) qrCode.style.display = 'none';
-    if (livePreview) livePreview.style.display = 'flex';
-    if (toggleBar) toggleBar.style.display = 'flex';
-    if (toggleQrBtn) toggleQrBtn.textContent = 'Hiện lại mã QR';
-    if (nextShotBar) nextShotBar.style.display = 'flex';
 
-      renderCurrentPhoto();
-      renderGalleryStrip();
+    if (statusText) statusText.textContent = `Đang nạp ảnh lên HIS, chờ xác nhận lưu...`;
 
-      // Cập nhật Thumbnail preview cũ (dự phòng tương thích ngược)
-      if (thumbCard && thumbImg) {
-        thumbImg.src = base64Image;
-        if (thumbName) thumbName.textContent = `${filename} (${approxKB} KB)`;
+    // 5. Asynchronous persistence verification via awaitPersisted
+    const asyncPromise = (async () => {
+      const adapter = getHisAdapter();
+      const evidence = {
+        transferId: transferId || `TX_${Date.now()}`,
+        fileToken: filename,
+        expectedContext: activeClinicalSession?.patient ? {
+          patientId: activeClinicalSession.patient.id,
+          encounterId: activeClinicalSession.encounter?.id || activeClinicalSession.patient.encounterId,
+          orderId: activeClinicalSession.encounter?.orderId || activeClinicalSession.patient.orderId
+        } : { patientId: patientId || 'UNKNOWN', encounterId: 'UNKNOWN' },
+        fileSize: file.size
+      };
+
+      let persistResult = 'UNKNOWN';
+      if (adapter && typeof adapter.awaitPersisted === 'function') {
+        persistResult = await adapter.awaitPersisted(evidence, 15000);
+      } else {
+        persistResult = 'UNKNOWN';
       }
 
-      // Cập nhật bộ đếm
-      if (counterBadge && photoCountEl) {
-        photoCountEl.textContent = photoCount;
-        counterBadge.style.display = 'inline-block';
+      // Checkpoint 3 confirmation prior to positive ACK
+      const cp3FinalCheck = validateClinicalContext();
+      if (!cp3FinalCheck.valid) {
+        const errorCode = 'UNKNOWN_CONTEXT_CHANGED';
+        const errorReason = 'Chưa xác định ảnh đã lưu do hồ sơ thay đổi; hãy kiểm tra trên HIS trước khi gửi lại.';
+        audit.log('photo_blocked_cp3', {
+          status: 'HIS_UNKNOWN',
+          code: errorCode,
+          subCode: cp3FinalCheck.code,
+          reason: errorReason,
+          pid: audit.hashId(activeClinicalSession?.patient?.id)
+        });
+        const unknownRes = {
+          success: false,
+          status: 'HIS_UNKNOWN',
+          code: errorCode,
+          error: errorCode,
+          reason: errorReason,
+          retry: false
+        };
+        if (sendAck) {
+          try { sendAck(false, errorCode, unknownRes); } catch (e) {}
+        } else if (transport === 'realtime') {
+          try {
+            sendRealtimeBroadcast('transfer_ack', {
+              transferId,
+              status: 'HIS_UNKNOWN',
+              success: false,
+              error: errorCode,
+              reason: errorReason,
+              retry: false
+            });
+          } catch (e) {}
+        }
+        abortClinicalSession(errorCode, errorReason);
+        sm.transition('HIS_UNKNOWN');
+        if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+          unifiedTransferReceiver.setTransferState(transferId, 'UNKNOWN', unknownRes);
+        }
+        return unknownRes;
       }
 
-      return { success: true, photoCount, filename };
+      if (persistResult === 'COMMITTED') {
+        sm.transition('HIS_COMMITTED');
+        if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+          unifiedTransferReceiver.setTransferState(transferId, 'COMMITTED', {
+            success: true,
+            status: 'HIS_COMMITTED',
+            photoCount: photoCount + 1,
+            filename
+          });
+        }
+
+        photoCount++;
+        const photoItem = {
+          id: photoCount,
+          base64: base64Image,
+          filename: filename,
+          sizeKB: approxKB,
+          timestamp: Date.now(),
+          rotation: 0
+        };
+        receivedPhotos.push(photoItem);
+        if (receivedPhotos.length > 20) {
+          receivedPhotos.shift();
+        }
+        currentPhotoIndex = receivedPhotos.length - 1;
+
+        updateProgressUI(100, `${approxKB} KB`, `Đã lưu vào HIS ảnh thứ ${photoCount}!`);
+
+        if (statusText) statusText.textContent = `Đã lưu vào HIS ảnh thứ ${photoCount}!`;
+        if (statusPill) statusPill.classList.add('connected');
+        if (instruction) instruction.textContent = 'Bạn có thể chụp tiếp ảnh khác trên điện thoại hoặc bấm "Đóng" bên dưới.';
+
+        if (nebulaController) {
+          try { nebulaController.onPhotoReceived(); } catch (e) {}
+        }
+
+        const qrCode = getModalElement('camsyncQrCode');
+        const livePreview = getModalElement('camsyncLivePreview');
+        const toggleBar = getModalElement('camsyncQrToggleBar');
+        const toggleQrBtn = getModalElement('camsyncToggleQrBtn');
+        const nextShotBar = getModalElement('camsyncNextShotBar');
+        const viewportFrame = getModalElement('camsyncViewportFrame');
+
+        if (viewportFrame && viewportFrame.classList && viewportFrame.classList.add) {
+          viewportFrame.classList.add('has-photo');
+        }
+        if (qrCode) qrCode.style.display = 'none';
+        if (livePreview) livePreview.style.display = 'flex';
+        if (toggleBar) toggleBar.style.display = 'flex';
+        if (toggleQrBtn) toggleQrBtn.textContent = 'Hiện lại mã QR';
+        if (nextShotBar) nextShotBar.style.display = 'flex';
+
+        renderCurrentPhoto();
+        renderGalleryStrip();
+
+        // Cập nhật Thumbnail preview cũ (dự phòng tương thích ngược)
+        if (thumbCard && thumbImg) {
+          thumbImg.src = base64Image;
+          if (thumbName) thumbName.textContent = `${filename} (${approxKB} KB)`;
+        }
+
+        // Cập nhật bộ đếm
+        if (counterBadge && photoCountEl) {
+          photoCountEl.textContent = photoCount;
+          counterBadge.style.display = 'inline-block';
+        }
+
+        return {
+          success: true,
+          status: 'HIS_COMMITTED',
+          photoCount,
+          filename
+        };
+      }
+
+      if (persistResult === 'REJECTED') {
+        sm.transition('HIS_REJECTED');
+        const errorReason = 'Máy chủ HIS từ chối lưu ảnh hoặc báo lỗi hệ thống';
+        const rejectPayload = {
+          success: false,
+          status: 'HIS_REJECTED',
+          code: 'HIS_REJECTED',
+          reason: errorReason,
+          retry: false
+        };
+        if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+          unifiedTransferReceiver.setTransferState(transferId, 'REJECTED', rejectPayload);
+        }
+        if (statusText) statusText.textContent = `⚠️ Lỗi máy chủ HIS: Bị từ chối`;
+        return rejectPayload;
+      }
+
+      // persistResult === 'UNKNOWN'
+      sm.transition('HIS_UNKNOWN');
+      const unknownReason = 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại';
+      const unknownFinal = {
+        success: false,
+        status: 'HIS_UNKNOWN',
+        code: 'HIS_UNKNOWN',
+        reason: unknownReason,
+        retry: false
+      };
+      if (unifiedTransferReceiver && typeof unifiedTransferReceiver.setTransferState === 'function') {
+        unifiedTransferReceiver.setTransferState(transferId, 'UNKNOWN', unknownFinal);
+      }
+      if (statusText) statusText.textContent = `⚠️ Chưa xác định trạng thái lưu trên HIS`;
+      showToast(`⚠️ Chưa xác định ảnh đã lưu vào HIS, vui lòng kiểm tra trực tiếp!`);
+      return unknownFinal;
+    })();
+
+    asyncPromise.status = 'HIS_UPLOAD_PENDING';
+    asyncPromise.initiated = true;
+    return asyncPromise;
   }
 
   function renderCurrentPhoto() {
@@ -2210,7 +3037,9 @@ function getPatientInfoFromDOM() {
   function setupObserver() {
     let debounceTimer = null;
     const checkAndInit = () => {
-      if (document.getElementById('fileUpload') && document.getElementById('btnUpload')) {
+      const adapter = getHisAdapter();
+      const isAvailable = adapter ? adapter.isUploadAvailable() : Boolean(document.getElementById('fileUpload') && document.getElementById('btnUpload'));
+      if (isAvailable) {
         injectSyncButton();
       }
     };

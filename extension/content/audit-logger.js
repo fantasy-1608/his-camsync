@@ -21,6 +21,31 @@
   }
 
   /**
+   * Pseudonymize Session ID: giữ 6 ký tự đầu và 4 ký tự cuối (P2-03: không log raw sid)
+   * Ví dụ: "a1b2c3d4e5f6...7890" → "a1b2c3...7890"
+   */
+  function hashSid(sid) {
+    if (!sid) return '***';
+    const str = String(sid);
+    if (str.length <= 10) return '***';
+    return str.slice(0, 6) + '...' + str.slice(-4);
+  }
+
+  /**
+   * Mã sự kiện chuẩn y tế theo CAMSYNC_9_5_MASTER_PLAN.md §12 (P2-03)
+   */
+  const STANDARD_EVENTS = {
+    SESSION_EXPIRED: 'SESSION_EXPIRED',
+    CONTEXT_MISMATCH: 'CONTEXT_MISMATCH',
+    TRANSFER_INVALID: 'TRANSFER_INVALID',
+    CRYPTO_FAILED: 'CRYPTO_FAILED',
+    HIS_REJECTED: 'HIS_REJECTED',
+    HIS_UNKNOWN: 'HIS_UNKNOWN',
+    HIS_COMMITTED: 'HIS_COMMITTED',
+    CHANNEL_DENIED: 'CHANNEL_DENIED'
+  };
+
+  /**
    * Đọc toàn bộ nhật ký từ chrome.storage.local
    */
   async function getEntries() {
@@ -42,14 +67,19 @@
    * @param {object} data  - Dữ liệu kèm theo (đã pseudonymized, KHÔNG chứa raw PHI)
    */
   async function log(event, data = {}) {
+    const sanitizedData = { ...data };
+    if (sanitizedData.sid) {
+      sanitizedData.sid = hashSid(sanitizedData.sid);
+    }
+
     const entry = {
       ts: new Date().toISOString(),
       ev: event,
-      ...data
+      ...sanitizedData
     };
 
     // Console output (luôn có, hỗ trợ debug trực tiếp)
-    console.log(`[CamSync Audit] ${event}`, JSON.stringify(data));
+    console.log(`[CamSync Audit] ${event}`, JSON.stringify(sanitizedData));
 
     // Persistent storage (chrome.storage.local circular buffer)
     try {
@@ -83,6 +113,8 @@
     getEntries,
     clear,
     hashId,
+    hashSid,
+    STANDARD_EVENTS,
     MAX_ENTRIES,
     STORAGE_KEY
   };

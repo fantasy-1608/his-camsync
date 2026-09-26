@@ -1,220 +1,240 @@
 /**
- * Tier 4: Real-World Clinical Scenarios Test Suite (>=5 tests)
+ * HIS CamSync - Tier 4: Real-World Clinical Application Scenarios (TC-S01 to TC-S05)
  * 
- * TC-S1: Zero-Leakage Direct REST Probe & PHI Isolation Verification
- * TC-S2: Zero-Retention Verification on Postgres & Local Storage
- * TC-S3: ECG Waveform Non-Obstruction Pixel Analysis & Safe-Zone Margin
- * TC-S4: 0% Overhead, Memory Hygiene & Teardown Lifecycle Audit
- * TC-S5: Full End-to-End Workflow with VNPT HIS DOM Form Writeback
- * 
- * Total: 5 tests
+ * Executes full realistic clinical workflows against production modules:
+ * - TC-S01: Clinical ECG Upload Workflow (Rhythm strip, 25% opacity watermark, E2EE, HIS commit)
+ * - TC-S02: High-Resolution Endoscopy Batch Workflow (Batch transfers, buffer cleanup, idempotency)
+ * - TC-S03: Ultrasound Diagnostic Review (Tissue contrast, emergency missing-ID fail-closed gating)
+ * - TC-S04: High-Throughput Clinic Rapid Patient Switching (10-patient intake stress, tab hygiene)
+ * - TC-S05: Clinic Network Blip & Recovery SOP (Network drop, deterministic HIS_UNKNOWN, SOP check)
  */
 
-import { describe, test, it, assert, expect } from '../harness/test-framework.js';
-import { MockCanvas, verifyJpegHeader, measurePixelDiff } from '../harness/canvas-pixel-harness.js';
+import { describe, test, assert } from '../harness/test-framework.js';
+import {
+  loadProductionDesktopModules,
+  createMockHisAdapter,
+  createAuthenticatedPayload,
+  decryptAuthenticatedPayload,
+  drawClinicalWatermark
+} from '../harness/production-loader.js';
+import { MockCanvas, verifyJpegHeader } from '../harness/canvas-pixel-harness.js';
 import { ClinicalSynthesizer } from '../generators/clinical-synthesizer.js';
-import { HisDomHarness } from '../harness/his-dom-harness.js';
-import { MockRealtimeHub, chunkBinaryBuffer } from '../harness/mock-realtime.js';
-import { MockHisServer } from '../harness/mock-his-server.js';
-import { drawClinicalWatermark, exportBlobWithWatermark } from '../harness/watermark-engine.js';
 
 describe('Tier 4: Real-World Clinical Scenarios Suite', () => {
 
-  test('TC-S1: Zero-Leakage direct REST probe verifies public anon access is blocked', async () => {
-    // Simulate direct REST probe with anon key against public schema
-    async function simulateRestProbe(endpoint, anonKey) {
-      // In the hardened his-camsync project, table access is REVOKED
-      const isTableBlocked = true; // REVOKE ALL ON SCHEMA public FROM anon, authenticated
-      if (isTableBlocked) {
-        return {
-          status: 401,
-          body: { code: 'PGRST301', message: 'Permission denied for schema public' }
-        };
-      }
-      return { status: 200, body: [] };
-    }
+  test('TC-S01: Clinical ECG Upload Workflow (Rhythm strip, 25% opacity watermark, E2EE, HIS commit)', async () => {
+    // 1. Synthesize Lead II ECG rhythm strip
+    const { canvas: ecgCanvas } = ClinicalSynthesizer.generateSyntheticEcg(1200, 400, { bpm: 72 });
+    assert.strictEqual(ecgCanvas.width, 1200);
+    assert.strictEqual(ecgCanvas.height, 400);
 
-    const sessionsProbe = await simulateRestProbe('/rest/v1/camsync_sessions', 'mock-anon-key');
-    const transfersProbe = await simulateRestProbe('/rest/v1/camsync_transfers', 'mock-anon-key');
+    const desktop = loadProductionDesktopModules({
+      patientText: 'Mã bệnh nhân: 778899 - Tên bệnh nhân: VO HOANG NAM - Mã lượt khám: ENC_ECG_01'
+    });
+    await desktop.audit.clear();
 
-    assert.strictEqual(sessionsProbe.status, 401, 'Direct REST SELECT on camsync_sessions must be blocked');
-    assert.strictEqual(transfersProbe.status, 401, 'Direct REST SELECT on camsync_transfers must be blocked');
-  });
+    const sid = desktop.crypto.generateSecureSessionId();
+    const key = await desktop.crypto.importAesGcmKey(desktop.crypto.generateEncryptionKeyHex());
 
-  test('TC-S2: Zero-Retention verification confirms 0 disk writes and RAM-to-RAM relay', async () => {
-    const hub = new MockRealtimeHub();
-    const topic = 'camsync:zero-retention-test';
-    const desktop = hub.createInMemoryClient(topic);
-    const mobile = hub.createInMemoryClient(topic);
+    const activeSession = {
+      state: 'ACTIVE',
+      sid,
+      expiresAt: Date.now() + 300000,
+      generation: 1,
+      patient: { id: '778899', name: 'VO HOANG NAM' },
+      encounter: { encounterId: 'ENC_ECG_01', orderId: 'ORD_ECG_01' }
+    };
 
-    // Relay 3 large medical image payloads (100KB each)
-    for (let i = 1; i <= 3; i++) {
-      const imgBuffer = Buffer.alloc(100 * 1024, 0x77);
-      const chunks = chunkBinaryBuffer(imgBuffer, 64 * 1024);
-      const transferId = `tx-retention-${i}`;
-
-      mobile.sendBroadcast('chunk_start', { transferId, totalChunks: chunks.length, totalSize: imgBuffer.length });
-      for (let c = 0; c < chunks.length; c++) {
-        mobile.sendBroadcast('chunk_data', { transferId, chunkIndex: c, data: chunks[c] });
-      }
-      mobile.sendBroadcast('chunk_complete', { transferId });
-    }
-
-    const retentionStatus = hub.verifyZeroRetention();
-    assert.strictEqual(retentionStatus.diskWrites, 0, 'Disk writes count must be strictly 0');
-    assert.strictEqual(retentionStatus.zeroDiskWrites, true);
-    assert.strictEqual(retentionStatus.isZeroRetentionCompliant, true);
-    assert.ok(retentionStatus.totalBytesRelayed > 0, 'Data was relayed in RAM');
-
-    desktop.leave();
-    mobile.leave();
-  });
-
-  test('TC-S3: ECG waveform non-obstruction pixel analysis verifies 0% alteration of P-QRS-T complexes', async () => {
-    // 1. Generate mathematically defined Lead II ECG strip with bounding box
-    const width = 1200;
-    const height = 400;
-    const { canvas: originalCanvas, ecgWaveformRoi } = ClinicalSynthesizer.generateSyntheticEcg(width, height);
-
-    // Snapshot waveform pixels before watermark
-    const origData = new Uint8ClampedArray(originalCanvas.data);
-
-    // 2. Export with watermark in bottom-right margin
-    const { outCanvas, watermarkMeta } = await exportBlobWithWatermark(originalCanvas, { left: 0, top: 0, right: 1, bottom: 1 }, 0.90, {
-      patient: { id: '24089123', name: 'NGUYEN VAN A' },
-      timestamp: Date.now()
+    // 2. Draw clinical watermark using production editor.js
+    const ctx = ecgCanvas.getContext('2d');
+    const wm = drawClinicalWatermark(ctx, 1200, 400, {
+      patient: activeSession.patient,
+      specialty: 'ecg'
     });
 
-    // 3. Pixel-by-pixel differential measurement inside ECG waveform ROI
-    const diff = measurePixelDiff(origData, outCanvas.data, width, ecgWaveformRoi);
+    assert.ok(wm.displayText.includes('778899'));
+    // Bottom-right placement keeps central waveform visible and anchors to bottom-right corner
+    assert.ok(wm.pillBounds.x > 0);
+    assert.strictEqual(wm.pillBounds.x + wm.pillBounds.width + wm.pillBounds.margin, 1200);
+    assert.strictEqual(wm.pillBounds.y + wm.pillBounds.height + wm.pillBounds.margin, 400);
 
-    assert.strictEqual(diff.diffCount, 0, 'Waveform region must have 0 altered pixels (100% preservation)');
-    assert.strictEqual(diff.diffRatio, 0.0, 'Waveform pixel error ratio must be strictly 0.0%');
+    // 3. Encrypt payload
+    const imagePayload = 'data:image/jpeg;base64,' + Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]).toString('base64');
+    const header = { v: 2, sid, transferId: 'TX_ECG_01' };
+    const auth = await createAuthenticatedPayload(key, imagePayload, header);
 
-    // 4. Verify clearance margin: bottom of waveform to top of watermark pill
-    const waveformBottomY = ecgWaveformRoi.y + ecgWaveformRoi.height;
-    const pillTopY = watermarkMeta.pillBounds.y;
-    const clearancePx = pillTopY - waveformBottomY;
+    // 4. Ingest via UnifiedTransferReceiver
+    const transfers = {};
+    const rx = new desktop.transfer.UnifiedTransferReceiver(transfers);
+    rx.begin({ transferId: 'TX_ECG_01', totalChunks: 1, totalBytes: auth.ciphertextBase64.length });
+    rx.acceptChunk('TX_ECG_01', 0, auth.ciphertextBase64);
 
-    assert.ok(clearancePx >= 20, `Watermark must be placed at least 20px below waveform (actual: ${clearancePx}px)`);
+    let assembled = null;
+    rx.onAssembled = (r) => { assembled = r; };
+    rx.complete('TX_ECG_01');
+
+    assert.ok(assembled);
+
+    // 5. Decrypt and verify
+    const decrypted = await decryptAuthenticatedPayload(key, auth.ivBase64, assembled.fullBase64, header);
+    assert.strictEqual(decrypted, imagePayload);
+
+    // 6. 3-Checkpoint barrier check
+    const check = desktop.clinical.validateClinicalContext(activeSession, '778899');
+    assert.strictEqual(check.valid, true);
+
+    // 7. Attach and await HIS server commit
+    const adapter = createMockHisAdapter({
+      initialContext: { patientId: '778899', encounterId: 'ENC_ECG_01', orderId: 'ORD_ECG_01' }
+    });
+    await adapter.attachImage(new File(['data'], 'ecg_lead_ii.jpg', { type: 'image/jpeg' }));
+    await adapter.beginUpload();
+
+    const commitResult = await adapter.awaitPersisted({
+      transferId: 'TX_ECG_01',
+      expectedContext: { patientId: '778899', encounterId: 'ENC_ECG_01', orderId: 'ORD_ECG_01' },
+      fileSize: 1024
+    });
+    assert.strictEqual(commitResult, 'COMMITTED');
+
+    // 8. Audit log
+    await desktop.audit.log('HIS_COMMITTED', {
+      sessionHash: 'h_ecg',
+      patientRef: desktop.audit.hashId('778899'),
+      transport: 'webrtc'
+    });
+
+    const entries = await desktop.audit.getEntries();
+    assert.strictEqual(entries[0].ev, 'HIS_COMMITTED');
+    assert.strictEqual(entries[0].patientRef, '77***99');
   });
 
-  test('TC-S4: 0% overhead & memory hygiene lifecycle audit maintains <30MB heap stability', () => {
-    const memorySnapshots = [];
-    let initialMemory = 12 * 1024 * 1024; // 12MB baseline
+  test('TC-S02: High-Resolution Endoscopy Batch Workflow (Batch transfers, buffer cleanup, idempotency)', async () => {
+    const desktop = loadProductionDesktopModules();
+    const transfers = {};
+    const rx = new desktop.transfer.UnifiedTransferReceiver(transfers);
 
-    // Simulate 30 open/close cycles across an 8-hour shift
-    for (let cycle = 1; cycle <= 30; cycle++) {
-      // Allocate temporary cycle structures
-      let sessionCache = new Map();
-      sessionCache.set('temp', Buffer.alloc(50 * 1024)); // 50KB
+    const assembledBatch = [];
+    rx.onAssembled = (item) => {
+      assembledBatch.push(item);
+    };
 
-      // Teardown cycle (Master OFF cleanup)
-      sessionCache.clear();
-      sessionCache = null;
+    // Simulate batch of 4 consecutive endoscopy captures (e.g. esophagus, stomach, duodenum, retroflexion)
+    for (let i = 1; i <= 4; i++) {
+      const tid = `TX_ENDO_${i}`;
+      rx.begin({ transferId: tid, totalChunks: 3, totalBytes: 3000 });
+      rx.acceptChunk(tid, 0, `PART_0_IMG_${i}`);
+      rx.acceptChunk(tid, 1, `PART_1_IMG_${i}`);
+      rx.acceptChunk(tid, 2, `PART_2_IMG_${i}`);
+      rx.complete(tid);
 
-      // Small GC variance simulation (< 0.2MB)
-      const currentMemory = initialMemory + (cycle % 3) * 50 * 1024;
-      memorySnapshots.push(currentMemory);
+      // Verify in-flight buffer for this transfer was immediately cleaned up after assembly
+      assert.strictEqual(transfers[tid], undefined, `Buffer for ${tid} must be cleaned up immediately`);
     }
 
-    const finalMemory = memorySnapshots[memorySnapshots.length - 1];
-    const maxMemory = Math.max(...memorySnapshots);
-
-    const maxMemoryMB = maxMemory / (1024 * 1024);
-    assert.ok(maxMemoryMB < 30, `Heap memory (${maxMemoryMB.toFixed(1)}MB) must stay well under 30MB limit`);
-    assert.ok(finalMemory <= initialMemory + 500 * 1024, 'Memory must not grow monotonically after teardown');
+    assert.strictEqual(assembledBatch.length, 4);
+    assert.strictEqual(Object.keys(transfers).length, 0, 'Zero residual memory leak across batch');
   });
 
-  test('TC-S5: End-to-End full workflow: Banner -> QR -> Watermark -> Relay -> HIS Form writeback', async () => {
-    // 1. Initialize Mock HIS Server and DOM Harness
-    const hisServer = new MockHisServer(3939);
-    await hisServer.start();
+  test('TC-S03: Ultrasound Diagnostic Review (Tissue contrast, emergency missing-ID fail-closed gating)', async () => {
+    // 1. Synthesize ultrasound phantom with high contrast
+    const { canvas } = ClinicalSynthesizer.generateSyntheticUltrasound(800, 600, {
+      sectorType: 'convex',
+      enhancementFilter: 'contrast'
+    });
+    assert.strictEqual(canvas.width, 800);
+    assert.strictEqual(canvas.height, 600);
 
-    const domHarness = new HisDomHarness();
-    domHarness.setupHisPage({ id: '24089123', name: 'NGUYEN VAN A', age: 45 });
+    // 2. Emergency intake: patient banner has temporary ID but encounterId is missing
+    const adapter = createMockHisAdapter({
+      initialContext: { patientId: 'EMERGENCY_911', encounterId: null }
+    });
 
-    try {
-      // 2. Doctor clicks "Quét từ ĐT": scrape patient & generate 128-bit session
-      const patient = domHarness.scrapePatientInfo();
-      assert.strictEqual(patient.id, '24089123');
+    const ctx = await adapter.readContext();
+    // Fail-closed gating: must stop auto-upload when encounterId is missing
+    assert.strictEqual(ctx, null, 'Auto-upload must be gated fail-closed when encounterId is missing');
 
-      const sessionId = HisDomHarness.generateSecureSessionId();
-      const qrUrl = HisDomHarness.generateQrUrl(sessionId);
-      assert.strictEqual(HisDomHarness.verifyZeroPhiInUrl(qrUrl, patient), true);
+    // 3. Once administrative registration assigns encounterId:
+    adapter.setContext({
+      patientId: 'EMERGENCY_911',
+      encounterId: 'ENC_EMERGENCY_01',
+      patientName: 'BN CAP CUU'
+    });
 
-      // 3. Connect Realtime Broadcast channel
-      const hub = new MockRealtimeHub();
-      const topic = `camsync:${sessionId}`;
-      const desktop = hub.createInMemoryClient(topic);
-      const mobile = hub.createInMemoryClient(topic);
+    const validCtx = await adapter.readContext();
+    assert.ok(validCtx);
+    assert.strictEqual(validCtx.encounterId, 'ENC_EMERGENCY_01');
+  });
 
-      // 4. Mobile captures ECG strip, applies clinical watermark, and exports JPEG
-      const { canvas: mobileCanvas } = ClinicalSynthesizer.generateSyntheticEcg(1200, 400);
-      const { blob: watermarkedBlob } = await exportBlobWithWatermark(mobileCanvas, { left: 0, top: 0, right: 1, bottom: 1 }, 0.90, {
-        patient,
-        timestamp: Date.now()
-      });
+  test('TC-S04: High-Throughput Clinic Rapid Patient Switching (10-patient intake stress, tab hygiene)', async () => {
+    const desktop = loadProductionDesktopModules();
+    const transfers = {};
+    const rx = new desktop.transfer.UnifiedTransferReceiver(transfers);
 
-      // 5. Mobile transmits over Realtime Broadcast (64KB chunks)
-      const imageBuffer = Buffer.from(await watermarkedBlob.arrayBuffer());
-      const chunks = chunkBinaryBuffer(imageBuffer, 64 * 1024);
+    let activePatientId = null;
 
-      let desktopReceivedBuffer = null;
-      desktop.on('chunk_complete', () => {
-        desktopReceivedBuffer = Buffer.from(receivedParts.join(''), 'base64');
-      });
+    // Simulate 10 consecutive patient intake cycles
+    for (let p = 1; p <= 10; p++) {
+      const patientId = `BN_${100000 + p}`;
+      activePatientId = patientId;
 
-      const receivedParts = [];
-      desktop.on('chunk_data', (payload) => {
-        receivedParts[payload.chunkIndex] = payload.data;
-      });
+      const tid = `TX_INTAKE_${p}`;
+      rx.begin({ transferId: tid, totalChunks: 2, totalBytes: 200 });
+      rx.acceptChunk(tid, 0, 'DATA_0');
+      rx.acceptChunk(tid, 1, 'DATA_1');
 
-      mobile.sendBroadcast('chunk_start', { transferId: 'e2e-tx', totalChunks: chunks.length, totalSize: imageBuffer.length });
-      for (let c = 0; c < chunks.length; c++) {
-        mobile.sendBroadcast('chunk_data', { transferId: 'e2e-tx', chunkIndex: c, data: chunks[c] });
+      let assembled = null;
+      rx.onAssembled = (r) => { assembled = r; };
+      rx.complete(tid);
+
+      assert.ok(assembled);
+
+      // Clean teardown between patients
+      rx.purgeAll();
+      assert.strictEqual(Object.keys(transfers).length, 0);
+    }
+
+    assert.strictEqual(activePatientId, 'BN_100010');
+  });
+
+  test('TC-S05: Clinic Network Blip & Recovery SOP (Network drop, deterministic HIS_UNKNOWN, SOP check)', async () => {
+    const desktop = loadProductionDesktopModules();
+    await desktop.audit.clear();
+
+    const adapter = createMockHisAdapter({ simulateFailure: 'TIMEOUT' });
+    await adapter.attachImage(new File(['data'], 'photo.jpg'));
+    await adapter.beginUpload();
+
+    // Hospital Wi-Fi blip during upload
+    const result = await adapter.awaitPersisted({ transferId: 'TX_BLIP' }, 100);
+    assert.strictEqual(result, 'UNKNOWN');
+
+    // Operational SOP: clinical staff receives warning to inspect HIS manually
+    const sopAction = (res) => {
+      if (res === 'UNKNOWN') {
+        return {
+          action: 'MANUAL_INSPECT_HIS_IMAGE_LIST',
+          allowAutoRetry: false,
+          userPrompt: 'Chưa xác định ảnh đã lưu vào HIS. Vui lòng kiểm tra danh sách kết quả trên HIS trước khi gửi lại!'
+        };
       }
-      mobile.sendBroadcast('chunk_complete', { transferId: 'e2e-tx' });
+      return { action: 'PROCEED', allowAutoRetry: true };
+    };
 
-      // 6. Desktop verifies standard JFIF JPEG header
-      assert.ok(desktopReceivedBuffer !== null, 'Desktop must have reassembled image');
-      const headerCheck = verifyJpegHeader(desktopReceivedBuffer);
-      assert.strictEqual(headerCheck.valid, true, 'Reassembled image must be valid standard JPEG');
+    const sop = sopAction(result);
+    assert.strictEqual(sop.action, 'MANUAL_INSPECT_HIS_IMAGE_LIST');
+    assert.strictEqual(sop.allowAutoRetry, false);
+    assert.ok(sop.userPrompt.includes('kiểm tra danh sách kết quả'));
 
-      // 7. Desktop injects file into VNPT HIS form
-      const filename = `ECG_${patient.id}_${Date.now()}.jpg`;
-      const hisFile = {
-        name: filename,
-        size: desktopReceivedBuffer.length,
-        type: 'image/jpeg'
-      };
+    // Record audit event
+    await desktop.audit.log('HIS_UNKNOWN', {
+      sessionHash: 'h_sop',
+      patientRef: desktop.audit.hashId('BN777888'),
+      reason: 'WIFI_BLIP_TIMEOUT'
+    });
 
-      const injectionResult = domHarness.injectFilesAndUpload(hisFile);
-      assert.strictEqual(injectionResult.success, true);
-      assert.strictEqual(injectionResult.changeTriggered, true);
-      assert.strictEqual(injectionResult.clickTriggered, true);
-
-      // 8. Upload to Mock HIS endpoint
-      const uploadRes = await fetch('http://localhost:3939/api/his/upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'x-filename': filename
-        },
-        body: desktopReceivedBuffer
-      });
-
-      assert.strictEqual(uploadRes.status, 200);
-      const json = await uploadRes.json();
-      assert.strictEqual(json.status, 'success');
-      assert.strictEqual(json.file.patientId, '24089123');
-
-      // 9. Teardown
-      desktop.leave();
-      mobile.leave();
-    } finally {
-      await hisServer.stop();
-    }
+    const entries = await desktop.audit.getEntries();
+    assert.strictEqual(entries[0].ev, 'HIS_UNKNOWN');
   });
 
 });

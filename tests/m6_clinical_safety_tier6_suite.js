@@ -205,14 +205,31 @@ function createClinicalTestEnvironment(options = {}) {
   parentDiv.appendChild(fileUpload);
   parentDiv.appendChild(btnUpload);
 
+  const gridUploadResults = createElement('div');
+  gridUploadResults.id = 'gridUploadResults';
+  elements['gridUploadResults'] = gridUploadResults;
+  parentDiv.appendChild(gridUploadResults);
+
   let patientText = options.patientText !== undefined ? options.patientText : 'Mã bệnh nhân: 12345 - Tên bệnh nhân: NGUYEN VAN A - Tuổi: 40 Tuổi';
   let bannerElement = createElement('div');
   bannerElement.id = 'patientInfo';
   bannerElement.innerText = patientText;
   elements['patientInfo'] = bannerElement;
 
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch && options.includeEncounter !== false) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+  }
+
   const mockDoc = {
     readyState: 'complete',
+    __simulatePersistenceCommit: true,
     getElementById: (id) => elements[id] || null,
     querySelector: (sel) => {
       if (sel.startsWith('#')) return elements[sel.slice(1)] || null;
@@ -232,7 +249,19 @@ function createClinicalTestEnvironment(options = {}) {
         return c;
       },
       get innerText() { return patientText; },
-      set innerText(v) { patientText = v; if (bannerElement) bannerElement.innerText = v; }
+      set innerText(v) {
+        patientText = v;
+        if (bannerElement) bannerElement.innerText = v;
+        const pm = v.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+        const em = v.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+        if (pm && options.includeEncounter !== false) {
+          const pid = pm[1];
+          const encId = em ? em[1] : `LK_${pid}`;
+          if (elements['maLuotKham']) {
+            elements['maLuotKham'].value = encId;
+          }
+        }
+      }
     },
     addEventListener: () => {}
   };
@@ -316,17 +345,20 @@ function createClinicalTestEnvironment(options = {}) {
   const cryptoCode = fs.readFileSync(path.join(rootDir, 'extension/content/crypto-utils.js'), 'utf8');
   const auditCode = fs.readFileSync(path.join(rootDir, 'extension/content/audit-logger.js'), 'utf8');
   const clinicalCode = fs.readFileSync(path.join(rootDir, 'extension/content/clinical-guard.js'), 'utf8');
+  const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Expose internals for verification
   code = code.replace('let activeClinicalSession = null;', 'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;');
   code = code.replace('let activeSessionId = null;', 'let activeSessionId = null; window.__getActiveSessionId = () => activeSessionId;');
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
+  code = code.replace('let currentSessionGeneration = 0;', 'let currentSessionGeneration = 0; window.__getCurrentSessionGeneration = () => currentSessionGeneration;');
 
   vm.createContext(sandbox);
   vm.runInContext(cryptoCode, sandbox);
   vm.runInContext(auditCode, sandbox);
   vm.runInContext(clinicalCode, sandbox);
+  vm.runInContext(hisCode, sandbox);
   vm.runInContext(transferCode, sandbox);
   vm.runInContext(code, sandbox);
 
@@ -334,12 +366,30 @@ function createClinicalTestEnvironment(options = {}) {
     elements,
     fileUpload,
     btnUpload,
-    setPatientText: (t) => { patientText = t; bannerElement.innerText = t; },
+    setPatientText: (t) => {
+      patientText = t;
+      bannerElement.innerText = t;
+      const pm = t.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+      const em = t.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+      if (pm && options.includeEncounter !== false) {
+        const pid = pm[1];
+        const encId = em ? em[1] : `LK_${pid}`;
+        if (elements['maLuotKham']) {
+          elements['maLuotKham'].value = encId;
+        }
+      }
+    },
+    setEncounterId: (encId) => {
+      if (elements['maLuotKham']) elements['maLuotKham'].value = encId;
+    },
     getPatientText: () => patientText,
     getActiveWs: () => activeWebSocket,
     getClinicalSession: () => sandbox.window.__getClinicalSession?.(),
     getActiveSessionId: () => sandbox.window.__getActiveSessionId?.(),
+    getCurrentSessionGeneration: () => sandbox.window.__getCurrentSessionGeneration?.(),
     getActiveTransfers: () => sandbox.window.__activeChunkTransfers,
+    getCrypto: () => sandbox.window.__CamSyncCrypto,
+    sandbox,
     openModal: async () => {
       const btnCamSync = elements['btnCamSync'];
       if (btnCamSync) btnCamSync.click();
@@ -389,6 +439,28 @@ async function runTier6Suite() {
   }
 
   {
+    // TC-CS1.1b: Missing Encounter ID blocks session creation (Fail-Closed, F01/F02)
+    const env = createClinicalTestEnvironment({
+      patientText: 'Mã bệnh nhân: 12345 - Tên bệnh nhân: TRAN THI B',
+      includeEncounter: false
+    });
+    await env.openModal();
+
+    const session = env.getClinicalSession();
+    const sessionId = env.getActiveSessionId();
+    const modalOpened = env.elements['camsyncModal'] !== undefined;
+
+    const passed = session === null && sessionId === null && !modalOpened;
+    reporter.record(
+      'TC-CS1.1b',
+      'Missing encounterId blocks session opening fail-closed (0 QR generated)',
+      passed,
+      `ClinicalSession: ${session}, Modal Created: ${modalOpened}`
+    );
+    env.cleanup();
+  }
+
+  {
     // TC-CS1.2: Valid Patient freezes patient, encounter, and fingerprint snapshot
     const env = createClinicalTestEnvironment({
       patientText: 'Mã bệnh nhân: 998877 - Tên bệnh nhân: TRAN THI DIEP - Tuổi: 52 Tuổi - Mã phiếu chỉ định: CDHA_2026_09'
@@ -420,7 +492,7 @@ async function runTier6Suite() {
   reporter.suite('SUITE 2: Multi-Checkpoint Validation (#2 Handshake, #3 Chunk, #4 Form Writeback)');
 
   {
-    // TC-CS2.1: Checkpoint #2: patient_req responds with frozen snapshot & fingerprint
+    // TC-CS2.1: Checkpoint #2: patient_req responds with encrypted frozen snapshot & fingerprint with zero wire plaintext
     const env = createClinicalTestEnvironment({ patientText: 'Mã bệnh nhân: 778899 - Tên bệnh nhân: HOANG MINH' });
     const ws = await env.openModal();
 
@@ -428,15 +500,30 @@ async function runTier6Suite() {
     await new Promise(r => setTimeout(r, 10));
 
     const patientMsg = ws.sent.find(m => m.event === 'broadcast' && m.payload?.event === 'patient_info');
-    const pData = patientMsg?.payload?.payload?.patient;
-    const fp = patientMsg?.payload?.payload?.fingerprint;
+    const wirePayload = patientMsg?.payload?.payload;
 
-    const passed = pData && pData.id === '778899' && typeof fp === 'string';
+    let pData = null;
+    let fp = null;
+
+    if (wirePayload?.encrypted && (wirePayload?.data || wirePayload?.ciphertext) && wirePayload?.iv) {
+      const crypto = env.getCrypto();
+      const session = env.getClinicalSession();
+      const key = session?.cryptoKey || (session?.encryptionKeyHex ? await crypto.importAesGcmKey(session.encryptionKeyHex) : null);
+      const aad = { v: wirePayload.v || 2, sid: session?.sessionId, contentType: 'application/json' };
+      const ciphertext = wirePayload.ciphertext || wirePayload.data;
+      const decryptedStr = await crypto.decryptAesGcmPayload(key, wirePayload.iv, ciphertext, aad);
+      const decrypted = JSON.parse(decryptedStr);
+      pData = decrypted.patient;
+      fp = decrypted.fingerprint;
+    }
+
+    const wireHasNoPlaintext = wirePayload?.patient === undefined && wirePayload?.encounter === undefined && wirePayload?.fingerprint === undefined;
+    const passed = wireHasNoPlaintext && wirePayload?.encrypted === true && pData && pData.id === '778899' && typeof fp === 'string';
     reporter.record(
       'TC-CS2.1',
-      'Checkpoint #2: patient_req verifies context and returns frozen snapshot & fingerprint',
+      'Checkpoint #2: patient_req verifies context and returns encrypted frozen snapshot & fingerprint with zero wire plaintext',
       passed,
-      `Returned ID: ${pData?.id}, Name: ${pData?.name}, Fingerprint: ${fp}`
+      `Decrypted ID: ${pData?.id}, Name: ${pData?.name}, Fingerprint: ${fp}, Plaintext stripped: ${wireHasNoPlaintext}`
     );
     env.cleanup();
   }
@@ -498,7 +585,7 @@ async function runTier6Suite() {
     const ackMsg = ws.sent.find(m => m.event === 'broadcast' && m.payload?.event === 'transfer_ack' && m.payload?.payload?.transferId === tid);
     const filesInDom = env.fileUpload.files.length;
 
-    const passed = ackMsg?.payload?.payload?.status === 'success' && filesInDom === 1;
+    const passed = (ackMsg?.payload?.payload?.status === 'HIS_COMMITTED' || ackMsg?.payload?.payload?.status === 'success') && filesInDom === 1;
     reporter.record(
       'TC-CS2.3',
       'Checkpoint #3: 3-Way matching patientId (Phone == Session == DOM) succeeds and injects file',
@@ -574,6 +661,53 @@ async function runTier6Suite() {
       'Clinical Context Watcher aborts session and emits session_closed with reason clinical_context_changed',
       passed,
       `Session State: ${sessionAfter?.state}, Broadcast Reason: ${reason}`
+    );
+    env.cleanup();
+  }
+
+  {
+    // TC-CS3.1b: Encounter switch during active session aborts session and notifies mobile (F01/F02)
+    const env = createClinicalTestEnvironment({ patientText: 'Mã bệnh nhân: 55555 - Tên bệnh nhân: LE THI E - Mã lượt khám: LK_55555' });
+    const ws = await env.openModal();
+
+    assert.strictEqual(env.getClinicalSession()?.state, 'ACTIVE');
+
+    // Encounter switches in HIS
+    env.setEncounterId('LK_DIFFERENT_99999');
+
+    // Wait for context watcher check
+    await new Promise(r => setTimeout(r, 600));
+
+    const sessionAfter = env.getClinicalSession();
+    const closeMsg = ws.sent.find(m => m.event === 'broadcast' && m.payload?.event === 'session_closed');
+    const reason = closeMsg?.payload?.payload?.reason;
+    const code = closeMsg?.payload?.payload?.code;
+
+    const passed = sessionAfter?.state === 'ABORTED' && reason === 'clinical_context_changed' && code === 'ENCOUNTER_CHANGED';
+    reporter.record(
+      'TC-CS3.1b',
+      'Encounter switch on HIS aborts active session fail-closed with ENCOUNTER_CHANGED',
+      passed,
+      `Session State: ${sessionAfter?.state}, Reason: ${reason}, Code: ${code}`
+    );
+    env.cleanup();
+  }
+
+  {
+    // TC-CS3.1c: Generation counter increments monotonically upon session teardown / abort (F04)
+    const env = createClinicalTestEnvironment({ patientText: 'Mã bệnh nhân: 55555 - Tên bệnh nhân: LE THI E - Mã lượt khám: LK_55555' });
+    await env.openModal();
+
+    const gen1 = env.getClinicalSession()?.generation;
+    env.closeModal();
+    const gen2 = env.getCurrentSessionGeneration();
+
+    const passed = typeof gen1 === 'number' && typeof gen2 === 'number' && gen2 > gen1;
+    reporter.record(
+      'TC-CS3.1c',
+      'Generation counter increments monotonically upon session teardown',
+      passed,
+      `Session Gen: ${gen1}, Current Gen after teardown: ${gen2}`
     );
     env.cleanup();
   }

@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node server/server.js",
-    "test": "node tests/run_all_hardening_tiers.js"
+    "test": "node tests/run_all_hardening_tiers.js",
+    "test:e2e": "node tests/e2e/run_all_tests.js",
+    "test:m4": "node tests/m4_challenger_idempotency_realtime_suite.js",
+    "test:all": "node tests/run_all_hardening_tiers.js && node tests/e2e/run_all_tests.js && node tests/m4_challenger_idempotency_realtime_suite.js"
   },
   "keywords": [
     "vnpt-his",

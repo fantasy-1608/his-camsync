@@ -257,8 +257,27 @@ function createAckEnvironment(options = {}) {
     parentDiv.appendChild(btnUpload);
   }
 
+  if (options.hasPersistenceContainer || options.simulatePersistenceCommit) {
+    const gridUploadResults = createElement('div');
+    gridUploadResults.id = 'gridUploadResults';
+    elements['gridUploadResults'] = gridUploadResults;
+    parentDiv.appendChild(gridUploadResults);
+  }
+
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch && options.includeEncounter !== false) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+  }
+
   const mockDoc = {
     readyState: 'complete',
+    __simulatePersistenceCommit: Boolean(options.simulatePersistenceCommit || options.simulateCommit),
     getElementById: (id) => elements[id] || null,
     querySelector: (sel) => {
       if (sel.startsWith('#')) return elements[sel.slice(1)] || null;
@@ -402,6 +421,7 @@ function createAckEnvironment(options = {}) {
   const cryptoCode = fs.readFileSync(path.join(rootDir, 'extension/content/crypto-utils.js'), 'utf8');
   const auditCode = fs.readFileSync(path.join(rootDir, 'extension/content/audit-logger.js'), 'utf8');
   const clinicalCode = fs.readFileSync(path.join(rootDir, 'extension/content/clinical-guard.js'), 'utf8');
+  const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
@@ -414,6 +434,7 @@ function createAckEnvironment(options = {}) {
   vm.runInContext(cryptoCode, sandbox);
   vm.runInContext(auditCode, sandbox);
   vm.runInContext(clinicalCode, sandbox);
+  vm.runInContext(hisCode, sandbox);
   vm.runInContext(transferCode, sandbox);
   vm.runInContext(code, sandbox);
 
@@ -431,6 +452,15 @@ function createAckEnvironment(options = {}) {
     setPatientText: (txt) => {
       patientText = txt;
       mockDoc.body.innerText = txt;
+      const pm = txt.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+      const em = txt.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+      if (pm && options.includeEncounter !== false) {
+        const pid = pm[1];
+        const encId = em ? em[1] : `LK_${pid}`;
+        if (elements['maLuotKham']) {
+          elements['maLuotKham'].value = encId;
+        }
+      }
     },
     openModal: async () => {
       const btnCamSync = elements['btnCamSync'];
@@ -465,7 +495,11 @@ async function runAckSemanticsSuite() {
 
   // TC-ACK-1.1: WebRTC successful transfer -> ACK { success: true }, photoCount: 1
   {
-    const env = createAckEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45' });
+    const env = createAckEnvironment({
+      patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45',
+      hasPersistenceContainer: true,
+      simulatePersistenceCommit: true
+    });
     const { peer } = await env.openModal();
     const conn = peer.connectSimulatedPhone();
     await new Promise(r => setTimeout(r, 10));
@@ -487,13 +521,13 @@ async function runAckSemanticsSuite() {
     });
     conn.simulateData({ type: 'CHUNK_DATA', transferId, index: 0, chunk: b64Data });
     conn.simulateData({ type: 'CHUNK_COMPLETE', transferId });
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 60));
 
     const ackReceived = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
 
     const passed = ackReceived &&
                    ackReceived.success === true &&
-                   ackReceived.status === 'success' &&
+                   (ackReceived.status === 'HIS_COMMITTED' || ackReceived.status === 'success') &&
                    ackReceived.photoCount === 1 &&
                    env.getPhotoCount() === 1 &&
                    env.fileUpload.files.length === 1 &&
@@ -510,7 +544,11 @@ async function runAckSemanticsSuite() {
 
   // TC-ACK-1.2: Realtime successful transfer -> transfer_ack { status: 'success' }, photoCount: 1
   {
-    const env = createAckEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45' });
+    const env = createAckEnvironment({
+      patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45',
+      hasPersistenceContainer: true,
+      simulatePersistenceCommit: true
+    });
     const { ws } = await env.openModal();
     await new Promise(r => setTimeout(r, 10));
 
@@ -528,7 +566,7 @@ async function runAckSemanticsSuite() {
     });
     ws.simulateBroadcast('chunk_data', { transferId, chunkIndex: 0, data: b64Data });
     ws.simulateBroadcast('chunk_complete', { transferId });
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => setTimeout(r, 60));
 
     const ackSent = ws.sent.find(m =>
       m.payload?.event === 'transfer_ack' &&
@@ -537,7 +575,7 @@ async function runAckSemanticsSuite() {
     const ackPayload = ackSent?.payload?.payload;
 
     const passed = ackPayload &&
-                   ackPayload.status === 'success' &&
+                   (ackPayload.status === 'HIS_COMMITTED' || ackPayload.status === 'success') &&
                    ackPayload.success === true &&
                    ackPayload.photoCount === 1 &&
                    env.getPhotoCount() === 1 &&
@@ -554,7 +592,11 @@ async function runAckSemanticsSuite() {
 
   // TC-ACK-1.3: Sequential 2-photo injection increments photoCount strictly to 2
   {
-    const env = createAckEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45' });
+    const env = createAckEnvironment({
+      patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45',
+      hasPersistenceContainer: true,
+      simulatePersistenceCommit: true
+    });
     const { peer } = await env.openModal();
     const conn = peer.connectSimulatedPhone();
     await new Promise(r => setTimeout(r, 10));
@@ -572,7 +614,7 @@ async function runAckSemanticsSuite() {
     });
     conn.simulateData({ type: 'CHUNK_DATA', transferId: 'tx_seq_1', index: 0, chunk: b64Data });
     conn.simulateData({ type: 'CHUNK_COMPLETE', transferId: 'tx_seq_1' });
-    await new Promise(r => setTimeout(r, 15));
+    await new Promise(r => setTimeout(r, 60));
 
     // Ảnh 2
     conn.simulateData({
@@ -584,7 +626,7 @@ async function runAckSemanticsSuite() {
     });
     conn.simulateData({ type: 'CHUNK_DATA', transferId: 'tx_seq_2', index: 0, chunk: b64Data });
     conn.simulateData({ type: 'CHUNK_COMPLETE', transferId: 'tx_seq_2' });
-    await new Promise(r => setTimeout(r, 15));
+    await new Promise(r => setTimeout(r, 60));
 
     const acks = conn.sent.filter(m => m.type === 'TRANSFER_ACK');
 
@@ -600,6 +642,56 @@ async function runAckSemanticsSuite() {
       'Sequential multi-photo injection increments photoCount monotonically (1 -> 2)',
       passed,
       `Ack 1 count=${acks[0]?.photoCount}, Ack 2 count=${acks[1]?.photoCount}, Total photos=${env.getPhotoCount()}`
+    );
+  }
+
+  // TC-ACK-1.4: Strict No-Speculative-Success Invariant: btnUpload.click() alone does NOT emit premature positive ACK
+  {
+    const env = createAckEnvironment({
+      patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN - Tuổi: 45',
+      hasPersistenceContainer: true
+    });
+    const { peer } = await env.openModal();
+    const conn = peer.connectSimulatedPhone();
+    await new Promise(r => setTimeout(r, 10));
+
+    const rawBuf = createSyntheticJpeg(256);
+    const b64Data = rawBuf.toString('base64');
+    const transferId = 'tx_no_speculative_success';
+
+    conn.simulateData({
+      type: 'CHUNK_START',
+      transferId,
+      totalChunks: 1,
+      totalBytes: b64Data.length,
+      mimeType: 'image/jpeg',
+      filename: 'ECG_speculative_test.jpg',
+      meta: { name: 'ECG_speculative_test.jpg', patientId: '889900', orderId: 'CD889900' }
+    });
+    conn.simulateData({ type: 'CHUNK_DATA', transferId, index: 0, chunk: b64Data });
+    conn.simulateData({ type: 'CHUNK_COMPLETE', transferId });
+
+    // Đợi 25ms: Lúc này btnUpload đã được click, nhưng server HIS chưa ghi xong
+    await new Promise(r => setTimeout(r, 25));
+
+    const prematureAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
+    const clickHappened = env.getUploadClickCount() === 1;
+    const noPrematureSuccess = !prematureAck || prematureAck.success !== true;
+
+    // Bây giờ giả lập server HIS xác nhận ghi bằng cách thêm kết quả vào container
+    env.elements['gridUploadResults'].innerHTML = '<div class="row">ECG_speculative_test.jpg tx_no_speculative_success</div>';
+    await new Promise(r => setTimeout(r, 100));
+
+    const finalAck = conn.sent.find(m => m.type === 'TRANSFER_ACK' && m.transferId === transferId);
+    const confirmedAfterPersistence = finalAck && finalAck.success === true && (finalAck.status === 'HIS_COMMITTED' || finalAck.status === 'success');
+
+    const passed = clickHappened && noPrematureSuccess && confirmedAfterPersistence;
+
+    reporter.record(
+      'TC-ACK-1.4',
+      'No-Speculative-Success Invariant: btnUpload.click() alone transitions to HIS_UPLOAD_PENDING, ACK deferred until awaitPersisted',
+      passed,
+      `Click count=${env.getUploadClickCount()}, Premature ACK=${prematureAck ? prematureAck.status : 'NONE'}, Final ACK=${finalAck?.status}`
     );
   }
 
@@ -639,7 +731,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   ackReceived.status === 'error' &&
+                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error') &&
                    ackReceived.error === 'ELEMENTS_NOT_FOUND' &&
                    typeof ackReceived.reason === 'string' &&
                    env.getPhotoCount() === 0 &&
@@ -685,7 +777,7 @@ async function runAckSemanticsSuite() {
     const ackPayload = ackSent?.payload?.payload;
 
     const passed = ackPayload &&
-                   ackPayload.status === 'error' &&
+                   (ackPayload.status === 'HIS_REJECTED' || ackPayload.status === 'error') &&
                    ackPayload.success === false &&
                    ackPayload.error === 'ELEMENTS_NOT_FOUND' &&
                    typeof ackPayload.reason === 'string' &&
@@ -731,7 +823,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   ackReceived.status === 'error' &&
+                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error') &&
                    ackReceived.error === 'ELEMENTS_NOT_FOUND' &&
                    env.getPhotoCount() === 0;
 
@@ -778,7 +870,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   ackReceived.status === 'error' &&
+                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error') &&
                    (ackReceived.error === 'PATIENT_CHANGED' || ackReceived.error === 'PATIENT_MISMATCH') &&
                    env.fileUpload.value === '' &&
                    env.getPhotoCount() === 0;
@@ -822,7 +914,7 @@ async function runAckSemanticsSuite() {
     const ackPayload = ackSent?.payload?.payload;
 
     const passed = ackPayload &&
-                   ackPayload.status === 'error' &&
+                   (ackPayload.status === 'HIS_REJECTED' || ackPayload.status === 'error') &&
                    ackPayload.success === false &&
                    (ackPayload.error === 'PATIENT_CHANGED' || ackPayload.error === 'PATIENT_MISMATCH') &&
                    env.fileUpload.value === '' &&
@@ -870,7 +962,7 @@ async function runAckSemanticsSuite() {
 
     const passed = ackReceived &&
                    ackReceived.success === false &&
-                   ackReceived.status === 'error' &&
+                   (ackReceived.status === 'HIS_REJECTED' || ackReceived.status === 'error') &&
                    ackReceived.error === 'INJECTION_EXCEPTION' &&
                    env.getPhotoCount() === 0;
 
@@ -1163,7 +1255,7 @@ async function runAckSemanticsSuite() {
     vm.createContext(mobileContext);
     // Thay đổi timeout xuống 50ms để kiểm thử nhanh
     const modifiedMobileCode = mobileCode.replace(/\bexport\s+/g, '') + '; globalThis.P2PClient = P2PClient;';
-    const quickTimeoutCode = modifiedMobileCode.replace('8000);', '50);');
+    const quickTimeoutCode = modifiedMobileCode.replace(/25000\);/g, '50);').replace('8000);', '50);');
     vm.runInContext(quickTimeoutCode, mobileContext);
 
     const P2PClient = mobileContext.P2PClient;

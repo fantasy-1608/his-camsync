@@ -17,7 +17,8 @@ export class MockHisServer {
     this.currentPatient = {
       id: '24089123',
       name: 'NGUYEN VAN A',
-      age: 45
+      age: 45,
+      encounterId: 'ENC-001'
     };
 
     this.setupRoutes();
@@ -43,13 +44,14 @@ export class MockHisServer {
         </head>
         <body>
           <div class="patient-banner" id="patientInfo">
-            Mã bệnh nhân: ${this.currentPatient.id} - Tên bệnh nhân: ${this.currentPatient.name} - Tuổi: ${this.currentPatient.age} Tuổi
+            Mã bệnh nhân: ${this.currentPatient.id} - Tên bệnh nhân: ${this.currentPatient.name}${this.currentPatient.encounterId ? ` - Mã lượt khám: ${this.currentPatient.encounterId}` : ''} - Tuổi: ${this.currentPatient.age} Tuổi
           </div>
 
           <div class="upload-box">
             <h3>Nạp kết quả Cận Lâm Sàng</h3>
             <form id="frmUpload" enctype="multipart/form-data">
               <input type="file" id="fileUpload" name="fileUpload" accept="image/*">
+              <input type="hidden" id="maLuotKham" value="${this.currentPatient.encounterId || ''}">
               <button type="button" id="btnUpload" class="btn btn-primary">Lưu Ảnh</button>
             </form>
           </div>

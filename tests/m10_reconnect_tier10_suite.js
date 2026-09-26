@@ -175,6 +175,18 @@ function createDesktopEnvironment(options = {}) {
   elements['grdBenhNhan'] = patientBanner;
   mockDoc.body.appendChild(patientBanner);
 
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch && options.includeEncounter !== false) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+    mockDoc.body.appendChild(maLuotKham);
+  }
+
   const fileUpload = createElement('input');
   fileUpload.id = 'fileUpload';
   fileUpload.type = 'file';

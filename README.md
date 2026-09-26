@@ -6,53 +6,110 @@
 [![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](package.json)
 [![Manifest](https://img.shields.io/badge/manifest-v3-green.svg)](extension/manifest.json)
 [![Security Level](https://img.shields.io/badge/security-Healthcare--Grade%20(E2EE)-success.svg)](security-assessment.md)
-[![Test Suite](https://img.shields.io/badge/tests-165%2F165%20PASS-brightgreen.svg)](tests/run_all_hardening_tiers.js)
-[![Architecture](https://img.shields.io/badge/cloud-Zero--Retention%20(RAM--to--RAM)-purple.svg)](#2-truyền-ảnh-ram-to-ram-không-lưu-trữ-zero-retention-on-cloud)
+[![Test Suite](https://img.shields.io/badge/tests-406%2F406%20PASS-brightgreen.svg)](tests/run_all_hardening_tiers.js)
+[![Architecture](https://img.shields.io/badge/channel-PRIVATE__CHANNEL__PENDING-orange.svg)](#1-ranh-giới-kênh-truyền-và-trạng-thái-private_channel_pending)
 
 ---
 
-## 🌟 Tính Năng Nổi Bật
+## 🌟 Nguyên Tắc Cốt Lõi & Tính Năng Nổi Bật
 
 - ⚡ **Siêu tốc & Không cài app**: Mở camera điện thoại quét mã QR là sử dụng ngay trên Web di động, không cần cài đặt ứng dụng từ App Store / Google Play.
-- 🔒 **Bảo mật Cấp độ Y tế (Medical-Grade)**: Mã hóa đầu cuối **E2EE AES-GCM 256-bit** (WebCrypto API), 4 tầng rào chắn lâm sàng chống gán nhầm bệnh nhân.
-- ☁️ **Zero-Retention on Cloud (RAM-to-RAM)**: Dữ liệu ảnh chỉ trung chuyển qua bộ nhớ RAM (WebSockets / WebRTC DataChannel), **0 byte ghi đĩa**, **0 dòng cơ sở dữ liệu**.
-- 📋 **Nhật ký Kiểm toán Lâm sàng (Audit Trail)**: Tự động ghi nhận lịch sử phiên và thao tác vào bộ nhớ cục bộ an toàn (`chrome.storage.local`), ẩn danh mã bệnh nhân (Pseudonymized).
-- 🩺 **Bộ công cụ xử lý ảnh ECG & Siêu âm**: Xoay 90°/180°, cắt cúp (crop) đa giác 4 điểm, bộ lọc nét sóng đen trắng (B&W ECG filter), đóng dấu chìm định danh an toàn (Clinical Watermark).
-- 🛡️ **Kiểm thử bất biến 10 Tầng (165 Checks)**: Vượt qua toàn bộ các bài kiểm thử Fuzzing, Adversarial, Reconnect Backoff, Strict ACK và Parity Transport.
+- 🔒 **Bảo mật Cấp độ Y tế (Medical-Grade E2EE)**: Mã hóa đầu cuối **WebCrypto AES-256-GCM** với IV 96-bit ngẫu nhiên duy nhất cho từng gói tin và ràng buộc dữ liệu bổ sung (AAD). Toàn bộ dữ liệu định danh bệnh nhân (tên, mã BN, CCCD) được đóng gói trong ciphertext, zero wire PHI trên kênh công cộng.
+- 🛑 **Hai Rào Chắn Lâm Sàng Tuyệt Đối**:
+  1. **Không bao giờ nạp nhầm hồ sơ**: Khóa cứng `patientId` và `encounterId` (bắt buộc). Kiểm tra ngữ cảnh tại 3 chốt chặn: CP1 (trước giải mã), CP2 (trước nạp HIS), CP3 (trước phát ACK). Chặn 100% khi phát hiện sai lệch ngữ cảnh (`UNKNOWN_CONTEXT_CHANGED`).
+  2. **Không bao giờ báo "Đã lưu" khi chưa có bằng chứng xác nhận từ HIS**: Thao tác `btnUpload.click()` hoặc gán file chỉ là `HIS_UPLOAD_PENDING`. Trạng thái `HIS_COMMITTED` chỉ trả về khi adapter kiểm tra bằng chứng lưu trữ thật; timeout hoặc mất kết nối trả về `HIS_UNKNOWN`.
+- ☁️ **RAM-to-RAM & Zero-Storage trên Cloud**: Dữ liệu chỉ trung chuyển qua bộ nhớ RAM (WebRTC DataChannel / Supabase Realtime Broadcast), không lưu trữ tệp trên máy chủ trung gian.
+- 🛡️ **Máy trạng thái Idempotency**: `transferId` bất biến cho từng lần gửi. Gói tin trùng lặp hoặc gửi lại sau khi hoàn tất được trả về kết quả đã lưu trữ trước đó, bảo đảm **0 lần bấm Upload thứ hai** trên giao diện HIS.
+- 📋 **Nhật ký Kiểm toán An toàn (Audit Trail)**: Ghi nhận sự kiện vào `chrome.storage.local` (circular buffer 200 bản ghi), tự động ẩn danh hóa mã phiên (`hashSid`) và mã bệnh nhân (`hashId`), sử dụng mã sự kiện chuẩn y tế.
+- 🩺 **Bộ công cụ xử lý ảnh ECG & Siêu âm**: Xoay 90°/180°, cắt cúp (crop) đa giác 4 điểm, bộ lọc nét sóng đen trắng (B&W ECG filter), đóng dấu chìm định danh an toàn (Clinical Watermark) ở viền ảnh.
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống & Bảo Mật Y Tế
+## 🏗️ Kiến Trúc Hệ Thống & Ranh Giới An Toàn
 
-### 1. Hạ Tầng Độc Lập Tại Singapore (Dedicated Cloud Infrastructure)
-- **Supabase Project chuyên biệt**: Luồng báo hiệu và chuyển tiếp hoạt động trên dự án riêng `his-camsync` (Project ID: `rmbbqtuzkyxovmskhfgj`) đặt tại trung tâm dữ liệu **Singapore (`ap-southeast-1`)**, đảm bảo độ trễ thấp (< 50ms) và tính sẵn sàng cao.
-- **Cô lập phân quyền triệt để**: Schema `public` được thu hồi hoàn toàn quyền truy cập của vai trò `anon` và `authenticated` (`REVOKE ALL`), ngăn chặn rò rỉ dữ liệu qua REST API.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Mobile Web Scanner (Trình duyệt ĐT)         │
+│  - Chụp ảnh, Canvas Editor, Watermark viền ảnh               │
+│  - WebCrypto AES-256-GCM Encryption (Unique 96-bit IV + AAD)│
+│  - URL Hash Key Scrubbing (history.replaceState)            │
+└──────────────┬───────────────────────────────┬──────────────┘
+               │ WebRTC DataChannel (Wi-Fi)    │ Supabase Realtime (4G/Fallback)
+               │ (AES-GCM Ciphertext)          │ (AES-GCM Ciphertext)
+               ▼                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│             UnifiedTransferReceiver V2 (Desktop Extension)   │
+│  - Protocol V2: TransferStart -> TransferChunk -> TransferEnd│
+│  - Bounds Check (<= 15MB Image, <= 20MB Ciphertext, <= 2000c)│
+│  - Idempotency State Machine (RECEIVING, VERIFIED, PENDING) │
+│  - Magic Bytes Check (JPEG/PNG) & Pixel Bomb Defense (16MP) │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Decrypted Image Payload
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Clinical Guard & HisAdapter (DOM HIS)          │
+│  - Checkpoint 1: Pre-decrypt context validation (Mandatory) │
+│  - Checkpoint 2: Pre-upload barrier (injectFilesAndUpload)  │
+│  - HisAdapter.awaitPersisted(): Xác thực bằng chứng lưu thật│
+│  - Checkpoint 3: In-flight context verification             │
+│  - ACK Dispatch: HIS_COMMITTED | HIS_REJECTED | HIS_UNKNOWN │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### 2. Truyền Ảnh RAM-to-RAM Không Lưu Trữ (Zero-Retention on Cloud)
-- **Kênh truyền kép (Hybrid Transport)**:
-  - **WebRTC P2P DataChannel (16KB Chunks)**: Ưu tiên truyền trực tiếp ngang hàng nội bộ khi điện thoại và máy tính cùng mạng Wi-Fi/LAN bệnh viện (tốc độ ~0.3s).
-  - **Supabase Realtime Broadcast (64KB Chunks)**: Tự động dự phòng khi mạng P2P bị chặn (điện thoại dùng 4G/5G, máy bàn dùng VLAN cô lập).
-- **Giao thức phân mảnh & tái ráp an toàn**: Unified Transfer Receiver kiểm tra tuần tự chỉ số, kích thước tối đa 15MB, tối đa 2000 chunks, tự động dọn dẹp bộ nhớ (TTL 60s).
-- **Zero-Storage**: Toàn bộ dữ liệu ảnh đi từ RAM trình duyệt điện thoại sang RAM trình duyệt máy tính và nạp thẳng vào Form HIS, không qua lưu trữ trung gian.
+### 1. Ranh Giới Kênh Truyền và Trạng Thái `PRIVATE_CHANNEL_PENDING`
+- **Hạ tầng Cloud**: Sử dụng Supabase Realtime Broadcast trên dự án CamSync chuyên biệt (`rmbbqtuzkyxovmskhfgj`, Singapore `ap-southeast-1`).
+- **Trạng thái kiến trúc**: Hệ thống vận hành dưới trạng thái **`PRIVATE_CHANNEL_PENDING`**. Do môi trường mạng bệnh viện không cấp JWT per-session từ server backend, CamSync **tuyệt đối không** dùng policy lỏng lẻo `anon USING (true)` để đối phó.
+- **Rào chắn bảo vệ bổ trợ**:
+  - Mã hóa đầu cuối WebCrypto AES-256-GCM cho toàn bộ payload và metadata bệnh nhân.
+  - Session ID ngẫu nhiên chuẩn mật mã học 128-bit CSPRNG (`crypto.getRandomValues`).
+  - Khóa giải mã truyền qua URL Hash Fragment `#session=...&key=...` (không gửi lên server HTTP) và tự động xóa khỏi thanh địa chỉ ngay sau khi đọc.
+  - Thời gian sống (TTL) phiên giới hạn cứng 5 phút (300,000ms), tự động dọn dẹp RAM khi hết hạn.
+- **Cô lập hoàn toàn dự án "Lịch trực"**: CamSync duy trì 0 kết nối, 0 truy vấn DDL/DML đến dự án lịch trực cũ (`exxynihhyvcligcysbdb`).
 
-### 3. Rào Chắn An Toàn Lâm Sàng 4 Lớp (4-Tier Clinical Checkpoints)
-Tuân thủ nguyên tắc cốt lõi **"Fail-Closed Writeback"** — Mọi trường hợp sai lệch đều chặn ghi và hủy phiên:
-- **Checkpoint #1 (Khóa phiên tại QR Hub)**: Khóa cứng snapshot thông tin bệnh nhân (`Mã BN`, `Họ tên`, `Mã chỉ định`) từ DOM HIS và tạo mã băm ngữ cảnh (Context Fingerprint DJB2).
-- **Checkpoint #2 (Clinical Context Watcher)**: Observer quét DOM HIS liên tục (kết hợp MutationObserver và Polling 500ms). Nếu nhân viên y tế chuyển sang hồ sơ bệnh nhân khác, phiên làm việc lập tức tự hủy (`ABORT`), xóa sạch bộ đệm RAM và đóng kết nối.
-- **Checkpoint #3 (Xác thực chéo 3-Way Check)**: Đối chiếu 3 chiều giữa thông tin gửi từ điện thoại ↔ Snapshot phiên làm việc ↔ DOM HIS thực tế trước khi giải nén ảnh.
-- **Checkpoint #4 (Chốt chặn cuối trước khi kích hoạt Upload)**: Kiểm tra lại mã bệnh nhân trên màn hình HIS lần cuối trước khi gọi lệnh `btnUpload.click()`. Nếu không trùng khớp, xóa sạch input file (`value = ''`).
+### 2. Tiêu Chuẩn Bằng Chứng Lưu Trữ HIS (Evidence-Based Commit)
+Hệ thống tuân thủ hợp đồng trạng thái chuyển dịch nghiêm ngặt:
+`TRANSFER_VERIFIED` ➔ `CONTEXT_VERIFIED` ➔ `FILE_ATTACHED` ➔ `HIS_UPLOAD_PENDING` ➔ `HIS_COMMITTED` | `HIS_REJECTED` | `HIS_UNKNOWN`.
 
-### 4. Mã Hóa Đầu Cuối E2EE 256-Bit (Zero-Knowledge WebCrypto AES-GCM)
-- Khóa đối xứng 256-bit sinh ngẫu nhiên cho từng phiên bằng CSPRNG (`crypto.getRandomValues`).
-- Truyền khóa bảo mật qua **URL Hash Fragment** (`#session=...&key=...`). Theo chuẩn RFC 3986, hash fragment không bao giờ được gửi lên máy chủ HTTP.
-- Trình duyệt di động tự động làm sạch URL (`history.replaceState`) ngay khi đọc khóa, loại bỏ hoàn toàn dấu vết trong lịch sử duyệt web.
-- Máy chủ chuyển tiếp chỉ thấy dữ liệu mã hóa (Ciphertext), hoàn toàn không thể giải mã nội dung hình ảnh y khoa.
+| Trạng thái | Tiêu chuẩn bằng chứng | Hành vi giao diện Desktop / Mobile |
+|---|---|---|
+| `HIS_UPLOAD_PENDING` | File đã đính kèm, lệnh upload đã kích hoạt | Hiển thị spinner "Đang nạp ảnh lên HIS, chờ xác nhận..." |
+| `HIS_COMMITTED` | Server HIS phản hồi thành công hoặc danh sách file xuất hiện bản ghi mới tương ứng với `transferId` | Hiển thị "Đã lưu vào HIS!", cập nhật bộ đếm ảnh, rung haptic |
+| `HIS_REJECTED` | Server HIS từ chối hoặc giao diện báo lỗi rõ ràng | Hiển thị banner cảnh báo lỗi, cho phép gửi lại |
+| `HIS_UNKNOWN` | Mất kết nối, timeout (15s) hoặc thay đổi ngữ cảnh sau khi gửi request | Hiển thị Amber Banner yêu cầu đối chiếu thủ công trên HIS, **vô hiệu hóa auto-retry** |
 
-### 5. Tuân Thủ Pháp Lý Y Tế & Quản Trị Rủi Ro
-- **Luật Bảo vệ dữ liệu cá nhân 2025 & Luật Khám bệnh, chữa bệnh 2023**: Không lưu trữ PHI ngoài biên giới Việt Nam, áp dụng nguyên tắc tối thiểu hóa dữ liệu (Data Minimization).
-- **Nhật ký kiểm toán (Audit Trail)**: Ghi nhận sự kiện (`session_opened`, `photo_uploaded`, `session_aborted`, v.v.) vào circular buffer 200 bản ghi trong `chrome.storage.local`. Mã bệnh nhân được che chắn an toàn (`BN***56`).
-- **Xác nhận đồng ý theo ca trực (Shift-based Consent)**: Hộp thoại xác nhận thao tác xuất hiện 1 lần mỗi ca trực (8 tiếng) để nhắc nhở nhân viên y tế về an toàn hồ sơ.
-- **Chống XSS & CSP chặt chẽ**: Toàn bộ dữ liệu hiển thị động sử dụng `textContent`, Mobile Web được trang bị Content-Security-Policy nghiêm ngặt.
+---
+
+## 📋 Hướng Dẫn Vận Hành Lâm Sàng (Clinical SOP)
+
+### 1. Khi gặp trạng thái `HIS_UNKNOWN` (Chưa xác định lưu)
+1. **Dừng thao tác gửi lại**: Nút gửi trên điện thoại sẽ tự động bị vô hiệu hóa để ngăn chặn ghi trùng lặp ảnh.
+2. **Kiểm tra trực tiếp trên HIS**: Điều dưỡng/Bác sĩ nhìn vào danh sách ảnh đính kèm của bệnh nhân trên màn hình VNPT HIS:
+   - Nếu ảnh **đã xuất hiện**: Đóng hộp thoại CamSync, kết thúc ca chụp.
+   - Nếu ảnh **chưa xuất hiện**: Bấm "Hiện lại mã QR" trên máy tính để tạo phiên mới và quét lại từ điện thoại.
+
+### 2. Khi gặp lỗi `CONTEXT_MISMATCH` hoặc `UNKNOWN_CONTEXT_CHANGED`
+- Lỗi xuất hiện khi nhân viên y tế mở hồ sơ bệnh nhân B trong lúc điện thoại đang chụp cho bệnh nhân A.
+- Hệ thống lập tức hủy phiên, không cho phép nạp ảnh (số lần upload = 0).
+- **Quy trình xử lý**: Chọn đúng hồ sơ bệnh nhân cần nạp trên HIS ➔ Bấm nút **Quét từ ĐT** để mở phiên mới.
+
+### 3. Khi gặp lỗi đồng loạt hoặc mất mạng kéo dài
+- Đóng hộp thoại CamSync.
+- Sử dụng quy trình tải ảnh truyền thống của VNPT HIS (cắm cáp USB hoặc chọn file từ ổ đĩa máy tính).
+
+---
+
+## 🛡️ Mô Hình Đe Dọa Lâm Sàng (Threat Model)
+
+| Nguy cơ | Biện pháp bảo vệ kỹ thuật | Giới hạn đã kiểm thử |
+|---|---|---|
+| **Lộ mã QR / URL** | Khóa phiên trong RAM, TTL cứng 5 phút, 128-bit entropy, hủy ngay khi chuyển bệnh nhân | Phiên tự hủy sau 300s; callback trễ bị loại bỏ bằng generation check |
+| **Người khác dùng chung máy trạm** | Khóa mã hóa nằm trên URL Hash, xóa sạch qua `history.replaceState`, 0 byte lưu trữ key trên LocalStorage/Disk | Kiểm tra History/Storage không lưu vết khóa mã hóa |
+| **XSS trên Mobile Scanner** | Content-Security-Policy nghiêm ngặt (`default-src 'self'`), toàn bộ hiển thị dùng `textContent` | Không thực thi inline scripts hoặc eval độc hại |
+| **Bên thứ ba nghe lén kênh Relay Cloud** | Toàn bộ payload và thông tin nhân khẩu được mã hóa AES-256-GCM với IV 96-bit duy nhất; wire transmission chỉ là ciphertext | Cloud relay chỉ thấy binary base64 vô nghĩa, sửa 1 byte tag khiến giải mã thất bại |
+| **Crash hoặc rớt mạng khi đang Upload** | Trạng thái `HIS_UNKNOWN`, không tự động retry, hiển thị cảnh báo Amber trên mobile | Ngăn chặn 100% tình huống nạp lặp ảnh vào bệnh án |
+| **VNPT HIS thay đổi DOM / Selector Drift** | Module `HisAdapter` tách rời, tự động kiểm tra sự tồn tại của phần tử trước khi thao tác | Khi không tìm thấy selector, dừng upload an toàn và báo `ELEMENTS_NOT_FOUND` |
+| **Gửi trùng gói tin / Retry lặp lại** | Máy trạng thái `UnifiedTransferReceiver` lưu trạng thái `COMMITTED`/`REJECTED`/`UNKNOWN` | Packet lặp chỉ trả về kết quả cũ, số lần bấm Upload trên HIS = 0 |
+| **Dung lượng ảnh bất thường / Pixel Bomb** | Giới hạn dung lượng <= 15MB, kiểm tra magic bytes nhị phân (JPEG/PNG) và kích thước <= 16MP (8192px) | Từ chối fail-closed `PIXEL_BOMB_DETECTED` hoặc `INVALID_IMAGE_MAGIC_BYTES` |
 
 ---
 
@@ -61,90 +118,61 @@ Tuân thủ nguyên tắc cốt lõi **"Fail-Closed Writeback"** — Mọi trư�
 ```
 his-camsync/
 ├── extension/                     # Chrome Extension (Manifest V3)
-│   ├── manifest.json              # Khai báo quyền, CSP và danh sách module
-│   ├── content/                   # Kiến trúc Module hóa chuẩn lâm sàng
-│   │   ├── crypto-utils.js        # Module mật mã: AES-GCM 256-bit, Session/Key CSPRNG
-│   │   ├── audit-logger.js        # Module kiểm toán: Circular buffer 200 bản ghi, Pseudonymize
-│   │   ├── clinical-guard.js      # Module an toàn lâm sàng: DOM Context, 3-Way Check, Fingerprint
-│   │   ├── transfer-receiver.js   # Module phân mảnh: Unified receiver, gap-check, TTL eviction
+│   ├── manifest.json              # Khai báo permissions và scripts
+│   ├── content/                   # Module hóa chuẩn y tế (Medical-Grade 9.5)
+│   │   ├── crypto-utils.js        # Mật mã: AES-GCM 256-bit, Session/Key CSPRNG, Magic Bytes, Pixel Bomb
+│   │   ├── audit-logger.js        # Kiểm toán: Circular buffer 200 bản ghi, hashId, hashSid, Event Codes
+│   │   ├── clinical-guard.js      # An toàn lâm sàng: DOM Context, Checkpoints 1-3, Context Fingerprint
+│   │   ├── his-adapter.js         # VNPT HIS Adapter: Selector Registry, Drift Detection, awaitPersisted
+│   │   ├── transfer-receiver.js   # Bộ nhận V2: Protocol V2, Idempotency State Machine, LRU 100 entries
 │   │   └── camsync-content.js     # Orchestrator chính: Giao diện Modal, WebSocket, Native Inject
 │   ├── styles/
-│   │   └── camsync.css            # Giao diện Quiet Clinical Utility, chuẩn WCAG AA, delay 300ms
+│   │   └── camsync.css            # Giao diện Quiet Clinical Utility, chuẩn WCAG AA, tooltip delay 300ms
 │   └── vendor/
-│       ├── heic2any.min.js        # Thư viện chuyển đổi định dạng ảnh Apple HEIC
+│       ├── heic2any.min.js        # Chuyển đổi định dạng Apple HEIC sang JPEG
 │       ├── peerjs.min.js          # WebRTC P2P client library
-│       └── qrcode.min.js          # Thư viện sinh mã QR offline bảo mật
+│       └── qrcode.min.js          # Thư viện sinh mã QR offline an toàn
 ├── mobile-web/                    # Giao diện Mobile Web Scanner
-│   ├── index.html                 # Giao diện camera & chụp ảnh có gắn CSP Meta Tag
-│   ├── css/style.css              # Giao diện tối ưu hóa cho màn hình cảm ứng di động
+│   ├── index.html                 # Giao diện chụp ảnh có gắn CSP Meta Tag & Amber Warning Banner
+│   ├── css/style.css              # Giao diện tối ưu hóa cho màn hình di động
 │   └── js/
-│       ├── editor.js              # Canvas Editor: Xoay, Crop 4 góc, Lọc tương phản & Watermark
-│       └── p2p-client.js          # Client kép P2P/Cloud, E2EE AES-GCM, Reconnect Exponential Backoff
-├── tests/                         # Khung kiểm thử tự động 10 tầng (165 Invariant Checks)
-│   ├── run_all_hardening_tiers.js # Master runner chạy toàn bộ 10 Tiers (npm test)
-│   ├── e2e/                       # Tiers 1 - 4: Core E2E Verification Suites (63 checks)
-│   ├── m5_adversarial_tier5_suite.js    # Tier 5: Adversarial & Fuzzing (36 checks)
-│   ├── m6_clinical_safety_tier6_suite.js # Tier 6: Clinical Safety Checkpoints (9 checks)
-│   ├── m7_transport_parity_tier7_suite.js # Tier 7: WebRTC / Cloud Parity (19 checks)
-│   ├── m8_ack_semantics_tier8_suite.js  # Tier 8: Strict Semantic ACK (13 checks)
-│   ├── m9_e2ee_tier9_suite.js     # Tier 9: WebCrypto AES-GCM Encryption (14 checks)
-│   └── m10_reconnect_tier10_suite.js    # Tier 10: Reconnect & Memory Hygiene (11 checks)
+│       ├── editor.js              # Canvas Editor: Xoay, Crop 4 góc, Lọc nét sóng & Watermark viền
+│       └── p2p-client.js          # Dual Client WebRTC/Realtime, E2EE AES-GCM, Backoff Reconnect
+├── tests/                         # Khung kiểm thử tự động toàn diện (406 Checks)
+│   ├── run_all_hardening_tiers.js # Master runner chạy toàn bộ 10 Tiers (165 checks)
+│   ├── e2e/                       # 4-Tier Automated E2E Testing Suite (223 checks)
+│   │   ├── suites/tier1-features.test.js
+│   │   ├── suites/tier2-boundary.test.js
+│   │   ├── suites/tier3-combinations.test.js
+│   │   └── suites/tier4-clinical.test.js
+│   ├── m4_challenger_idempotency_realtime_suite.js # Milestone 4 Challenger (18 checks)
+│   ├── m3_challenger_wire_zero_phi_suite.js        # Wire Zero-PHI Challenger (18 checks)
+│   ├── m3_polling_and_legacy_audit.js              # Legacy Project Isolation Audit (18 checks)
+│   └── ...
 ├── package.json                   # Cấu hình dự án & scripts kiểm thử
-├── security-assessment.md         # Báo cáo đánh giá bảo mật y tế toàn diện
+├── CAMSYNC_9_5_MASTER_PLAN.md     # Tài liệu đặc tả kỹ thuật và kế hoạch thực thi 9.5
 └── README.md                      # Tài liệu kỹ thuật dự án
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt & Sử Dụng
+## 🧪 Khung Kiểm Thử Tự Động (Automated QA Suites)
 
-### 1. Cài đặt Tiện ích trên Máy tính VNPT HIS (Desktop)
-1. Tải về file `.zip` phiên bản mới nhất từ bản phát hành hoặc thư mục dự án.
-2. Giải nén thư mục (hoặc sử dụng trực tiếp thư mục `extension/`).
-3. Mở Google Chrome (hoặc trình duyệt Chromium trên máy trạm HIS) ➔ Truy cập `chrome://extensions/`.
-4. Bật chế độ **Chế độ dành cho nhà phát triển (Developer mode)** ở góc trên bên phải.
-5. Nhấp vào nút **Tải tiện ích đã giải nén (Load unpacked)** ➔ Chọn thư mục `extension/`.
-6. Tiện ích **HIS CamSync** xuất hiện với phiên bản `1.2.0` sẵn sàng hoạt động.
-
-### 2. Thao tác tiếp nhận hình ảnh tại phòng Cận Lâm Sàng
-1. Mở màn hình trả kết quả trên VNPT HIS (ví dụ: Tab **Hình ảnh** trong giao diện Cận lâm sàng).
-2. Tiện ích tự động nhận diện và hiển thị nút **Quét từ ĐT** bên cạnh nút Tải lên mặc định của HIS.
-3. Bấm **Quét từ ĐT**:
-   - Nếu trong ca trực mới (sau 8 tiếng), xuất hiện thông báo xác nhận an toàn lâm sàng.
-   - Hộp thoại hiển thị mã QR cùng thông tin bệnh nhân đang thao tác.
-4. Mở Camera trên điện thoại di động quét mã QR để mở trang quét trực tuyến.
-
-### 3. Chụp và gửi ảnh từ Điện thoại Di động
-1. Trên giao diện Web di động:
-   - Chụp dải giấy điện tim ECG nhiệt hoặc màn hình siêu âm / nội soi.
-   - Sử dụng các công cụ: Xoay ảnh, kéo 4 góc để căn chỉnh góc chụp (Perspective Crop), áp dụng bộ lọc tương phản tăng độ rõ nét của sóng điện tim.
-2. Bấm **Gửi lên HIS**:
-   - Hệ thống tự động gắn dấu chìm thông tin bệnh nhân ở mép viền (không che khuất phức bộ sóng).
-   - Mã hóa AES-GCM và truyền tức thì về máy tính.
-3. Extension trên máy tính giải mã, kiểm tra 3-Way Check và tự động đưa file vào danh sách tải lên của VNPT HIS.
-
----
-
-## 🧪 Khung Kiểm Thử Toàn Diện (10 Tiers QA Suite)
-
-Hệ thống được bảo vệ bởi bộ kiểm thử tự động gồm **165 chốt kiểm định bất biến** (100% Pass):
+Toàn bộ hệ thống được bảo vệ bởi **406 chốt kiểm tra tự động** (100% Pass) trên các module production:
 
 ```bash
-# Thực thi toàn bộ 10 tầng kiểm thử
+# 1. Chạy Master 10-Tier Hardening Suite (165 checks)
 npm test
-```
 
-### Chi tiết các tầng kiểm định:
-| Tầng kiểm thử | Tên bộ kiểm thử | Số ca test | Trọng tâm kiểm định |
-|---|---|:---:|---|
-| **Tier 1 - 4** | Core E2E Verification Suites | **63** | Toàn bộ tính năng F1-F6, biên B1-B5, tổ hợp C1-C8, kịch bản S1-S5 |
-| **Tier 5** | Adversarial Hardening Suite | **36** | Chống gói tin bất thường, chunk vượt kích thước, replay, out-of-order |
-| **Tier 6** | Clinical Safety Invariants | **9** | 4 rào chắn lâm sàng, Context Watcher tự hủy phiên khi chuyển bệnh nhân |
-| **Tier 7** | Transport Parity Hardening | **19** | Đồng nhất 100% logic tiếp nhận giữa WebRTC P2P và Cloud Relay |
-| **Tier 8** | Strict ACK Semantics | **13** | Chỉ ACK thành công khi ảnh đã inject vào DOM HIS, từ chối nạp khuyết |
-| **Tier 9** | E2EE WebCrypto AES-GCM | **14** | Sinh khóa 256-bit, URL hash hygiene, giải mã toàn vẹn, chống can thiệp |
-| **Tier 10** | Reconnect & Memory Hygiene | **11** | Exponential backoff, bảo toàn ngữ cảnh khi rớt mạng, 0% rò rỉ RAM |
-| **TỔNG CỘNG** | **Master Invariants Verification** | **165/165 PASS** | **Chuẩn mực cao nhất cho phần mềm y tế lâm sàng** |
+# 2. Chạy 4-Tier Automated E2E Suite (223 checks)
+npm run test:e2e
+
+# 3. Chạy Milestone 4 Idempotency & Realtime Suite (18 checks)
+npm run test:m4
+
+# 4. Chạy toàn bộ tất cả bộ kiểm thử
+npm run test:all
+```
 
 ---
 

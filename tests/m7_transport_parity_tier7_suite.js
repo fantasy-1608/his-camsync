@@ -243,11 +243,28 @@ function createParityEnvironment(options = {}) {
   btnUpload.id = 'btnUpload';
   elements['btnUpload'] = btnUpload;
 
+  const pMatch = patientText.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+  const encMatch = patientText.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+  if (pMatch && options.includeEncounter !== false) {
+    const pid = pMatch[1];
+    const encId = encMatch ? encMatch[1] : `LK_${pid}`;
+    const maLuotKham = createElement('input');
+    maLuotKham.id = 'maLuotKham';
+    maLuotKham.value = encId;
+    elements['maLuotKham'] = maLuotKham;
+  }
+
   parentDiv.appendChild(fileUpload);
   parentDiv.appendChild(btnUpload);
 
+  const gridUploadResults = createElement('div');
+  gridUploadResults.id = 'gridUploadResults';
+  elements['gridUploadResults'] = gridUploadResults;
+  parentDiv.appendChild(gridUploadResults);
+
   const mockDoc = {
     readyState: 'complete',
+    __simulatePersistenceCommit: true,
     getElementById: (id) => elements[id] || null,
     querySelector: (sel) => {
       if (sel.startsWith('#')) return elements[sel.slice(1)] || null;
@@ -270,7 +287,18 @@ function createParityEnvironment(options = {}) {
         return c;
       },
       get innerText() { return patientText; },
-      set innerText(v) { patientText = v; }
+      set innerText(v) {
+        patientText = v;
+        const pm = v.match(/Mã bệnh nhân:\s*([A-Za-z0-9_.-]+)/i);
+        const em = v.match(/(?:Mã lượt khám|Mã vào viện|Số vào viện):\s*([A-Za-z0-9_.-]+)/i);
+        if (pm && options.includeEncounter !== false) {
+          const pid = pm[1];
+          const encId = em ? em[1] : `LK_${pid}`;
+          if (elements['maLuotKham']) {
+            elements['maLuotKham'].value = encId;
+          }
+        }
+      }
     },
     addEventListener: () => {}
   };
@@ -405,6 +433,7 @@ function createParityEnvironment(options = {}) {
   const cryptoCode = fs.readFileSync(path.join(rootDir, 'extension/content/crypto-utils.js'), 'utf8');
   const auditCode = fs.readFileSync(path.join(rootDir, 'extension/content/audit-logger.js'), 'utf8');
   const clinicalCode = fs.readFileSync(path.join(rootDir, 'extension/content/clinical-guard.js'), 'utf8');
+  const hisCode = fs.readFileSync(path.join(rootDir, 'extension/content/his-adapter.js'), 'utf8');
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
@@ -416,6 +445,7 @@ function createParityEnvironment(options = {}) {
   vm.runInContext(cryptoCode, sandbox);
   vm.runInContext(auditCode, sandbox);
   vm.runInContext(clinicalCode, sandbox);
+  vm.runInContext(hisCode, sandbox);
   vm.runInContext(transferCode, sandbox);
   vm.runInContext(code, sandbox);
 

@@ -47,11 +47,14 @@
   function getClinicalContextFromDOM(getRootDocFn, activeSessionId) {
     const rootDocGetter = getRootDocFn || getRootDocument;
     try {
-      const docsToScan = [document];
+      const docsToScan = [];
       try {
         const rootDoc = rootDocGetter();
-        if (rootDoc && rootDoc !== document) docsToScan.unshift(rootDoc);
+        if (rootDoc) docsToScan.push(rootDoc);
       } catch (e) { /* cross-origin */ }
+      if (!getRootDocFn && typeof document !== 'undefined' && !docsToScan.includes(document)) {
+        docsToScan.push(document);
+      }
 
       let patientId = null;
       let patientName = null;
@@ -71,11 +74,12 @@
         ) : null;
 
         const bannerText = bannerEl?.innerText || targetDoc.body?.innerText || '';
-        const m = bannerText.match(/Mã bệnh nhân:\s*([0-9]+)\s*-\s*Tên bệnh nhân:\s*([^-\n]+)(?:\s*-\s*Tuổi:\s*([0-9]+\s*Tuổi|[0-9]+))?/i);
+        const m = bannerText.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)\s*-\s*Tên\s*(?:bệnh\s*nhân|BN):\s*([^-\n]+)(?:\s*-\s*Tuổi:\s*([0-9]+\s*Tuổi|[0-9]+))?/i) ||
+                  bannerText.match(/Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.-]*)/i);
         if (m) {
           patientId = m[1].trim();
-          patientName = m[2].trim();
-          patientAge = m[3] ? m[3].trim() : '';
+          if (m[2]) patientName = m[2].trim();
+          if (m[3]) patientAge = m[3].trim();
         }
 
         // 2. Tìm từ input/form field chuẩn của VNPT HIS
@@ -83,7 +87,7 @@
           const idInput = targetDoc.getElementById('maBenhNhan') ||
                           targetDoc.getElementById('txtMaBN') ||
                           targetDoc.getElementById('patientId');
-          if (idInput && idInput.value) {
+          if (idInput && idInput.value && idInput.value.trim()) {
             patientId = idInput.value.trim();
           }
         }
@@ -92,28 +96,45 @@
         if (targetDoc.getElementById) {
           const orderInput = targetDoc.getElementById('maPhieuChiDinh') ||
                              targetDoc.getElementById('soPhieu') ||
-                             targetDoc.getElementById('txtMaPhieu');
-          if (orderInput && orderInput.value) {
+                             targetDoc.getElementById('txtMaPhieu') ||
+                             targetDoc.getElementById('orderId');
+          if (orderInput && orderInput.value && orderInput.value.trim()) {
             orderId = orderInput.value.trim();
           }
 
           const encounterInput = targetDoc.getElementById('soVaoVien') ||
                                  targetDoc.getElementById('maVaoVien') ||
-                                 targetDoc.getElementById('maLuotKham');
-          if (encounterInput && encounterInput.value) {
+                                 targetDoc.getElementById('maLuotKham') ||
+                                 targetDoc.getElementById('txtSoVaoVien') ||
+                                 targetDoc.getElementById('txtMaBA') ||
+                                 targetDoc.getElementById('encounterId');
+          if (encounterInput && encounterInput.value && encounterInput.value.trim()) {
             encounterId = encounterInput.value.trim();
           }
         }
 
+        // Regex bóc tách bổ sung từ banner text
+        if (!encounterId) {
+          const encMatch = bannerText.match(/(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Mã\s*BA|Số\s*BA|Mã\s*hồ\s*sơ|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
+                           bannerText.match(/\b(?:LK|VV|ENC):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
+          if (encMatch) encounterId = encMatch[1].trim();
+        }
+
         if (!orderId) {
-          const orderMatch = bannerText.match(/Mã phiếu(?:\s*chỉ\s*định)?:\s*([A-Za-z0-9_-]+)/i);
+          const orderMatch = bannerText.match(/(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i) ||
+                             bannerText.match(/\b(?:ORD|PCD):\s*([A-Za-z0-9][A-Za-z0-9_./-]*)/i);
           if (orderMatch) orderId = orderMatch[1].trim();
         }
 
-        if (patientId) break;
+        if (patientId && encounterId) break;
       }
 
-      const isValid = Boolean(patientId);
+      patientId = patientId && patientId.trim() && patientId.trim() !== '-' ? patientId.trim() : null;
+      encounterId = encounterId && encounterId.trim() && encounterId.trim() !== '-' ? encounterId.trim() : null;
+      orderId = orderId && orderId.trim() && orderId.trim() !== '-' ? orderId.trim() : null;
+
+      // KHÓA BẮT BUỘC: Cả patientId VÀ encounterId phải cùng tồn tại (F01, F02, R1)
+      const isValid = Boolean(patientId && encounterId);
 
       return {
         valid: isValid,
@@ -160,11 +181,45 @@
    */
   function validateClinicalContext(activeClinicalSession, expectedPatientId, getRootDocFn, activeSessionId) {
     const current = getClinicalContextFromDOM(getRootDocFn, activeSessionId);
-    if (!current || !current.valid || !current.patient || !current.patient.id) {
+
+    // Xử lý khi ngữ cảnh hiện tại thiếu thông tin bắt buộc
+    if (!current || !current.valid) {
+      if (activeClinicalSession) {
+        // Nếu bệnh nhân trên DOM thay đổi so với phiên, ưu tiên cảnh báo PATIENT_CHANGED
+        if (current?.patient?.id && activeClinicalSession.patient?.id &&
+            current.patient.id !== activeClinicalSession.patient.id) {
+          return {
+            valid: false,
+            code: 'PATIENT_CHANGED',
+            reason: `Bệnh nhân trên HIS (${current.patient.id}) không khớp với phiên làm việc (${activeClinicalSession.patient.id})`
+          };
+        }
+      }
+      if (!current?.patient?.id && !current?.encounter?.id) {
+        return {
+          valid: false,
+          code: 'PATIENT_NOT_FOUND',
+          reason: 'Không tìm thấy thông tin bệnh nhân trên màn hình HIS'
+        };
+      }
+      if (!current?.patient?.id) {
+        return {
+          valid: false,
+          code: 'PATIENT_NOT_FOUND',
+          reason: 'Không tìm thấy mã bệnh nhân trên màn hình HIS'
+        };
+      }
+      if (!current?.encounter?.id) {
+        return {
+          valid: false,
+          code: 'ENCOUNTER_NOT_FOUND',
+          reason: 'Không tìm thấy mã lượt khám / vào viện trên màn hình HIS'
+        };
+      }
       return {
         valid: false,
-        code: 'PATIENT_NOT_FOUND',
-        reason: 'Không tìm thấy thông tin bệnh nhân trên màn hình HIS'
+        code: 'CONTEXT_INVALID',
+        reason: 'Ngữ cảnh lâm sàng trên HIS không hợp lệ'
       };
     }
 
@@ -178,7 +233,9 @@
       }
 
       if (Date.now() > activeClinicalSession.expiresAt) {
-        activeClinicalSession.state = 'EXPIRED';
+        if (typeof activeClinicalSession === 'object' && !Object.isFrozen(activeClinicalSession)) {
+          activeClinicalSession.state = 'EXPIRED';
+        }
         return {
           valid: false,
           code: 'SESSION_EXPIRED',
@@ -195,9 +252,23 @@
         };
       }
 
-      // Checkpoint so sánh phiếu chỉ định (nếu có)
-      if (activeClinicalSession.encounter?.orderId && current.encounter?.orderId &&
-          current.encounter.orderId !== activeClinicalSession.encounter.orderId) {
+      // Checkpoint so sánh lượt khám (encounterId) - BẮT BUỘC (F01, F02, R1)
+      const sessionEncounterId = activeClinicalSession.encounter?.encounterId ||
+                                 activeClinicalSession.encounter?.id ||
+                                 activeClinicalSession.hisContext?.encounterId ||
+                                 activeClinicalSession.his?.encounterId;
+      if (sessionEncounterId && current.encounter?.id !== sessionEncounterId) {
+        return {
+          valid: false,
+          code: 'ENCOUNTER_CHANGED',
+          reason: `Lượt khám trên HIS (${current.encounter?.id || 'rỗng'}) không khớp với phiên làm việc (${sessionEncounterId})`
+        };
+      }
+
+      // Checkpoint so sánh phiếu chỉ định (nếu có trong snapshot lúc mở QR)
+      const sessionOrderId = activeClinicalSession.encounter?.orderId;
+      if (sessionOrderId && current.encounter?.orderId &&
+          current.encounter.orderId !== sessionOrderId) {
         return {
           valid: false,
           code: 'ORDER_CHANGED',

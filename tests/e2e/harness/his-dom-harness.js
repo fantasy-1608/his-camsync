@@ -123,12 +123,13 @@ export class HisDomHarness {
     this.setupHisPage();
   }
 
-  setupHisPage(patient = { id: '24089123', name: 'NGUYEN VAN A', age: 45 }) {
+  setupHisPage(patient = { id: '24089123', name: 'NGUYEN VAN A', age: 45, encounterId: 'ENC-001' }) {
     this.body.children = [];
 
     // Patient Banner
     const banner = new MockDOMElement('div', 'patientInfo', 'patient-banner');
-    banner.innerText = `Mã bệnh nhân: ${patient.id} - Tên bệnh nhân: ${patient.name} - Tuổi: ${patient.age} Tuổi`;
+    const encStr = patient.encounterId ? ` - Mã lượt khám: ${patient.encounterId}` : '';
+    banner.innerText = `Mã bệnh nhân: ${patient.id} - Tên bệnh nhân: ${patient.name}${encStr} - Tuổi: ${patient.age} Tuổi`;
     this.body.appendChild(banner);
 
     // Form container
@@ -137,6 +138,12 @@ export class HisDomHarness {
     fileInput.setAttribute('type', 'file');
     fileInput.setAttribute('accept', 'image/*');
     uploadForm.appendChild(fileInput);
+
+    if (patient.encounterId) {
+      const encInput = new MockDOMElement('input', 'maLuotKham');
+      encInput.value = patient.encounterId;
+      uploadForm.appendChild(encInput);
+    }
 
     const uploadBtn = new MockDOMElement('button', 'btnUpload', 'btn btn-primary');
     uploadBtn.innerText = 'Lưu Ảnh';
