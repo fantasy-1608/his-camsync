@@ -37,24 +37,30 @@ const PRESET_CONFIG = {
  * @param {string} preset - 'document' | 'color'
  * @returns {Promise<{dataUrl: string, width: number, height: number}>}
  */
-function compressImage(img, preset = 'document') {
+function compressImage(img, preset = 'document', rotation = 0) {
   const config = PRESET_CONFIG[preset] || PRESET_CONFIG.document;
   const dpi = config.dpi;
 
   // Tính kích thước pixel tối đa dựa trên DPI và khổ A4
-  const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);  // 150DPI → 1240px, 200DPI → 1654px
-  const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi); // 150DPI → 1754px, 200DPI → 2339px
+  const maxWidthPx = Math.round((A4_WIDTH_MM / 25.4) * dpi);
+  const maxHeightPx = Math.round((A4_HEIGHT_MM / 25.4) * dpi);
 
-  // Tính tỷ lệ scale để fit vào khổ A4
+  // Kích thước gốc (sau xoay)
   const imgW = img.width || img.naturalWidth;
   const imgH = img.height || img.naturalHeight;
+  const rot = ((rotation % 360) + 360) % 360;
+  const swapped = (rot === 90 || rot === 270);
+  const srcW = swapped ? imgH : imgW;
+  const srcH = swapped ? imgW : imgH;
+
+  // Tính tỷ lệ scale để fit vào khổ A4
   let scale = 1;
-  if (imgW > maxWidthPx || imgH > maxHeightPx) {
-    scale = Math.min(maxWidthPx / imgW, maxHeightPx / imgH);
+  if (srcW > maxWidthPx || srcH > maxHeightPx) {
+    scale = Math.min(maxWidthPx / srcW, maxHeightPx / srcH);
   }
 
-  const outW = Math.round(imgW * scale);
-  const outH = Math.round(imgH * scale);
+  const outW = Math.round(srcW * scale);
+  const outH = Math.round(srcH * scale);
 
   const canvas = document.createElement('canvas');
   canvas.width = outW;
@@ -65,7 +71,18 @@ function compressImage(img, preset = 'document') {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, outW, outH);
 
-  ctx.drawImage(img, 0, 0, outW, outH);
+  // Xoay ảnh nếu cần
+  if (rot) {
+    ctx.save();
+    ctx.translate(outW / 2, outH / 2);
+    ctx.rotate(rot * Math.PI / 180);
+    const drawW = swapped ? outH : outW;
+    const drawH = swapped ? outW : outH;
+    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, 0, 0, outW, outH);
+  }
 
   // Chuyển grayscale nếu là preset tài liệu
   if (config.grayscale) {
@@ -73,7 +90,6 @@ function compressImage(img, preset = 'document') {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
       const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      // Tăng contrast nhẹ cho text rõ hơn
       const enhanced = gray < 128
         ? Math.max(0, gray * 0.85)
         : Math.min(255, gray * 1.1);
@@ -173,8 +189,8 @@ export async function buildPdf(pages, options = {}) {
       throw new Error(`Trang ${i + 1}: Thiếu dữ liệu ảnh`);
     }
 
-    // Nén ảnh theo preset
-    const compressed = compressImage(img, preset);
+    // Nén ảnh theo preset (có hỗ trợ xoay)
+    const compressed = compressImage(img, preset, pages[i].rotation || 0);
 
     // Tính kích thước fit vào trang A4 (giữ tỉ lệ, có margin 5mm)
     const margin = 5;
