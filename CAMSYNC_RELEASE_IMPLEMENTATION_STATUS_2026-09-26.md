@@ -13,7 +13,7 @@ Ngày cập nhật: 26/09/2026. Mốc: nhánh `codex/hospital-release-hardening`
 | R07 | `PENDING_PRIVACY` | Bỏ ghi `consent_granted` khi chỉ mở QR; sửa bản dự thảo privacy/Store để khai dữ liệu và bỏ claim tuyệt đối. | Bệnh viện, PRIV và SEC duyệt bản đồ dữ liệu, nhà cung cấp và căn cứ xử lý. |
 | R08 | `DONE_LOCAL_SAFETY` | `/api/sync/:sessionId` không còn nhận/trả ảnh, trả HTTP 410. | Chốt kiến trúc vận hành và rà PeerJS signaling/ICE/TURN. |
 | R09 | `DONE_LOCAL_PARTIAL` | Thêm `tests/hospital-safety.test.js` chạy production `HisAdapter`; các test cũ được sửa để `UNKNOWN` khi chỉ có DOM; fixture transport mô phỏng được đánh dấu rõ. | Browser integration và HIS thật với bằng chứng đã khử PHI. |
-| R10 | `DONE_LOCAL_PARTIAL` | Thêm lockfile và workflow PR/`main`: `npm ci`, syntax, safety, toàn bộ test, audit, ZIP/manifest, SHA-256. | Run CI trên GitHub đúng commit; bật required checks và branch protection thật. |
+| R10 | `DONE_CI_VERIFIED` | Thêm lockfile và workflow PR/`main`; CI GitHub Actions đã chạy thành công 100% trên commit `main` (Run #36221169147, tạo gói ZIP và SHA-256). | Bật required checks và branch protection thật trên repo settings. |
 | R11–R13 | `PENDING_HIS_CLIN_OPS` | Có danh sách ca tự thử bên dưới. | Kết quả ca thử, thẩm định ảnh và tải theo thiết bị/mạng/khoa đã duyệt. |
 | R14 | `DRAFT` | Sửa README, chính sách riêng tư và hướng dẫn Store theo trạng thái mã hiện tại. | Duyệt nội dung, màn hình trạng thái, screenshot sạch PHI và chốt kênh phân phối. |
 | R15–R16 | `PENDING_HOSPITAL` | Chưa pilot hay triển khai. | Biên bản pilot, trực vận hành, SLO, rollback, quyết định mở rộng từng khoa. |
