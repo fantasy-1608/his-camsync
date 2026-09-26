@@ -119,7 +119,7 @@ function warpPerspectiveWebGL(imgElement, srcCorners, dstW, dstH) {
       vec2 dstPixel = vec2(v_texCoord.x * u_dstSize.x, (1.0 - v_texCoord.y) * u_dstSize.y);
       vec3 srcHomo = u_homography * vec3(dstPixel, 1.0);
       vec2 srcPixel = srcHomo.xy / srcHomo.z;
-      vec2 srcTex = vec2(srcPixel.x / u_srcSize.x, 1.0 - (srcPixel.y / u_srcSize.y));
+      vec2 srcTex = vec2(srcPixel.x / u_srcSize.x, srcPixel.y / u_srcSize.y);
 
       if (srcTex.x < 0.0 || srcTex.x > 1.0 || srcTex.y < 0.0 || srcTex.y > 1.0) {
         gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Nền trắng viền ngoài
@@ -221,25 +221,29 @@ function warpPerspectiveCanvas2D(imgElement, srcCorners, dstW, dstH) {
   }
 
   function drawTriangle(s0, s1, s2, d0, d1, d2) {
+    const [x0, y0] = s0, [x1, y1] = s1, [x2, y2] = s2;
+    const [u0, v0] = d0, [u1, v1] = d1, [u2, v2] = d2;
+    const D = x0 * (y1 - y2) + x1 * (y2 - y0) + x2 * (y0 - y1);
+    if (Math.abs(D) < 1e-8) return;
+
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(d0[0], d0[1]);
-    ctx.lineTo(d1[0], d1[1]);
-    ctx.lineTo(d2[0], d2[1]);
+    ctx.moveTo(u0, v0);
+    ctx.lineTo(u1, v1);
+    ctx.lineTo(u2, v2);
     ctx.closePath();
     ctx.clip();
 
-    const denom = (s0[0] * (s1[1] - s2[1]) - s1[0] * (s0[1] - s2[1]) + s2[0] * (s0[1] - s1[1]));
-    if (Math.abs(denom) > 1e-6) {
-      const m11 = - (s0[1] * (d1[0] - d2[0]) - s1[1] * (d0[0] - d2[0]) + s2[1] * (d0[0] - d1[0])) / denom;
-      const m12 =   (s0[1] * (d1[1] - d2[1]) - s1[1] * (d0[1] - d2[1]) + s2[1] * (d0[1] - d1[1])) / denom;
-      const m21 =   (s0[0] * (d1[0] - d2[0]) - s1[0] * (d0[0] - d2[0]) + s2[0] * (d0[0] - d1[0])) / denom;
-      const m22 = - (s0[0] * (d1[1] - d2[1]) - s1[0] * (d0[0] - d2[1]) + s2[0] * (d0[0] - d1[0])) / denom;
-      const dx =    (s0[0] * (s1[1] * d2[0] - s2[1] * d1[0]) - s1[0] * (s0[1] * d2[0] - s2[1] * d0[0]) + s2[0] * (s0[1] * d1[0] - s1[1] * d0[0])) / denom;
-      const dy =    (s0[0] * (s1[1] * d2[1] - s2[1] * d1[1]) - s1[0] * (s0[1] * d2[1] - s2[1] * d0[1]) + s2[0] * (s0[1] * d1[1] - s1[1] * d0[1])) / denom;
-      ctx.transform(m11, m12, m21, m22, dx, dy);
-      ctx.drawImage(imgElement, 0, 0);
-    }
+    const a = ((y1 - y2) * u0 + (y2 - y0) * u1 + (y0 - y1) * u2) / D;
+    const c = ((x2 - x1) * u0 + (x0 - x2) * u1 + (x1 - x0) * u2) / D;
+    const e = ((x1 * y2 - x2 * y1) * u0 + (x2 * y0 - x0 * y2) * u1 + (x0 * y1 - x1 * y0) * u2) / D;
+
+    const b = ((y1 - y2) * v0 + (y2 - y0) * v1 + (y0 - y1) * v2) / D;
+    const d = ((x2 - x1) * v0 + (x0 - x2) * v1 + (x1 - x0) * v2) / D;
+    const f = ((x1 * y2 - x2 * y1) * v0 + (x2 * y0 - x0 * y2) * v1 + (x0 * y1 - x1 * y0) * v2) / D;
+
+    ctx.transform(a, b, c, d, e, f);
+    ctx.drawImage(imgElement, 0, 0);
     ctx.restore();
   }
 

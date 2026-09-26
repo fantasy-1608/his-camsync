@@ -361,6 +361,12 @@ body {
   height: 100%;
 }
 
+#docScreen.screen {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 /* ==========================================================================
    Screen 1: Standby / Capture Screen (Màn hình Chụp)
    ========================================================================== */
@@ -452,7 +458,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding-bottom: 8px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 12px));
 }
 
 /* Shutter Button (Nút bấm chụp lớn kiểu Camera cao cấp) */
@@ -613,7 +619,7 @@ body {
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  padding: 8px 12px 10px 12px;
+  padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 12px)) 12px;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -1136,7 +1142,8 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 8px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 20px));
+  flex-shrink: 0;
 }
 
 .doc-actions-row {
@@ -1210,9 +1217,29 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  padding: 24px 16px;
+  padding: 8px 12px;
   text-align: center;
+}
+
+.doc-preview-img-wrap {
+  width: 100%;
+  max-height: clamp(160px, 32vh, 300px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.doc-preview-img {
+  max-width: 100%;
+  max-height: clamp(150px, 30vh, 280px);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  display: none;
+  transition: transform 0.2s ease;
+  object-fit: contain;
 }
 
 /* Size estimate badge */
