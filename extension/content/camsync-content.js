@@ -303,7 +303,8 @@ function getPatientInfoFromDOM() {
       }
 
       // Anti-Decompression / Pixel Bomb Defense (<= 16MP, <= 8192px)
-      if (imageBytes && typeof extractImageDimensions === 'function' && typeof isWithinImageLimits === 'function') {
+      // Bỏ qua kiểm tra kích thước pixel nếu là file PDF
+      if (finalMimeType !== 'application/pdf' && imageBytes && typeof extractImageDimensions === 'function' && typeof isWithinImageLimits === 'function') {
         const dims = extractImageDimensions(imageBytes);
         if (dims.valid && !isWithinImageLimits(dims.width, dims.height)) {
           console.warn('[CamSync] Kích thước ảnh vượt giới hạn');
@@ -607,6 +608,49 @@ function getPatientInfoFromDOM() {
    * @returns {{ success: boolean, initiated: boolean, status: string, code?: string, reason?: string }}
    */
   function injectFilesAndUpload(fileList, incomingPatientId) {
+    const isPdf = fileList.length > 0 && fileList[0].type === 'application/pdf';
+    
+    // Nếu là file PDF, áp dụng luồng xử lý riêng cho Phiếu Scan
+    if (isPdf) {
+      if (!window.location.href.includes('NTU01H102_ThemPhieuKySo')) {
+        console.warn('[CamSync] Frame hiện tại không phải form Phiếu Scan (NTU01H102_ThemPhieuKySo)');
+        return { success: false, initiated: false, code: 'WRONG_FRAME', reason: 'Vui lòng mở form Thêm Phiếu Scan để lưu PDF' };
+      }
+      
+      const pdfInput = document.getElementById('fileUpload');
+      if (!pdfInput) {
+        return { success: false, initiated: false, code: 'ELEMENTS_NOT_FOUND', reason: 'Không tìm thấy #fileUpload trên form Phiếu Scan' };
+      }
+      
+      try {
+        const dt = typeof DataTransfer !== 'undefined' ? new DataTransfer() : null;
+        if (dt && dt.items && dt.items.add) {
+          for (let i = 0; i < fileList.length; i++) {
+            dt.items.add(fileList[i]);
+          }
+          pdfInput.files = dt.files;
+        } else {
+          pdfInput.files = fileList;
+        }
+
+        if (pdfInput.dispatchEvent) {
+          const changeEvt = typeof Event !== 'undefined'
+            ? new Event('change', { bubbles: true })
+            : { type: 'change', target: pdfInput };
+          pdfInput.dispatchEvent(changeEvt);
+        }
+
+        if (typeof showToast === 'function') {
+          showToast(`Đã nạp file PDF thành công. Vui lòng điền thông tin và bấm Lưu.`);
+        }
+        // Không tự động click btnLuu để user tự điền thêm thông tin (Tên phiếu, v.v.)
+        return { success: true, initiated: true, status: 'HIS_UPLOAD_PENDING' };
+      } catch (err) {
+        console.error('[CamSync] Lỗi nạp tệp PDF:', err);
+        return { success: false, initiated: false, code: 'INJECTION_EXCEPTION', reason: 'Lỗi thao tác DOM khi nạp PDF' };
+      }
+    }
+
     const adapter = getHisAdapter();
     let fileInput = adapter ? adapter.getFileInput() : document.getElementById('fileUpload');
     const btnUpload = adapter ? adapter.getUploadButton() : document.getElementById('btnUpload');

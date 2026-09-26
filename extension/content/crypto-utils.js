@@ -288,6 +288,11 @@
       return { valid: true, mimeType: 'image/png', ext: 'png' };
     }
 
+    // PDF: %PDF- (25 50 44 46 2D)
+    if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2D) {
+      return { valid: true, mimeType: 'application/pdf', ext: 'pdf' };
+    }
+
     return { valid: false, error: 'INVALID_IMAGE_MAGIC_BYTES' };
   }
 

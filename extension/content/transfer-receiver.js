@@ -106,9 +106,9 @@
 
       // 2. Kiểm tra contentType / mimeType nếu khai báo
       const declaredContentType = contentType || mimeType || meta?.contentType || meta?.mimeType;
-      if (declaredContentType && declaredContentType !== 'image/jpeg' && declaredContentType !== 'image/png') {
+      if (declaredContentType && declaredContentType !== 'image/jpeg' && declaredContentType !== 'image/png' && declaredContentType !== 'application/pdf') {
         console.warn(`[CamSync] Từ chối phiên truyền ${transferId}: contentType (${declaredContentType}) không được hỗ trợ`);
-        if (sendAck) sendAck(false, 'UNSUPPORTED_CONTENT_TYPE', { status: 'HIS_REJECTED', reason: 'Chỉ hỗ trợ image/jpeg hoặc image/png' });
+        if (sendAck) sendAck(false, 'UNSUPPORTED_CONTENT_TYPE', { status: 'HIS_REJECTED', reason: 'Chỉ hỗ trợ image/jpeg, image/png hoặc application/pdf' });
         return false;
       }
 
