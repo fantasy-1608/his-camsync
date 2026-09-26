@@ -99,11 +99,11 @@
           .map((id) => targetDoc.getElementById?.(id)).find(Boolean);
         const bannerText = String(bannerEl?.innerText || bannerEl?.textContent || targetDoc.body.innerText || targetDoc.body.textContent || '');
         const patients = unique([
-          ...collectFields(targetDoc, ['maBenhNhan', 'txtMaBN', 'patientId']),
+          ...collectFields(targetDoc, ['maBenhNhan', 'txtMaBN', 'patientId', 'hidMABENHNHAN']),
           ...collectText(bannerText, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
         let directEncounters = unique([
-          ...collectFields(targetDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId']),
+          ...collectFields(targetDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId', 'hidKHAMBENHID']),
           ...collectText(bannerText, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
         if (!directEncounters.length) {
