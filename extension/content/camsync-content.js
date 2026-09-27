@@ -619,9 +619,9 @@ function getPatientInfoFromDOM() {
       if (window.location.href.includes('NTU01H102_ThemPhieuKySo')) {
         phieuScanDoc = document;
       } else {
-        // Tìm trong tất cả iframe con (3 tầng sâu: page → divDlgBAifmView → divDlgThemPhieuifmView)
+        // Tìm trong toàn bộ cây DOM (bắt đầu từ window.top để bao quát cả frame cha & frame con)
         const searchIframes = (doc, depth = 0) => {
-          if (depth > 5 || !doc) return null;
+          if (depth > 6 || !doc) return null;
           try {
             const iframes = doc.querySelectorAll('iframe');
             for (const frame of iframes) {
@@ -632,7 +632,7 @@ function getPatientInfoFromDOM() {
                 if (frameUrl.includes('NTU01H102_ThemPhieuKySo')) {
                   return fd;
                 }
-                // Tìm tiếp trong iframe con
+                // Tìm tiếp trong iframe con sâu hơn
                 const deeper = searchIframes(fd, depth + 1);
                 if (deeper) return deeper;
               } catch (e) {} // cross-origin
@@ -640,7 +640,18 @@ function getPatientInfoFromDOM() {
           } catch (e) {}
           return null;
         };
-        phieuScanDoc = searchIframes(document);
+
+        let rootDoc = document;
+        try {
+          if (window.top && window.top.document) {
+            rootDoc = window.top.document;
+          }
+        } catch (_) {}
+
+        phieuScanDoc = searchIframes(rootDoc);
+        if (!phieuScanDoc && rootDoc !== document) {
+          phieuScanDoc = searchIframes(document);
+        }
       }
       
       if (!phieuScanDoc) {
@@ -648,7 +659,8 @@ function getPatientInfoFromDOM() {
         return { success: false, initiated: false, code: 'WRONG_FRAME', reason: 'Vui lòng mở form Thêm Phiếu Scan để lưu PDF' };
       }
       
-      const pdfInput = phieuScanDoc.getElementById('fileUpload');
+      const pdfInput = (phieuScanDoc.querySelector && phieuScanDoc.querySelector('#fileUpload, input[type="file"][id*="Upload" i], input[type="file"]')) ||
+                       phieuScanDoc.getElementById('fileUpload');
       if (!pdfInput) {
         return { success: false, initiated: false, code: 'ELEMENTS_NOT_FOUND', reason: 'Không tìm thấy #fileUpload trên form Phiếu Scan' };
       }
@@ -932,8 +944,8 @@ function getPatientInfoFromDOM() {
     if (document.getElementById('btnCamSyncPhieuScan')) return;
 
     // Tìm nút Scan hoặc thanh nút action ở đáy form
-    const btnScan = document.querySelector('button[id*="Scan"], .btn[onclick*="scan"], #btnScan');
-    const btnLuu = document.querySelector('#btnLuu, button[id*="btnLuu"]');
+    const btnScan = document.querySelector('button[id*="Scan" i], .btn[onclick*="scan" i], #btnScan');
+    const btnLuu = document.querySelector('#btnLuu, button[id*="btnLuu" i], button[id*="Luu" i]');
     const targetBtn = btnScan || btnLuu;
     if (!targetBtn || !targetBtn.parentNode) return;
 
@@ -947,7 +959,7 @@ function getPatientInfoFromDOM() {
     btn.addEventListener('click', () => {
       // Gửi message lên frame cha (nơi có patient context) để mở QR modal
       try {
-        const msg = { type: 'CAMSYNC_OPEN_QR', source: 'phieu-scan' };
+        const msg = { type: 'CAMSYNC_OPEN_QR', source: 'phieu-scan', specialty: 'document' };
         if (window.parent && window.parent !== window) {
           window.parent.postMessage(msg, '*');
         }
@@ -959,7 +971,7 @@ function getPatientInfoFromDOM() {
       }
     });
 
-    const btnClose = document.querySelector('#btnClose, button[id*="btnDong"], button[onclick*="close"]');
+    const btnClose = document.querySelector('#btnClose, button[id*="btnDong" i], button[onclick*="close" i]');
     if (btnClose && btnClose.parentNode === targetBtn.parentNode) {
       btnClose.parentNode.insertBefore(btn, btnClose);
     } else {
@@ -971,7 +983,7 @@ function getPatientInfoFromDOM() {
   window.addEventListener('message', (evt) => {
     try {
       if (evt.data && evt.data.type === 'CAMSYNC_OPEN_QR' && evt.data.source === 'phieu-scan') {
-        openQrModal();
+        openQrModal({ specialty: evt.data.specialty || 'document' });
       }
     } catch (e) {}
   });
@@ -1473,7 +1485,9 @@ function getPatientInfoFromDOM() {
    * Mở Modal Quét Mã QR Đồng Bộ
    */
   function openQrModal() {
+    const options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
     closeQrModal();
+    const specialty = options.specialty || null;
     photoCount = 0;
     processedTransferIds.clear();
     recentUploadedTokens.clear();
@@ -1532,8 +1546,10 @@ function getPatientInfoFromDOM() {
 
     startClinicalContextWatcher();
 
-    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}&key=${encryptionKeyHex}&gen=${activeClinicalSession.generation}`;
+    const specialtyParam = specialty ? `&specialty=${encodeURIComponent(specialty)}` : '';
+    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}&key=${encryptionKeyHex}&gen=${activeClinicalSession.generation}${specialtyParam}`;
     const patient = activeClinicalSession.patient;
+    const modalTitle = specialty === 'document' ? 'Quét Tài Liệu & Đồng Bộ Phiếu Scan' : 'Chụp & Đồng Bộ Từ Điện Thoại';
 
     const backdrop = document.createElement('div');
     backdrop.className = 'camsync-modal-backdrop';
@@ -1544,7 +1560,7 @@ function getPatientInfoFromDOM() {
         <div class="camsync-modal-header">
           <div class="camsync-modal-title">
             ${SVG_ICONS.camera}
-            <span>Chụp & Đồng Bộ Từ Điện Thoại</span>
+            <span>${modalTitle}</span>
           </div>
           <button class="camsync-modal-close" id="camsyncCloseBtn" title="Đóng">${SVG_ICONS.close}</button>
         </div>
@@ -3174,6 +3190,16 @@ function getPatientInfoFromDOM() {
     return asyncPromise;
   }
 
+  const PDF_PLACEHOLDER_ICON = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="80" height="80"><path fill="%23e11d48" d="M12 4h18l10 10v26a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z"/><path fill="%23fff" d="M28 4v12h12M15 24h18M15 30h18M15 36h12" stroke="%23fff" stroke-width="2.5" stroke-linecap="round"/><text x="24" y="32" font-family="sans-serif" font-size="9" font-weight="bold" fill="%23fff" text-anchor="middle">PDF</text></svg>';
+
+  function isPdfPayload(photo) {
+    if (!photo) return false;
+    if (photo.isPdf) return true;
+    if (photo.filename && photo.filename.toLowerCase().endsWith('.pdf')) return true;
+    if (typeof photo.base64 === 'string' && photo.base64.startsWith('data:application/pdf')) return true;
+    return false;
+  }
+
   function renderCurrentPhoto() {
     if (receivedPhotos.length === 0) return;
     const photo = receivedPhotos[currentPhotoIndex] || receivedPhotos[receivedPhotos.length - 1];
@@ -3182,23 +3208,40 @@ function getPatientInfoFromDOM() {
     const idxBadge = getModalElement('camsyncPhotoIndexBadge');
     const lightboxImg = getModalElement('camsyncLightboxImg');
     const lightboxTitle = getModalElement('camsyncLightboxTitle');
+    const isPdf = isPdfPayload(photo);
 
     if (liveImg) {
-      liveImg.src = photo.base64;
-      applyRotation(liveImg, photo.rotation || 0);
+      if (isPdf) {
+        liveImg.src = PDF_PLACEHOLDER_ICON;
+        liveImg.style.objectFit = 'contain';
+        liveImg.style.padding = '24px';
+        liveImg.style.transform = 'none';
+      } else {
+        liveImg.src = photo.base64;
+        liveImg.style.objectFit = 'contain';
+        liveImg.style.padding = '0';
+        applyRotation(liveImg, photo.rotation || 0);
+      }
     }
     if (liveMeta) {
-      liveMeta.textContent = `${photo.filename} (${photo.sizeKB} KB)`;
+      liveMeta.textContent = isPdf ? `Tài liệu PDF: ${photo.filename} (${photo.sizeKB} KB)` : `${photo.filename} (${photo.sizeKB} KB)`;
     }
     if (idxBadge) {
-      idxBadge.textContent = `Ảnh ${photo.id}/${photoCount}`;
+      idxBadge.textContent = isPdf ? 'Tài liệu PDF' : `Ảnh ${photo.id}/${photoCount}`;
     }
     if (lightboxImg) {
-      lightboxImg.src = photo.base64;
-      applyRotation(lightboxImg, photo.rotation || 0);
+      if (isPdf) {
+        lightboxImg.src = PDF_PLACEHOLDER_ICON;
+        lightboxImg.style.padding = '48px';
+        lightboxImg.style.transform = 'none';
+      } else {
+        lightboxImg.src = photo.base64;
+        lightboxImg.style.padding = '0';
+        applyRotation(lightboxImg, photo.rotation || 0);
+      }
     }
     if (lightboxTitle) {
-      lightboxTitle.textContent = `Ảnh ${photo.id}/${photoCount} - ${photo.filename}`;
+      lightboxTitle.textContent = isPdf ? `Tài liệu PDF - ${photo.filename}` : `Ảnh ${photo.id}/${photoCount} - ${photo.filename}`;
     }
   }
 
@@ -3228,12 +3271,17 @@ function getPatientInfoFromDOM() {
 
     receivedPhotos.forEach((photo, idx) => {
       if (!document.createElement) return;
+      const isPdfItem = isPdfPayload(photo);
       const item = document.createElement('div');
       item.className = `camsync-gallery-item${idx === currentPhotoIndex ? ' active' : ''}`;
       
       const thumb = document.createElement('img');
-      thumb.src = photo.base64;
-      thumb.alt = `Thumb ${idx + 1}`;
+      thumb.src = isPdfItem ? PDF_PLACEHOLDER_ICON : photo.base64;
+      thumb.alt = isPdfItem ? `PDF ${idx + 1}` : `Thumb ${idx + 1}`;
+      if (isPdfItem) {
+        thumb.style.padding = '4px';
+        thumb.style.background = '#fef2f2';
+      }
       
       const badge = document.createElement('span');
       badge.className = 'camsync-gallery-badge';
@@ -3255,7 +3303,7 @@ function getPatientInfoFromDOM() {
   function handleRotateCurrentPhoto() {
     if (receivedPhotos.length === 0) return;
     const photo = receivedPhotos[currentPhotoIndex];
-    if (!photo) return;
+    if (!photo || isPdfPayload(photo)) return;
     photo.rotation = ((photo.rotation || 0) + 90) % 360;
     renderCurrentPhoto();
   }

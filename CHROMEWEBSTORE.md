@@ -1,10 +1,10 @@
 # Chrome Web Store Listing & Submission Guide — HIS CamSync
 
-> Ngày cập nhật: 26/09/2026  
-> Phiên bản phát hành: **v1.4.2**  
-> Tệp đóng gói (Release Package): `camsync-extension-v1.4.2.zip`  
-> Kích thước: 428 KB  
-> Mã kiểm tra SHA-256: `0b9e6f9e583faeff48e863767a6c9e1fa16bb91c435b8ad9a2be550d1b0e1081`  
+> Ngày cập nhật: 27/09/2026  
+> Phiên bản phát hành: **v1.5.0**  
+> Tệp đóng gói (Release Package): `camsync-extension-v1.5.0.zip`  
+> Kích thước: 431 KB  
+> Mã kiểm tra SHA-256: `bf42ae62a005f9b7155a1951df7eec0919f1df977e27c3278fcebad7744112ce`  
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
 Tài liệu này tổng hợp toàn bộ các mục thông tin, văn bản giải trình và trường dữ liệu sẵn sàng để sao chép (copy-paste) trực tiếp vào **Chrome Developer Dashboard** khi cập nhật hoặc phát hành tiện ích lên Google Chrome Web Store.
@@ -146,7 +146,8 @@ https://fantasy-1608.github.io/his-camsync/privacy.html
 
 | Phiên bản | Ngày | Tóm tắt thay đổi | Trạng thái |
 | :--- | :--- | :--- | :--- |
-| **v1.4.2** | 26/09/2026 | Tối ưu hóa cơ chế xác thực lưu trữ ảnh trên giao diện VNPT HIS, đồng bộ phản hồi trạng thái tức thì về điện thoại, nâng cấp Clinical Guard bảo vệ an toàn bệnh nhân. | **Sẵn sàng gửi duyệt** |
+| **v1.5.0** | 27/09/2026 | Tích hợp tính năng Quét tài liệu nhiều trang và xuất PDF đính kèm trực tiếp vào Phiếu Scan VNPT HIS (NTU01H102_ThemPhieuKySo), tối ưu nắn phẳng 4 góc WebGL và lazy-load giảm 90% tải mobile. | **Sẵn sàng gửi duyệt** |
+| **v1.4.2** | 26/09/2026 | Tối ưu hóa cơ chế xác thực lưu trữ ảnh trên giao diện VNPT HIS, đồng bộ phản hồi trạng thái tức thì về điện thoại, nâng cấp Clinical Guard bảo vệ an toàn bệnh nhân. | **Đã duyệt trên Store** |
 | **v1.4.1** | 26/09/2026 | Khóa kênh Supabase công khai, chỉ cho phép truyền tải nội bộ P2P WebRTC được mã hóa AES-256-GCM. | Đã hoàn tất |
 | **v1.4.0** | 26/09/2026 | Hoàn thiện kiến trúc an toàn lâm sàng, rào chắn 3 lớp, chống gửi trùng lặp hình ảnh. | Đã hoàn tất |
 
@@ -155,11 +156,11 @@ https://fantasy-1608.github.io/his-camsync/privacy.html
 ## 9. Hướng Dẫn Tải Lên (Submission Checklist)
 
 1. Mở [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole/).
-2. Chọn tiện ích HIS CamSync (hoặc bấm **New Item** nếu là lần đầu tiên).
+2. Chọn tiện ích HIS CamSync.
 3. Bấm **Upload new package** (Tải lên gói mới) và chọn tệp:
    ```text
-   /Users/trunganh/CNTT/his-camsync/camsync-extension-v1.4.2.zip
+   /Users/trunganh/CNTT/his-camsync/camsync-extension-v1.5.0.zip
    ```
-4. Kiểm tra số phiên bản hiển thị là `1.4.2`.
+4. Kiểm tra số phiên bản hiển thị là `1.5.0`.
 5. Điền/cập nhật thông tin Store Listing, Privacy, Permissions theo các mục ở trên.
-6. Bấm **Submit for Review** (Gửi để xem xét). Thời gian Google duyệt thông thường từ 24 - 48 giờ.
+6. Bấm **Submit for Review** (Gửi để xem xét). Thời gian Google duyệt thông thường từ 24 - 48 giờ. Trong suốt thời gian này, bản v1.4.2 vẫn tiếp tục hoạt động phục vụ khoa phòng bình thường.

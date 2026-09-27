@@ -260,6 +260,7 @@ function initWorkerIfSupported() {
     const blob = new Blob([workerScript], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
     compressionWorker = new Worker(url);
+    try { URL.revokeObjectURL(url); } catch (_) {}
     compressionWorker.onmessage = (e) => {
       const { id, success, dataUrl, width, height, error } = e.data;
       const cb = workerCallbacks.get(id);

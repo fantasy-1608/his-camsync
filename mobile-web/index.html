@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -464,15 +464,56 @@
     <span id="loadingText" style="color: #ffffff; font-size: 13px; font-weight: 600;">Đang chuẩn hóa ảnh iPhone...</span>
   </div>
 
-  <!-- Scripts -->
+  <!-- Scripts: Nạp trước PeerJS (~90KB) để kết nối P2P tức thì. heic2any (1.3MB) và jsPDF (357KB) được lazy-load khi cần -->
   <script src="js/vendor/peerjs.min.js"></script>
-  <script src="js/vendor/heic2any.min.js"></script>
-  <script src="js/vendor/jspdf.umd.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.2';
     import { P2PClient } from './js/p2p-client.js?v=2.0.2';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
     import { unwarpDocument } from './js/perspective.js?v=2.0.2';
+
+    // =========================================================================
+    // Lazy Loader cho Vendor Libraries (Cắt giảm 85% dung lượng tải ban đầu: heic2any 1.3MB, jsPDF 357KB)
+    // =========================================================================
+    const _loadedVendorScripts = new Set();
+    function loadVendorScript(src) {
+      if (_loadedVendorScripts.has(src)) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => {
+          _loadedVendorScripts.add(src);
+          resolve();
+        };
+        s.onerror = (e) => reject(new Error(`Không thể nạp tệp thư viện: ${src}`));
+        document.head.appendChild(s);
+      });
+    }
+
+    let _heicLoaderPromise = null;
+    function loadHeic2Any() {
+      if (window.heic2any) return Promise.resolve();
+      if (!_heicLoaderPromise) {
+        _heicLoaderPromise = loadVendorScript('js/vendor/heic2any.min.js').catch(err => {
+          _heicLoaderPromise = null;
+          throw err;
+        });
+      }
+      return _heicLoaderPromise;
+    }
+
+    let _jspdfLoaderPromise = null;
+    function loadJsPdf() {
+      if (window.jspdf?.jsPDF) return Promise.resolve();
+      if (!_jspdfLoaderPromise) {
+        _jspdfLoaderPromise = loadVendorScript('js/vendor/jspdf.umd.min.js').catch(err => {
+          _jspdfLoaderPromise = null;
+          throw err;
+        });
+      }
+      return _jspdfLoaderPromise;
+    }
 
     // State
     let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
@@ -567,10 +608,12 @@
     let initialSessionId = null;
     let initialCryptoKey = null;
     let initialGeneration = null;
+    let initialSpecialty = null;
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
       initialSessionId = hashParams.get('session');
       initialCryptoKey = hashParams.get('key');
+      initialSpecialty = hashParams.get('specialty') || hashParams.get('mode');
       const genParam = hashParams.get('gen');
       if (genParam !== null && genParam !== '') {
         const parsedGen = parseInt(genParam, 10);
@@ -581,6 +624,7 @@
       const searchParams = new URLSearchParams(window.location.search);
       initialSessionId = searchParams.get('session');
       if (!initialCryptoKey) initialCryptoKey = searchParams.get('key');
+      if (!initialSpecialty) initialSpecialty = searchParams.get('specialty') || searchParams.get('mode');
       if (initialGeneration === null) {
         const genParam = searchParams.get('gen');
         if (genParam !== null && genParam !== '') {
@@ -615,6 +659,7 @@
         this.isDragging = false;
         this.startX = 0;
         this.startAngle = 0;
+        this.rafId = null;
 
         this.init();
       }
@@ -641,23 +686,33 @@
 
         window.addEventListener('pointermove', (e) => {
           if (!this.isDragging) return;
-          const dx = e.clientX - this.startX;
-          let newAngle = this.startAngle - (dx / this.pxPerDegree);
-          newAngle = Math.max(-45, Math.min(45, newAngle));
+          const clientX = e.clientX;
+          if (this.rafId) return;
+          this.rafId = requestAnimationFrame(() => {
+            this.rafId = null;
+            if (!this.isDragging) return;
+            const dx = clientX - this.startX;
+            let newAngle = this.startAngle - (dx / this.pxPerDegree);
+            newAngle = Math.max(-45, Math.min(45, newAngle));
 
-          // Tự hít về 0° khi ở gần ±0.8°
-          if (Math.abs(newAngle) < 0.8) {
-            if (this.angle !== 0 && navigator.vibrate) {
-              try { navigator.vibrate(12); } catch (_) {}
+            // Tự hít về 0° khi ở gần ±0.8°
+            if (Math.abs(newAngle) < 0.8) {
+              if (this.angle !== 0 && navigator.vibrate) {
+                try { navigator.vibrate(12); } catch (_) {}
+              }
+              newAngle = 0;
             }
-            newAngle = 0;
-          }
 
-          this.setAngle(newAngle, true);
+            this.setAngle(newAngle, true);
+          });
         });
 
         const onPointerUp = () => {
           if (!this.isDragging) return;
+          if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+          }
           this.isDragging = false;
           this.onAngleChange(this.angle, false);
           this.draw();
@@ -762,11 +817,30 @@
           statusBadge.classList.remove('disconnected');
           btnSendToHis.disabled = false;
           btnSendText.textContent = 'Gửi Lên HIS';
+          if (btnDocSendPdf) {
+            btnDocSendPdf.disabled = docPages.length === 0;
+            btnDocSendText.textContent = 'Gửi lên HIS';
+          }
         } else {
           statusBadge.classList.add('disconnected');
           btnSendToHis.disabled = true;
-          btnSendText.textContent = 'Chờ kết nối...';
+          const isClosedMsg = text && (text.includes('Phiên') || text.includes('hết hạn') || text.includes('thay đổi'));
+          btnSendText.textContent = isClosedMsg ? 'Phiên đã đóng' : 'Chờ kết nối...';
+          if (btnDocSendPdf) {
+            btnDocSendPdf.disabled = true;
+            btnDocSendText.textContent = isClosedMsg ? 'Phiên đã đóng' : 'Chờ kết nối...';
+          }
         }
+      },
+      onSessionClosed: (payload) => {
+        const reason = payload?.reason;
+        const msg = (reason === 'session_expired')
+          ? '⏰ Phiên chụp đã hết hạn (5 phút). Vui lòng quét lại mã QR trên máy tính.'
+          : (reason === 'clinical_context_changed'
+            ? (payload?.message || '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy để đảm bảo an toàn hồ sơ.')
+            : '⚠️ Phiên làm việc trên máy tính đã kết thúc.');
+        showErrorBanner(msg);
+        triggerHaptic('warning');
       },
       onPatientInfo: (patient) => {
         if (patient && (patient.name || patient.id)) {
@@ -885,7 +959,18 @@
 
     tabEcg.addEventListener('click', () => switchSpecialty('ecg'));
     tabUltrasound.addEventListener('click', () => switchSpecialty('ultrasound'));
-    tabDocument.addEventListener('click', () => switchSpecialty('document'));
+    tabDocument.addEventListener('click', () => {
+      switchSpecialty('document');
+      loadJsPdf().catch(() => {});
+    });
+
+    // Tự động kích hoạt chế độ phù hợp nếu quét từ QR chuyên biệt (Ví dụ: nút Nhập từ ĐT trên Phiếu Scan)
+    if (initialSpecialty === 'document') {
+      switchSpecialty('document');
+      loadJsPdf().catch(() => {});
+    } else if (initialSpecialty === 'ultrasound') {
+      switchSpecialty('ultrasound');
+    }
 
     // Trigger Camera & Gallery
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());
@@ -931,6 +1016,13 @@
             canvas.toBlob(resolve, 'image/jpeg', 0.92);
           });
 
+          // Giải phóng ngay bộ nhớ canvas và bitmap GPU
+          canvas.width = 0;
+          canvas.height = 0;
+          if (typeof bitmap.close === 'function') {
+            try { bitmap.close(); } catch (_) {}
+          }
+
           if (jpegBlob) {
             const cleanName = (fileName || 'photo.heic').replace(/\.(heic|heif)$/i, '.jpg');
             return new File([jpegBlob], cleanName, { type: 'image/jpeg' });
@@ -941,6 +1033,11 @@
       }
 
       try {
+        if (typeof window.heic2any !== 'function') {
+          showLoading('Đang nạp mô-đun chuẩn hóa ảnh iPhone...');
+          await loadHeic2Any();
+          showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
+        }
         if (typeof window.heic2any === 'function') {
           const res = await window.heic2any({
             blob: file,
@@ -1106,6 +1203,10 @@
 
     // Gửi ảnh lên HIS
     btnSendToHis.addEventListener('click', async () => {
+      if (p2p.isSessionIntentionallyClosed) {
+        showErrorBanner('Phiên chụp đã đóng hoặc bệnh nhân trên máy tính đã thay đổi. Vui lòng quét lại mã QR trên HIS.');
+        return;
+      }
       if (!p2p.isConnected) {
         btnSendText.textContent = 'Đang kết nối lại...';
         p2p.connect();
@@ -1159,7 +1260,7 @@
           return;
         }
 
-        if (!res || res.status === 'HIS_REJECTED' || !res.success) {
+        if (!res || !res.success || res.status === 'HIS_REJECTED') {
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'Máy chủ HIS từ chối lưu ảnh.');
           btnSendToHis.disabled = false;
@@ -1628,6 +1729,10 @@
     }
 
     function exitEditOverlay() {
+      if (editCanvasRaf) {
+        cancelAnimationFrame(editCanvasRaf);
+        editCanvasRaf = null;
+      }
       activeEditMode = null;
       activeDragHandle = null;
       activeDragCorner = -1;
@@ -1889,6 +1994,15 @@
       drawEditCanvas();
     }
 
+    let editCanvasRaf = null;
+    function scheduleEditCanvasDraw() {
+      if (editCanvasRaf) return;
+      editCanvasRaf = requestAnimationFrame(() => {
+        editCanvasRaf = null;
+        drawEditCanvas();
+      });
+    }
+
     function handleEditPointerMove(px, py) {
       if (!activeEditMode) return;
       const cw = docCropCanvas.width;
@@ -1899,7 +2013,7 @@
       if (activeEditMode === 'perspective') {
         if (activeDragCorner >= 0 && activeDragCorner < 4) {
           perspectiveCorners[activeDragCorner] = { x: nx, y: ny };
-          drawEditCanvas();
+          scheduleEditCanvasDraw();
         }
       } else if (activeEditMode === 'crop') {
         if (!activeDragHandle || !cropTouchStart) return;
@@ -1944,12 +2058,16 @@
             h: Math.abs(ny - cropTouchStart.ny)
           };
         }
-        drawEditCanvas();
+        scheduleEditCanvasDraw();
       }
     }
 
     function handleEditPointerUp() {
       const wasDragging = (activeDragCorner >= 0 || activeDragHandle !== null);
+      if (editCanvasRaf) {
+        cancelAnimationFrame(editCanvasRaf);
+        editCanvasRaf = null;
+      }
       activeDragCorner = -1;
       activeDragHandle = null;
       cropTouchStart = null;
@@ -2200,6 +2318,10 @@
     // ---- Xuất PDF & Gửi lên HIS ----
     btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
+      if (p2p.isSessionIntentionallyClosed) {
+        showErrorBanner('Phiên làm việc đã kết thúc hoặc bệnh nhân trên máy tính đã thay đổi. Vui lòng quét lại QR trên HIS.');
+        return;
+      }
       if (!p2p.isConnected) {
         showErrorBanner('Chưa kết nối với HIS. Vui lòng quét lại QR.');
         return;
@@ -2210,6 +2332,10 @@
         uploadProgressModal.style.display = 'flex';
         uploadPctBadge.textContent = '5%';
         const modeLabel = docPreset === 'enhance' ? 'Sắc nét' : (docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu');
+        uploadMeta.textContent = 'Đang chuẩn bị mô-đun PDF...';
+
+        await loadJsPdf();
+
         uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${modeLabel})...`;
 
         const pdfResult = await buildPdf(
@@ -2256,7 +2382,7 @@
           return;
         }
 
-        if (!res || res.status === 'HIS_REJECTED' || !res.success) {
+        if (!res || !res.success || res.status === 'HIS_REJECTED') {
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
           btnDocSendPdf.disabled = false;
