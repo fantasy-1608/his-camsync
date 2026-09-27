@@ -525,10 +525,25 @@ export class ImageEditor {
       }
 
       outCanvas.toBlob((blob) => {
+        // Thu hồi kích thước canvas để giải phóng backing buffer trên mobile WebKit/Blink
+        outCanvas.width = 0;
+        outCanvas.height = 0;
         if (blob) resolve(blob);
         else reject(new Error('Lỗi xuất Blob ảnh'));
       }, 'image/jpeg', quality);
     });
+  }
+
+  destroy() {
+    if (this.resizeObserver) {
+      try { this.resizeObserver.disconnect(); } catch (_) {}
+      this.resizeObserver = null;
+    }
+    this.originalImage = null;
+    if (this.canvas) {
+      this.canvas.width = 0;
+      this.canvas.height = 0;
+    }
   }
 }
 

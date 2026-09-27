@@ -233,6 +233,7 @@ export class P2PClient {
 
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onPatientInfo = options.onPatientInfo || (() => {});
+    this.onSessionClosed = options.onSessionClosed || (() => {});
     this.onTransferAck = null;
   }
 
@@ -494,6 +495,9 @@ export class P2PClient {
             if (!this.conn || !this.conn.open) {
               this.updateStatus(false, msg);
             }
+            try {
+              if (this.onSessionClosed) this.onSessionClosed(subPayload);
+            } catch (_) {}
           }
         } catch (err) {
           console.warn('[Realtime] Lỗi đọc gói tin WebSocket:', err);
@@ -680,11 +684,15 @@ export class P2PClient {
       } else if (data.type === 'TRANSFER_ACK') {
         if (this.onTransferAck) this.onTransferAck(data);
       } else if (data.type === 'SESSION_CLOSED') {
+        this.isSessionIntentionallyClosed = true;
         const isContextChanged = data.reason === 'clinical_context_changed';
         const msg = isContextChanged ?
           '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
           'Phiên làm việc đã đóng';
         this.updateStatus(false, msg);
+        try {
+          if (this.onSessionClosed) this.onSessionClosed(data);
+        } catch (_) {}
       }
     });
 
@@ -910,9 +918,13 @@ export class P2PClient {
       const expectedSid = this.sessionId;
       const expectedGeneration = this.generation;
       this.onTransferAck = (ackData) => {
-        if (ackData?.transferId === transferId &&
-            ackData?.sid === expectedSid &&
-            ackData?.generation === expectedGeneration) {
+        const sidMatches = (ackData?.sid === expectedSid || ackData?.sessionId === expectedSid);
+        const genMatches = (
+          ackData?.generation === expectedGeneration ||
+          (ackData?.generation === undefined && expectedGeneration !== undefined) ||
+          expectedGeneration === undefined
+        );
+        if (ackData?.transferId === transferId && sidMatches && genMatches) {
           // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
           if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
             if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
@@ -921,6 +933,8 @@ export class P2PClient {
 
           clearTimeout(ackTimeout);
           this.onTransferAck = null;
+
+          const isCommitted = (ackData?.status === 'HIS_COMMITTED' || ackData?.status === 'COMPLETED' || ackData?.status === 'SUCCESS' || (ackData?.success === true && !ackData?.status)) && ackData?.success === true;
 
           if (ackData && ackData.status === 'HIS_UNKNOWN') {
             resolve({
@@ -942,7 +956,7 @@ export class P2PClient {
               retry: ackData.retry !== undefined ? ackData.retry : false,
               ack: ackData
             });
-          } else if (ackData?.status === 'HIS_COMMITTED' && ackData?.success === true) {
+          } else if (isCommitted) {
             if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
             resolve({
               success: true,
@@ -1106,9 +1120,13 @@ export class P2PClient {
       const expectedSid = this.sessionId;
       const expectedGeneration = this.generation;
       this.onTransferAck = (ackData) => {
-        if (ackData?.transferId === transferId &&
-            ackData?.sid === expectedSid &&
-            ackData?.generation === expectedGeneration) {
+        const sidMatches = (ackData?.sid === expectedSid || ackData?.sessionId === expectedSid);
+        const genMatches = (
+          ackData?.generation === expectedGeneration ||
+          (ackData?.generation === undefined && expectedGeneration !== undefined) ||
+          expectedGeneration === undefined
+        );
+        if (ackData?.transferId === transferId && sidMatches && genMatches) {
           // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
           if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
             if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
@@ -1117,6 +1135,9 @@ export class P2PClient {
 
           clearTimeout(ackTimeout);
           this.onTransferAck = null;
+
+          const isCommitted = (ackData?.status === 'HIS_COMMITTED' || ackData?.status === 'COMPLETED' || ackData?.status === 'SUCCESS' || (ackData?.success === true && !ackData?.status)) && ackData?.success === true;
+
           if (ackData && ackData.status === 'HIS_UNKNOWN') {
             resolve({
               success: false,
@@ -1137,7 +1158,7 @@ export class P2PClient {
               retry: ackData.retry !== undefined ? ackData.retry : false,
               ack: ackData
             });
-          } else if (ackData?.status === 'HIS_COMMITTED' && ackData?.success === true) {
+          } else if (isCommitted) {
             if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
             resolve({
               success: true,
