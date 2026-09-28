@@ -1016,7 +1016,12 @@ function getPatientInfoFromDOM() {
     btnCam.innerHTML = `
       <span class="glyphicon glyphicon-phone" aria-hidden="true"></span> Quét từ ĐT
     `;
-    btnCam.addEventListener('click', () => openQrModal());
+    btnCam.addEventListener('click', () => {
+      const isDoc = Boolean(targetDoc?.getElementById('txtSOPHIEU') || 
+                            targetDoc?.getElementById('divDlgThemPhieu') || 
+                            /ThemPhieu/i.test(targetDoc?.location?.href || ''));
+      openQrModal({ specialty: isDoc ? 'document' : null });
+    });
     wrapperCam.appendChild(btnCam);
 
     // Chèn ngay sau nút Upload (trong thanh công cụ UploadController)
@@ -1487,7 +1492,7 @@ function getPatientInfoFromDOM() {
   function openQrModal() {
     const options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
     closeQrModal();
-    const specialty = options.specialty || null;
+    let specialty = options.specialty || null;
     photoCount = 0;
     processedTransferIds.clear();
     recentUploadedTokens.clear();
@@ -1500,6 +1505,25 @@ function getPatientInfoFromDOM() {
       const msg = clinicalContext?.reason || 'Chưa xác định được đầy đủ mã bệnh nhân và lượt khám trên HIS. CamSync đã dừng để tránh gắn nhầm hình ảnh.';
       showToast(`⚠️ ${msg}`);
       return;
+    }
+
+    // Tự động suy luận chuyên khoa nếu chưa được chỉ định tường minh
+    if (!specialty) {
+      const orderId = String(clinicalContext?.encounter?.orderId || '');
+      const winLoc = (typeof window !== 'undefined') ? (window.location.pathname + window.location.search) : '';
+      const rootDoc = getRootDocument();
+      const isDocument = orderId.toUpperCase().includes('SCAN') || 
+                         /ThemPhieu|DayLaiBenhAn|PhieuKySo|PhieuScan/i.test(winLoc) ||
+                         Boolean(rootDoc?.getElementById('btnCamSyncPhieuScan') || 
+                                 rootDoc?.getElementById('txtSOPHIEU') ||
+                                 rootDoc?.querySelector?.('iframe[id*="ThemPhieu" i]'));
+      if (isDocument) {
+        specialty = 'document';
+      } else if (/sieuam|ultrasound/i.test(winLoc) || orderId.toUpperCase().startsWith('SA')) {
+        specialty = 'ultrasound';
+      } else if (/ecg|dientim/i.test(winLoc) || orderId.toUpperCase().startsWith('ECG')) {
+        specialty = 'ecg';
+      }
     }
 
     // Tạo Session ID và Khóa mã hóa E2EE 256-bit cố định cho ca bệnh này
@@ -2116,10 +2140,9 @@ function getPatientInfoFromDOM() {
 
     if (event === 'device_info' && payload.device) {
       updateConnectedDeviceUI(payload.device, 'cloud');
-      return;
     }
 
-    if (event === 'patient_req') {
+    if (event === 'patient_req' || (event === 'device_info' && payload.device)) {
       const check = validateClinicalContext();
       if (!check.valid) {
         console.warn(`[CamSync] patient_req bị từ chối do vi phạm an toàn lâm sàng: ${check.code}`);
@@ -2511,7 +2534,11 @@ function getPatientInfoFromDOM() {
           conn.on('data', async (payload) => {
             if (!payload) return;
 
-            if (payload.type === 'REQ_PATIENT_INFO') {
+            if (payload.type === 'DEVICE_INFO' && payload.device) {
+              updateConnectedDeviceUI(payload.device, 'webrtc');
+            }
+
+            if (payload.type === 'REQ_PATIENT_INFO' || payload.type === 'DEVICE_INFO') {
               const check = validateClinicalContext();
               if (check.valid && conn.open) {
                 const patient = activeClinicalSession ? activeClinicalSession.patient : check.currentContext.patient;
