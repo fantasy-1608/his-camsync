@@ -95,7 +95,14 @@
 
       // An upload iframe must prove its own patient and encounter. IDs from its parent
       // banner and a different child form are never combined into a synthetic context.
-      const uploadDocs = docsToScan.filter((doc) => doc?.getElementById?.('btnUpload'));
+      // Nhận diện biểu mẫu upload: Cận lâm sàng (#btnUpload) hoặc Quản lý bệnh án / Phiếu Scan (#btnCamSyncPhieuScan, #fileUpload + nút Lưu/Scan/Ký số)
+      const isUploadOrScanDoc = (doc) => Boolean(
+        doc?.getElementById?.('btnUpload') ||
+        doc?.getElementById?.('btnCamSyncPhieuScan') ||
+        (doc?.getElementById?.('fileUpload') && (doc?.getElementById?.('btnLuu') || doc?.getElementById?.('btnScan') || doc?.getElementById?.('btnKySo'))) ||
+        (doc?.location?.href && /ThemPhieu|PhieuScan|PhieuKySo/i.test(doc.location.href))
+      );
+      const uploadDocs = docsToScan.filter(isUploadOrScanDoc);
       const candidates = uploadDocs.length ? uploadDocs : docsToScan;
       const complete = [];
       const partial = [];
@@ -104,14 +111,20 @@
         const bannerEl = ['tabTTBN', 'patientInfo', 'thongtinbenhnhan', 'patientBanner']
           .map((id) => targetDoc.getElementById?.(id)).find(Boolean);
         const bannerText = String(bannerEl?.innerText || bannerEl?.textContent || targetDoc.body.innerText || targetDoc.body.textContent || '');
-        const patients = unique([
+        let patients = unique([
           ...collectFields(targetDoc, ['maBenhNhan', 'txtMaBN', 'patientId', 'hidMABENHNHAN']),
           ...collectText(bannerText, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
-        let directEncounters = unique([
-          ...collectFields(targetDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId', 'hidKHAMBENHID']),
-          ...collectText(bannerText, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
-        ]);
+
+        // Ưu tiên mã lượt khám nội bộ (hidKHAMBENHID / maLuotKham) trước số vào viện
+        const primaryEncounters = collectFields(targetDoc, ['hidKHAMBENHID', 'maLuotKham', 'encounterId']);
+        let directEncounters = primaryEncounters.length
+          ? unique(primaryEncounters)
+          : unique([
+              ...collectFields(targetDoc, ['soVaoVien', 'maVaoVien', 'txtSoVaoVien']),
+              ...collectText(bannerText, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+            ]);
+
         if (!directEncounters.length) {
           const urlParams = targetDoc.location?.search ? new URLSearchParams(targetDoc.location.search) : null;
           const mbpId = validId(targetDoc.getElementById?.('hdfIDMauBenhPham')?.value) || validId(urlParams?.get('idmaubenhpham'));
@@ -122,11 +135,49 @@
             directEncounters = [clsId];
           }
         }
-        const encounters = directEncounters;
+
         const orders = unique([
           ...collectFields(targetDoc, ['maPhieuChiDinh', 'soPhieu', 'txtMaPhieu', 'orderId', 'hdfSoPhieu', 'txtSOPHIEU']),
           ...collectText(bannerText, /(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
+
+        // Kế thừa ngữ cảnh bệnh nhân cho biểu mẫu con (QLBA / Phiếu Scan lồng trong iframe cha NTU01H101_DayLaiBenhAn)
+        let inheritedDoc = null;
+        if (!patients.length || !directEncounters.length) {
+          let curWin = targetDoc.defaultView;
+          while (curWin && curWin !== curWin.parent) {
+            try {
+              const pDoc = curWin.parent.document;
+              if (pDoc && pDoc.body) {
+                if (!patients.length) {
+                  const pPatients = unique([
+                    ...collectFields(pDoc, ['maBenhNhan', 'txtMaBN', 'patientId', 'hidMABENHNHAN']),
+                    ...collectText(pDoc.getElementById?.('tabTTBN')?.innerText || pDoc.body?.innerText || '', /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+                  ]);
+                  if (pPatients.length) {
+                    patients = pPatients;
+                    inheritedDoc = pDoc;
+                  }
+                }
+                if (!directEncounters.length) {
+                  const pPrimaryEnc = collectFields(pDoc, ['hidKHAMBENHID', 'maLuotKham', 'encounterId']);
+                  const pEncounters = pPrimaryEnc.length ? unique(pPrimaryEnc) : unique([
+                    ...collectFields(pDoc, ['soVaoVien', 'maVaoVien', 'txtSoVaoVien']),
+                    ...collectText(pDoc.body?.innerText || '', /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+                  ]);
+                  if (pEncounters.length) {
+                    directEncounters = pEncounters;
+                    inheritedDoc = inheritedDoc || pDoc;
+                  }
+                }
+                if (patients.length && directEncounters.length) break;
+              }
+            } catch (e) { break; }
+            curWin = curWin.parent;
+          }
+        }
+
+        const encounters = directEncounters;
 
         if (patients.length > 1 || encounters.length > 1 || orders.length > 1) {
           return invalid('Thông tin bệnh nhân, lượt khám hoặc phiếu chỉ định trên HIS không thống nhất');
@@ -136,20 +187,27 @@
         }
         partial.push({ patientId: patients[0] || null, encounterId: encounters[0] || null });
         if (patients.length && encounters.length) {
+          const docForDemographics = inheritedDoc || targetDoc;
           // Bóc tách tên bệnh nhân đa tầng (DOM hidden/label QLBA + bannerText)
           let patientName = targetDoc.getElementById?.('lblTENBENHNHAN')?.innerText?.trim() ||
+                            docForDemographics.getElementById?.('lblTENBENHNHAN')?.innerText?.trim() ||
                             targetDoc.getElementById?.('hidTENBENHNHAN')?.value?.trim() ||
+                            docForDemographics.getElementById?.('hidTENBENHNHAN')?.value?.trim() ||
                             targetDoc.getElementById?.('lblMSG_TENBENHNHAN')?.innerText?.trim() ||
+                            docForDemographics.getElementById?.('lblMSG_TENBENHNHAN')?.innerText?.trim() ||
                             targetDoc.getElementById?.('txtTENBENHNHAN')?.value?.trim() ||
-                            targetDoc.getElementById?.('txtHoTen')?.value?.trim() || null;
+                            docForDemographics.getElementById?.('txtTENBENHNHAN')?.value?.trim() ||
+                            targetDoc.getElementById?.('txtHoTen')?.value?.trim() ||
+                            docForDemographics.getElementById?.('txtHoTen')?.value?.trim() || null;
 
           if (!patientName) {
-            const nameMatch = bannerText.match(/Tên\s*(?:bệnh\s*nhân|BN)[:\s]+([^\n\r-]+)/i);
+            const nameMatch = bannerText.match(/Tên\s*(?:bệnh\s*nhân|BN)[:\s]+([^\n\r-]+)/i) ||
+                              docForDemographics.body?.innerText?.match(/Tên\s*(?:bệnh\s*nhân|BN)[:\s]+([^\n\r-]+)/i);
             if (nameMatch) patientName = nameMatch[1].trim();
           }
 
           if (!patientName) {
-            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value || docForDemographics.getElementById?.('hidTHONGTINBN')?.value;
             if (thongTin && thongTin.includes('/')) {
               patientName = thongTin.split('/')[0].trim();
             }
@@ -157,16 +215,16 @@
 
           // Bóc tách tuổi / năm sinh
           let patientAge = '';
-          const ageMatch = bannerText.match(/Tuổi:\s*([0-9]+)/i);
+          const ageMatch = bannerText.match(/Tuổi:\s*([0-9]+)/i) || docForDemographics.body?.innerText?.match(/Tuổi:\s*([0-9]+)/i);
           if (ageMatch) {
             patientAge = ageMatch[1];
           } else {
-            const namSinhVal = targetDoc.getElementById?.('hidNAMSINH')?.value;
+            const namSinhVal = targetDoc.getElementById?.('hidNAMSINH')?.value || docForDemographics.getElementById?.('hidNAMSINH')?.value;
             const namSinh = namSinhVal ? parseInt(namSinhVal, 10) : null;
             if (namSinh && namSinh > 1900 && namSinh <= new Date().getFullYear()) {
               patientAge = `${new Date().getFullYear() - namSinh} tuổi`;
             } else {
-              const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+              const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value || docForDemographics.getElementById?.('hidTHONGTINBN')?.value;
               if (thongTin && thongTin.includes('/')) {
                 const parts = thongTin.split('/');
                 if (parts[1]) {
@@ -181,11 +239,11 @@
 
           // Bóc tách giới tính
           let patientGender = '';
-          const genderVal = targetDoc.getElementById?.('hidGIOITINH')?.value;
+          const genderVal = targetDoc.getElementById?.('hidGIOITINH')?.value || docForDemographics.getElementById?.('hidGIOITINH')?.value;
           if (genderVal && genderVal !== '-1' && genderVal !== '1') {
             patientGender = genderVal;
           } else {
-            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value || docForDemographics.getElementById?.('hidTHONGTINBN')?.value;
             if (thongTin && thongTin.includes('/')) {
               const parts = thongTin.split('/');
               if (parts[2]) patientGender = parts[2].trim();
@@ -202,8 +260,14 @@
         const observed = partial[0] || {};
         return invalid('Không tìm thấy mã bệnh nhân và mã lượt khám cùng trong biểu mẫu HIS đang thao tác', observed.patientId, observed.encounterId);
       }
-      const selected = complete[0];
-      if (complete.some((ctx) => ctx.patientId !== selected.patientId || ctx.encounterId !== selected.encounterId || ctx.orderId !== selected.orderId)) {
+      // Ưu tiên ứng viên có đầy đủ orderId (ví dụ phiếu scan cụ thể thay vì màn hình tổng quan)
+      const selected = complete.find((ctx) => ctx.orderId) || complete[0];
+      const hasConflict = complete.some((ctx) =>
+        ctx.patientId !== selected.patientId ||
+        ctx.encounterId !== selected.encounterId ||
+        (ctx.orderId && selected.orderId && ctx.orderId !== selected.orderId)
+      );
+      if (hasConflict) {
         return invalid('Có nhiều biểu mẫu HIS với ngữ cảnh lâm sàng khác nhau');
       }
       for (const otherDoc of docsToScan) {
@@ -212,13 +276,21 @@
           .map((id) => otherDoc.getElementById?.(id)).find(Boolean);
         const text = String(banner?.innerText || banner?.textContent || '');
         const otherPatients = unique([
-          ...collectFields(otherDoc, ['maBenhNhan', 'txtMaBN', 'patientId']),
+          ...collectFields(otherDoc, ['maBenhNhan', 'txtMaBN', 'patientId', 'hidMABENHNHAN']),
           ...collectText(text, /Mã\s*(?:bệnh\s*nhân|BN):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
-        const otherEncounters = unique(collectFields(otherDoc, ['maLuotKham', 'soVaoVien', 'maVaoVien', 'txtSoVaoVien', 'encounterId']));
-        if (otherPatients.some((id) => id !== selected.patientId) ||
-            otherEncounters.some((id) => id !== selected.encounterId)) {
+        const otherPrimaryEnc = collectFields(otherDoc, ['hidKHAMBENHID', 'maLuotKham', 'encounterId']);
+        const otherEncounters = otherPrimaryEnc.length ? unique(otherPrimaryEnc) : unique([
+          ...collectFields(otherDoc, ['soVaoVien', 'maVaoVien', 'txtSoVaoVien']),
+          ...collectText(text, /(?:Mã\s*lượt\s*khám|Mã\s*LK|Số\s*vào\s*viện|Số\s*VV|Mã\s*vào\s*viện|Mã\s*đợt\s*khám|Lượt\s*khám):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
+        ]);
+        if (otherPatients.some((id) => id !== selected.patientId)) {
           return invalid('Ngữ cảnh biểu mẫu tải ảnh khác ngữ cảnh HIS chính');
+        }
+        if (otherEncounters.some((id) => id !== selected.encounterId)) {
+          if (otherPrimaryEnc.length && otherPrimaryEnc.some((id) => id !== selected.encounterId)) {
+            return invalid('Ngữ cảnh biểu mẫu tải ảnh khác ngữ cảnh HIS chính');
+          }
         }
       }
       return {

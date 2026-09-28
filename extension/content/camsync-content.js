@@ -957,17 +957,18 @@ function getPatientInfoFromDOM() {
     btn.innerHTML = '<span class="glyphicon glyphicon-phone" aria-hidden="true"></span> Nhập từ ĐT';
     btn.title = 'Chụp giấy tờ từ điện thoại, chuyển PDF đính kèm vào phiếu';
     btn.addEventListener('click', () => {
-      // Gửi message lên frame cha (nơi có patient context) để mở QR modal
+      // Gửi message lên frame cao nhất (top window) để quản trị phiên tập trung, tránh duplicate
       try {
         const msg = { type: 'CAMSYNC_OPEN_QR', source: 'phieu-scan', specialty: 'document' };
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(msg, '*');
-        }
-        if (window.top && window.top !== window && window.top !== window.parent) {
+        if (window.top && window.top !== window) {
           window.top.postMessage(msg, '*');
+        } else if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, '*');
+        } else {
+          openQrModal({ specialty: 'document' });
         }
       } catch (e) {
-        console.warn('[CamSync] Không gửi được message lên frame cha:', e);
+        console.warn('[CamSync] Không gửi được message mở modal:', e);
       }
     });
 
@@ -983,7 +984,11 @@ function getPatientInfoFromDOM() {
   window.addEventListener('message', (evt) => {
     try {
       if (evt.data && evt.data.type === 'CAMSYNC_OPEN_QR' && evt.data.source === 'phieu-scan') {
-        openQrModal({ specialty: evt.data.specialty || 'document' });
+        // CHỈ top window (hoặc window cha cao nhất nếu top không accessible) mở QR modal
+        // để loại bỏ triệt để xung đột phiên & duplicate peer connection giữa các iframe
+        if (window === window.top || !window.top) {
+          openQrModal({ specialty: evt.data.specialty || 'document' });
+        }
       }
     } catch (e) {}
   });

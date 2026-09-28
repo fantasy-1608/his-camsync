@@ -73,6 +73,42 @@ parent.querySelectorAll = (selector) => selector === 'iframe'
 assert.equal(guard.getClinicalContextFromDOM(() => parent).valid, false,
   'parent patient and upload iframe cannot disagree');
 
+// VNPT HIS QLBA (BenhAn / PhieuScan) nested iframe context inheritance verification
+const baParentDoc = {
+  body: { innerText: '' },
+  fields: {
+    hidMABENHNHAN: { value: '25046905' },
+    hidKHAMBENHID: { value: '1779332' },
+    lblTENBENHNHAN: { innerText: 'NGUYỄN THỊ THÚY HẰNG' }
+  },
+  getElementById: function (id) { return this.fields[id] || null; }
+};
+const phieuScanChildDoc = {
+  body: { innerText: '' },
+  fields: {
+    txtSOPHIEU: { value: 'SCAN.260928.1' },
+    fileUpload: { disabled: false, files: [] },
+    btnCamSyncPhieuScan: {},
+    btnLuu: {}
+  },
+  defaultView: {
+    parent: {
+      document: baParentDoc
+    }
+  },
+  getElementById: function (id) { return this.fields[id] || null; }
+};
+baParentDoc.querySelectorAll = (selector) => selector === 'iframe'
+  ? [{ contentDocument: phieuScanChildDoc }] : [];
+phieuScanChildDoc.querySelectorAll = () => [];
+
+const qlbaContext = guard.getClinicalContextFromDOM(() => baParentDoc);
+assert.equal(qlbaContext.valid, true, 'QLBA Phieu Scan inherits patient and encounter from parent dialog');
+assert.equal(qlbaContext.patient.id, '25046905', 'QLBA patientId correctly inherited');
+assert.equal(qlbaContext.encounter.id, '1779332', 'QLBA encounterId correctly inherited');
+assert.equal(qlbaContext.encounter.orderId, 'SCAN.260928.1', 'QLBA orderId correctly captured from txtSOPHIEU');
+assert.equal(qlbaContext.patient.name, 'NGUYỄN THỊ THÚY HẰNG', 'QLBA patient name correctly inherited');
+
 await desktop.audit.clear();
 await desktop.audit.log('HIS_UNKNOWN', {
   sid: 'raw-session', patientRef: 'P***1', filename: 'ECG_P1.jpg',
