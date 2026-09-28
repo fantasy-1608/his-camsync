@@ -52,14 +52,16 @@
     PATIENT_ID_INPUTS: Object.freeze([
       '#maBenhNhan',
       '#txtMaBN',
-      '#patientId'
+      '#patientId',
+      '#hidMABENHNHAN'
     ]),
     ENCOUNTER_ID_INPUTS: Object.freeze([
       '#maLuotKham',
       '#soVaoVien',
       '#maVaoVien',
       '#txtSoVaoVien',
-      '#encounterId'
+      '#encounterId',
+      '#hidKHAMBENHID'
     ]),
     ORDER_ID_INPUTS: Object.freeze([
       '#hdfSoPhieu',
@@ -67,7 +69,8 @@
       '#maPhieuChiDinh',
       '#soPhieu',
       '#txtMaPhieu',
-      '#orderId'
+      '#orderId',
+      '#txtSOPHIEU'
     ]),
     PERSISTENCE_CONTAINERS: Object.freeze([
       '#list',

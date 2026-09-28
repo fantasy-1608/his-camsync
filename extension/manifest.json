@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HIS CamSync - Đồng Bộ Ảnh & ECG Cận Lâm Sàng",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Đồng bộ ảnh chụp ECG giấy, siêu âm và quét tài liệu PDF nhiều trang trực tiếp từ điện thoại vào VNPT HIS qua WebRTC P2P.",
   "icons": {
     "16": "icons/icon16.png",

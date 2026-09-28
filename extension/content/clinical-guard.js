@@ -56,15 +56,21 @@
         docsToScan.push(document);
       }
 
-      // Quét thêm các iframe con cùng nguồn (ví dụ: dialog chẩn đoán hình ảnh dlgSuaKetQuaifmView)
-      for (const d of [...docsToScan]) {
+      // Quét đệ quy toàn bộ iframe con cùng nguồn (dialog CĐHA, QLBA, Phiếu Scan lồng nhau)
+      const scannedDocs = new Set(docsToScan);
+      const queue = [...docsToScan];
+      while (queue.length > 0) {
+        const d = queue.shift();
+        if (!d) continue;
         try {
           const iframes = d.querySelectorAll ? d.querySelectorAll('iframe') : [];
           for (const f of iframes) {
             try {
               const fd = f.contentDocument || f.contentWindow?.document;
-              if (fd && !docsToScan.includes(fd)) {
+              if (fd && !scannedDocs.has(fd)) {
+                scannedDocs.add(fd);
                 docsToScan.push(fd);
+                queue.push(fd);
               }
             } catch (fe) {}
           }
@@ -74,7 +80,7 @@
       const invalid = (reason, patientId = null, encounterId = null) => ({
         valid: false,
         reason,
-        patient: { id: patientId, name: null, age: '' },
+        patient: { id: patientId, name: null, age: '', gender: '' },
         encounter: { id: encounterId, orderId: null },
         hisContext: null,
         fingerprint: null
@@ -118,7 +124,7 @@
         }
         const encounters = directEncounters;
         const orders = unique([
-          ...collectFields(targetDoc, ['maPhieuChiDinh', 'soPhieu', 'txtMaPhieu', 'orderId', 'hdfSoPhieu']),
+          ...collectFields(targetDoc, ['maPhieuChiDinh', 'soPhieu', 'txtMaPhieu', 'orderId', 'hdfSoPhieu', 'txtSOPHIEU']),
           ...collectText(bannerText, /(?:Mã\s*phiếu(?:\s*chỉ\s*định)?|Mã\s*chỉ\s*định|Số\s*phiếu|Mã\s*y\s*lệnh):\s*([A-Za-z0-9][A-Za-z0-9_.\/-]*)/gi)
         ]);
 
@@ -130,11 +136,65 @@
         }
         partial.push({ patientId: patients[0] || null, encounterId: encounters[0] || null });
         if (patients.length && encounters.length) {
-          const nameMatch = bannerText.match(/Tên\s*(?:bệnh\s*nhân|BN):\s*([^-\n]+)/i);
+          // Bóc tách tên bệnh nhân đa tầng (DOM hidden/label QLBA + bannerText)
+          let patientName = targetDoc.getElementById?.('lblTENBENHNHAN')?.innerText?.trim() ||
+                            targetDoc.getElementById?.('hidTENBENHNHAN')?.value?.trim() ||
+                            targetDoc.getElementById?.('lblMSG_TENBENHNHAN')?.innerText?.trim() ||
+                            targetDoc.getElementById?.('txtTENBENHNHAN')?.value?.trim() ||
+                            targetDoc.getElementById?.('txtHoTen')?.value?.trim() || null;
+
+          if (!patientName) {
+            const nameMatch = bannerText.match(/Tên\s*(?:bệnh\s*nhân|BN)[:\s]+([^\n\r-]+)/i);
+            if (nameMatch) patientName = nameMatch[1].trim();
+          }
+
+          if (!patientName) {
+            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+            if (thongTin && thongTin.includes('/')) {
+              patientName = thongTin.split('/')[0].trim();
+            }
+          }
+
+          // Bóc tách tuổi / năm sinh
+          let patientAge = '';
           const ageMatch = bannerText.match(/Tuổi:\s*([0-9]+)/i);
+          if (ageMatch) {
+            patientAge = ageMatch[1];
+          } else {
+            const namSinhVal = targetDoc.getElementById?.('hidNAMSINH')?.value;
+            const namSinh = namSinhVal ? parseInt(namSinhVal, 10) : null;
+            if (namSinh && namSinh > 1900 && namSinh <= new Date().getFullYear()) {
+              patientAge = `${new Date().getFullYear() - namSinh} tuổi`;
+            } else {
+              const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+              if (thongTin && thongTin.includes('/')) {
+                const parts = thongTin.split('/');
+                if (parts[1]) {
+                  const ns = parseInt(parts[1].trim(), 10);
+                  if (ns && ns > 1900 && ns <= new Date().getFullYear()) {
+                    patientAge = `${new Date().getFullYear() - ns} tuổi`;
+                  }
+                }
+              }
+            }
+          }
+
+          // Bóc tách giới tính
+          let patientGender = '';
+          const genderVal = targetDoc.getElementById?.('hidGIOITINH')?.value;
+          if (genderVal && genderVal !== '-1' && genderVal !== '1') {
+            patientGender = genderVal;
+          } else {
+            const thongTin = targetDoc.getElementById?.('hidTHONGTINBN')?.value;
+            if (thongTin && thongTin.includes('/')) {
+              const parts = thongTin.split('/');
+              if (parts[2]) patientGender = parts[2].trim();
+            }
+          }
+
           complete.push({
             patientId: patients[0], encounterId: encounters[0], orderId: orders[0] || null,
-            patientName: nameMatch?.[1]?.trim() || null, patientAge: ageMatch?.[1] || ''
+            patientName: patientName || null, patientAge: patientAge || '', patientGender: patientGender || ''
           });
         }
       }
@@ -163,7 +223,7 @@
       }
       return {
         valid: true,
-        patient: { id: selected.patientId, name: selected.patientName, age: selected.patientAge },
+        patient: { id: selected.patientId, name: selected.patientName, age: selected.patientAge, gender: selected.patientGender || '' },
         encounter: { id: selected.encounterId, orderId: selected.orderId, accessionNumber: null },
         hisContext: {
           pathname: typeof window !== 'undefined' ? window.location.pathname : '',
