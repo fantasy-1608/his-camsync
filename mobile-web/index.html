@@ -468,7 +468,7 @@
   <script src="js/vendor/peerjs.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.2';
-    import { P2PClient } from './js/p2p-client.js?v=2.0.5';
+    import { P2PClient } from './js/p2p-client.js?v=2.0.6';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
     import { unwarpDocument } from './js/perspective.js?v=2.0.2';
 
@@ -604,13 +604,17 @@
       if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 
+    // Cấu hình lưu trữ phiên ngắn hạn phòng ngừa mất phiên khi kéo vuốt làm mới trang (Pull-to-refresh)
+    const SESSION_STORAGE_KEY = 'camsync_mobile_session';
+    const SESSION_MAX_AGE_MS = 5 * 60 * 1000; // 5 phút TTL
+
     // Trích xuất session_id, key & gen từ URL hash fragment hoặc query
     let initialSessionId = null;
     let initialCryptoKey = null;
     let initialGeneration = null;
     let initialSpecialty = null;
     if (window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
       initialSessionId = hashParams.get('session');
       initialCryptoKey = hashParams.get('key');
       initialSpecialty = hashParams.get('specialty') || hashParams.get('mode');
@@ -632,6 +636,39 @@
           if (!isNaN(parsedGen)) initialGeneration = parsedGen;
         }
       }
+    }
+
+    // Khôi phục phiên hợp lệ từ sessionStorage nếu trang được tải lại mà mất hash
+    if (!initialSessionId) {
+      try {
+        const cachedStr = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (cached && cached.sessionId && cached.cryptoKey && (Date.now() - cached.timestamp < SESSION_MAX_AGE_MS)) {
+            initialSessionId = cached.sessionId;
+            initialCryptoKey = cached.cryptoKey;
+            if (initialGeneration === null && cached.generation !== undefined) {
+              initialGeneration = cached.generation;
+            }
+            if (!initialSpecialty && cached.specialty) {
+              initialSpecialty = cached.specialty;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Ghi nhớ phiên hợp lệ vào sessionStorage
+    if (initialSessionId && initialCryptoKey) {
+      try {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+          sessionId: initialSessionId,
+          cryptoKey: initialCryptoKey,
+          generation: initialGeneration,
+          specialty: initialSpecialty,
+          timestamp: Date.now()
+        }));
+      } catch (_) {}
     }
 
     // Làm sạch thanh địa chỉ ngay lập tức để bảo mật thông tin phiên
@@ -833,6 +870,9 @@
         }
       },
       onSessionClosed: (payload) => {
+        try {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        } catch (_) {}
         const reason = payload?.reason;
         const msg = (reason === 'session_expired')
           ? '⏰ Phiên chụp đã hết hạn (5 phút). Vui lòng quét lại mã QR trên máy tính.'
@@ -848,17 +888,28 @@
           patientIdBadgeEl.textContent = patient.id ? `BN: ${patient.id}` : 'BN: ---';
           
           const metaParts = [];
-          if (patient.age) metaParts.push(patient.age);
+          if (patient.age) {
+            metaParts.push(typeof patient.age === 'number' ? `${patient.age} tuổi` : String(patient.age));
+          }
           if (patient.gender) metaParts.push(patient.gender);
           if (patient.room) metaParts.push(`Buồng ${patient.room}`);
           if (patient.department) metaParts.push(patient.department);
 
           patientDemographicsEl.textContent = metaParts.length > 0 ? metaParts.join(' • ') : 'Đã kết nối hồ sơ lâm sàng';
+          triggerHaptic('success');
         }
       }
     });
 
-    p2p.connect();
+    if (initialSessionId && initialCryptoKey) {
+      p2p.connect();
+    } else {
+      statusBadge.classList.add('disconnected');
+      statusText.textContent = 'Chờ quét mã QR trên máy tính';
+      patientNameEl.textContent = 'Chưa quét mã QR';
+      patientIdBadgeEl.textContent = 'BN: ---';
+      patientDemographicsEl.textContent = 'Vui lòng quét mã QR từ màn hình HIS để kết nối';
+    }
 
     // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ)
     const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
@@ -971,6 +1022,55 @@
     } else if (initialSpecialty === 'ultrasound') {
       switchSpecialty('ultrasound');
     }
+
+    // Lắng nghe sự kiện hashchange khi người dùng quét mã mới từ Camera trong lúc trang web đang mở sẵn
+    window.addEventListener('hashchange', async () => {
+      if (!window.location.hash) return;
+      const rawHash = window.location.hash.replace(/^#[/?]*/, '');
+      const hashParams = new URLSearchParams(rawHash);
+      const newSessionId = hashParams.get('session');
+      const newCryptoKey = hashParams.get('key');
+      const newSpecialty = hashParams.get('specialty') || hashParams.get('mode');
+      const genParam = hashParams.get('gen');
+      const newGeneration = (genParam !== null && genParam !== '') ? parseInt(genParam, 10) : 1;
+
+      if (newSessionId && newCryptoKey) {
+        console.log('[CamSync Mobile] Quét mã mới qua hashchange:', newSessionId);
+
+        try {
+          sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+            sessionId: newSessionId,
+            cryptoKey: newCryptoKey,
+            generation: newGeneration,
+            specialty: newSpecialty,
+            timestamp: Date.now()
+          }));
+        } catch (_) {}
+
+        try {
+          window.history.replaceState(null, '', window.location.pathname);
+        } catch (_) {}
+
+        patientNameEl.textContent = 'Chờ đồng bộ bệnh nhân...';
+        patientIdBadgeEl.textContent = 'BN: ---';
+        patientDemographicsEl.textContent = 'Đang đồng bộ hồ sơ lâm sàng...';
+        statusBadge.classList.add('disconnected');
+        statusText.textContent = 'Đang kết nối...';
+
+        if (newSpecialty === 'document') {
+          switchSpecialty('document');
+          loadJsPdf().catch(() => {});
+        } else if (newSpecialty === 'ultrasound') {
+          switchSpecialty('ultrasound');
+        } else if (newSpecialty === 'ecg') {
+          switchSpecialty('ecg');
+        }
+
+        if (p2p && typeof p2p.updateSession === 'function') {
+          await p2p.updateSession(newSessionId, newCryptoKey, newGeneration);
+        }
+      }
+    });
 
     // Trigger Camera & Gallery
     btnTriggerCapture.addEventListener('click', () => cameraInput.click());

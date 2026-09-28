@@ -232,6 +232,7 @@ export class P2PClient {
 
     // Architectural Status: P1-03 Channel Privacy Boundary
     this.channelStatus = 'PRIVATE_CHANNEL_PENDING';
+    this.patientReqRetryTimer = null;
 
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onPatientInfo = options.onPatientInfo || (() => {});
@@ -242,7 +243,7 @@ export class P2PClient {
   getGenerationFromUrl() {
     if (typeof window !== 'undefined') {
       if (window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
         const genVal = hashParams.get('gen');
         if (genVal !== null && genVal !== '') {
           const parsed = parseInt(genVal, 10);
@@ -257,6 +258,14 @@ export class P2PClient {
           if (!isNaN(parsed)) return parsed;
         }
       }
+      try {
+        if (window.sessionStorage) {
+          const cached = JSON.parse(window.sessionStorage.getItem('camsync_mobile_session') || 'null');
+          if (cached && typeof cached.generation === 'number' && (Date.now() - cached.timestamp < 300000)) {
+            return cached.generation;
+          }
+        }
+      } catch (_) {}
     }
     return undefined;
   }
@@ -264,7 +273,7 @@ export class P2PClient {
   getSessionIdFromUrl() {
     if (typeof window !== 'undefined') {
       if (window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
         const sid = hashParams.get('session');
         if (sid) return sid;
       }
@@ -273,6 +282,14 @@ export class P2PClient {
         const sid = params.get('session');
         if (sid) return sid;
       }
+      try {
+        if (window.sessionStorage) {
+          const cached = JSON.parse(window.sessionStorage.getItem('camsync_mobile_session') || 'null');
+          if (cached && cached.sessionId && (Date.now() - cached.timestamp < 300000)) {
+            return cached.sessionId;
+          }
+        }
+      } catch (_) {}
     }
     return generateSecureToken();
   }
@@ -281,12 +298,22 @@ export class P2PClient {
     let key = null;
     if (typeof window !== 'undefined') {
       if (window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
         key = hashParams.get('key');
       }
       if (!key && window.location.search) {
         const params = new URLSearchParams(window.location.search);
         key = params.get('key');
+      }
+      if (!key) {
+        try {
+          if (window.sessionStorage) {
+            const cached = JSON.parse(window.sessionStorage.getItem('camsync_mobile_session') || 'null');
+            if (cached && cached.cryptoKey && (Date.now() - cached.timestamp < 300000)) {
+              key = cached.cryptoKey;
+            }
+          }
+        } catch (_) {}
       }
       // Scrub key from URL immediately so it never leaks into browser history or logs
       if (key && window.history && typeof window.history.replaceState === 'function') {
@@ -425,6 +452,7 @@ export class P2PClient {
         // Báo cho máy bàn thông tin thiết bị và yêu cầu dữ liệu bệnh nhân qua RAM broadcast
         this.broadcast('device_info', { device: this.getDeviceMetadata() });
         this.broadcast('patient_req', {});
+        this.startPatientReqRetry();
       };
 
       this.realtimeWs.onmessage = async (e) => {
@@ -432,6 +460,12 @@ export class P2PClient {
           const msg = JSON.parse(e.data);
           let subEvent = null;
           let subPayload = null;
+
+          if (msg.event === 'phx_reply' && (msg.payload?.status === 'ok' || msg.payload?.response?.status === 'ok')) {
+            // Xác nhận đã join channel thành công -> chủ động gửi lại yêu cầu thông tin bệnh nhân
+            this.broadcast('device_info', { device: this.getDeviceMetadata() });
+            this.broadcast('patient_req', {});
+          }
 
           if (msg.event === 'broadcast' && msg.payload && typeof msg.payload === 'object' && msg.payload.event) {
             subEvent = msg.payload.event;
@@ -471,6 +505,7 @@ export class P2PClient {
             }
 
             if (patientObj) {
+              this.stopPatientReqRetry();
               if (typeof subPayload.generation === 'number') {
                 this.generation = subPayload.generation;
               }
@@ -562,6 +597,7 @@ export class P2PClient {
   }
 
   closeRealtime() {
+    this.stopPatientReqRetry();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -714,6 +750,7 @@ export class P2PClient {
         // Gửi thông tin thiết bị và yêu cầu dữ liệu bệnh nhân
         this.conn.send({ type: 'DEVICE_INFO', device: this.getDeviceMetadata() });
         this.conn.send({ type: 'REQ_PATIENT_INFO' });
+        this.startPatientReqRetry();
       } catch (e) {}
     });
 
@@ -747,6 +784,7 @@ export class P2PClient {
         }
 
         if (patientObj) {
+          this.stopPatientReqRetry();
           if (typeof data.generation === 'number') {
             this.generation = data.generation;
           }
@@ -1260,8 +1298,63 @@ export class P2PClient {
     });
   }
 
+  startPatientReqRetry() {
+    this.stopPatientReqRetry();
+    let retryCount = 0;
+    this.patientReqRetryTimer = setInterval(() => {
+      retryCount++;
+      if (this.patientInfo || retryCount >= 5 || this.isSessionIntentionallyClosed) {
+        this.stopPatientReqRetry();
+        return;
+      }
+      if (this.isCloudReady) {
+        this.broadcast('patient_req', {});
+      }
+      if (this.conn && this.conn.open) {
+        try { this.conn.send({ type: 'REQ_PATIENT_INFO' }); } catch (_) {}
+      }
+    }, 1200);
+  }
+
+  stopPatientReqRetry() {
+    if (this.patientReqRetryTimer) {
+      clearInterval(this.patientReqRetryTimer);
+      this.patientReqRetryTimer = null;
+    }
+  }
+
+  async updateSession(sessionId, cryptoKeyHex, generation) {
+    if (!sessionId || !cryptoKeyHex) return;
+    this.sessionId = sessionId;
+    this.encryptionKeyHex = cryptoKeyHex;
+    this.cryptoKey = await importAesGcmKey(cryptoKeyHex);
+    this.generation = Number.isSafeInteger(generation) ? generation : 1;
+    this.isSessionIntentionallyClosed = false;
+    this.patientInfo = null;
+    this.channelStatus = 'PRIVATE_CHANNEL_READY';
+
+    this.stopPatientReqRetry();
+    this.closeRealtime();
+
+    if (this.p2pRetryTimer) {
+      clearTimeout(this.p2pRetryTimer);
+      this.p2pRetryTimer = null;
+    }
+    if (this.conn) {
+      try { this.conn.close(); } catch (_) {}
+      this.conn = null;
+    }
+    if (this.peer && !this.peer.destroyed) {
+      try { this.peer.destroy(); } catch (_) {}
+      this.peer = null;
+    }
+
+    await this.connect();
+  }
+
   destroy() {
     this.isSessionIntentionallyClosed = true;
+    this.stopPatientReqRetry();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
