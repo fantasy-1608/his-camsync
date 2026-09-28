@@ -519,10 +519,65 @@
     let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
     let currentFilter = 'normal';
 
-    // Document Scan State
-    let docPages = []; // Array of { file: File, thumbnail: string (dataURL) }
+    // =========================================================================
+    // Document Scan State & Elements (Hoisted to prevent TDZ ReferenceError)
+    // =========================================================================
+    let docPages = []; // Array of { id, originalDataUrl, processedDataUrl, thumbnail, rotation, cropRect }
     let docSelectedIndex = -1;
     let docPreset = 'enhance'; // 'enhance' | 'document' | 'color'
+    let isGeneratingPdf = false;
+    let activeEditMode = null; // null | 'crop' | 'perspective'
+    let cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 }; // Normalized [0, 1]
+    let perspectiveCorners = [
+      { x: 0.06, y: 0.06 }, // TL (0)
+      { x: 0.94, y: 0.06 }, // TR (1)
+      { x: 0.94, y: 0.94 }, // BR (2)
+      { x: 0.06, y: 0.94 }  // BL (3)
+    ];
+    let activeDragCorner = -1; // 0..3
+    let activeDragHandle = null; // 'tl', 'tr', 'bl', 'br', 'move', 'new'
+    let cropTouchStart = null;
+    let editCanvasRaf = null;
+
+    const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
+    const tabDocument = document.getElementById('tabDocument');
+    const iconDocMode = document.getElementById('iconDocMode');
+    const docScreen = document.getElementById('docScreen');
+
+    const docThumbnailStrip = document.getElementById('docThumbnailStrip');
+    const btnDocAddPage = document.getElementById('btnDocAddPage');
+    const btnDocCapture = document.getElementById('btnDocCapture');
+    const btnDocGallery = document.getElementById('btnDocGallery');
+    const btnDocPreview = document.getElementById('btnDocPreview');
+    const btnDocSendPdf = document.getElementById('btnDocSendPdf');
+    const btnDocSendText = document.getElementById('btnDocSendText');
+    const docCameraInput = document.getElementById('docCameraInput');
+    const docGalleryInput = document.getElementById('docGalleryInput');
+    const docPreviewImg = document.getElementById('docPreviewImg');
+    const docPreviewImgWrap = document.getElementById('docPreviewImgWrap');
+    const docEmptyState = document.getElementById('docEmptyState');
+    const docPageNum = document.getElementById('docPageNum');
+    const docSizeEstimate = document.getElementById('docSizeEstimate');
+    const docEditToolbar = document.getElementById('docEditToolbar');
+    const btnDocRotate = document.getElementById('btnDocRotate');
+    const btnDocCrop = document.getElementById('btnDocCrop');
+    const btnDocPerspective = document.getElementById('btnDocPerspective');
+    const btnDocMoveLeft = document.getElementById('btnDocMoveLeft');
+    const btnDocMoveRight = document.getElementById('btnDocMoveRight');
+    const docCropOverlay = document.getElementById('docCropOverlay');
+    const docCropCanvas = document.getElementById('docCropCanvas');
+    const docCropHint = document.getElementById('docCropHint');
+    const docCropConfirm = document.getElementById('docCropConfirm');
+    const btnCropCancel = document.getElementById('btnCropCancel');
+    const btnCropApply = document.getElementById('btnCropApply');
+
+    // PDF Preview Modal elements
+    const docPreviewModal = document.getElementById('docPreviewModal');
+    const btnDocPreviewClose = document.getElementById('btnDocPreviewClose');
+    const btnDocModalClose = document.getElementById('btnDocModalClose');
+    const btnDocModalSend = document.getElementById('btnDocModalSend');
+    const docPreviewModalBody = document.getElementById('docPreviewModalBody');
+    const docPreviewMetaLine = document.getElementById('docPreviewMetaLine');
 
     // Haptic Feedback (Rung xúc giác nhẹ trên thiết bị di động)
     function triggerHaptic(type = 'tap') {
@@ -912,11 +967,6 @@
     }
 
     // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ)
-    const globalSpecialtyBar = document.getElementById('globalSpecialtyBar');
-    const tabDocument = document.getElementById('tabDocument');
-    const iconDocMode = document.getElementById('iconDocMode');
-    const docScreen = document.getElementById('docScreen');
-
     function switchSpecialty(spec) {
       exitCropMode();
       currentSpecialty = spec;
@@ -1447,38 +1497,7 @@
     // Document Scan Mode — Chụp giấy tờ nhiều trang, xuất PDF gửi Phiếu Scan
     // =========================================================================
 
-    const docThumbnailStrip = document.getElementById('docThumbnailStrip');
-    const btnDocAddPage = document.getElementById('btnDocAddPage');
-    const btnDocCapture = document.getElementById('btnDocCapture');
-    const btnDocGallery = document.getElementById('btnDocGallery');
-    const btnDocPreview = document.getElementById('btnDocPreview');
-    const btnDocSendPdf = document.getElementById('btnDocSendPdf');
-    const btnDocSendText = document.getElementById('btnDocSendText');
-    const docCameraInput = document.getElementById('docCameraInput');
-    const docGalleryInput = document.getElementById('docGalleryInput');
-    const docPreviewImg = document.getElementById('docPreviewImg');
-    const docPreviewImgWrap = document.getElementById('docPreviewImgWrap');
-    const docEmptyState = document.getElementById('docEmptyState');
-    const docPageNum = document.getElementById('docPageNum');
-    const docSizeEstimate = document.getElementById('docSizeEstimate');
-    const docEditToolbar = document.getElementById('docEditToolbar');
-    const btnDocRotate = document.getElementById('btnDocRotate');
-    const btnDocCrop = document.getElementById('btnDocCrop');
-    const btnDocMoveLeft = document.getElementById('btnDocMoveLeft');
-    const btnDocMoveRight = document.getElementById('btnDocMoveRight');
-    const docCropOverlay = document.getElementById('docCropOverlay');
-    const docCropCanvas = document.getElementById('docCropCanvas');
-    const docCropConfirm = document.getElementById('docCropConfirm');
-    const btnCropCancel = document.getElementById('btnCropCancel');
-    const btnCropApply = document.getElementById('btnCropApply');
 
-    // PDF Preview Modal elements
-    const docPreviewModal = document.getElementById('docPreviewModal');
-    const btnDocPreviewClose = document.getElementById('btnDocPreviewClose');
-    const btnDocModalClose = document.getElementById('btnDocModalClose');
-    const btnDocModalSend = document.getElementById('btnDocModalSend');
-    const docPreviewModalBody = document.getElementById('docPreviewModalBody');
-    const docPreviewMetaLine = document.getElementById('docPreviewMetaLine');
 
     // Helper: load HTMLImageElement from File or Blob
     function loadImageFromFile(file) {
@@ -1757,20 +1776,6 @@
     // =========================================================================
     // Touch-Based Crop & 4-Corner Perspective Warp Workspace (Full Resolution)
     // =========================================================================
-    let activeEditMode = null; // null | 'crop' | 'perspective'
-    let cropRect = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 }; // Normalized [0, 1]
-    let perspectiveCorners = [
-      { x: 0.06, y: 0.06 }, // TL (0)
-      { x: 0.94, y: 0.06 }, // TR (1)
-      { x: 0.94, y: 0.94 }, // BR (2)
-      { x: 0.06, y: 0.94 }  // BL (3)
-    ];
-    let activeDragCorner = -1; // 0..3
-    let activeDragHandle = null; // 'tl', 'tr', 'bl', 'br', 'move', 'new'
-    let cropTouchStart = null;
-
-    const btnDocPerspective = document.getElementById('btnDocPerspective');
-    const docCropHint = document.getElementById('docCropHint');
 
     function setupOverlayPosition() {
       const imgRect = docPreviewImg.getBoundingClientRect();
@@ -2094,7 +2099,6 @@
       drawEditCanvas();
     }
 
-    let editCanvasRaf = null;
     function scheduleEditCanvasDraw() {
       if (editCanvasRaf) return;
       editCanvasRaf = requestAnimationFrame(() => {
