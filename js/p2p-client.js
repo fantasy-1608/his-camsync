@@ -221,6 +221,8 @@ export class P2PClient {
     this.realtimeHeartbeatTimer = null;
     this.realtimeRefCounter = 0;
     this.p2pRetryTimer = null;
+    this.p2pRetryAttempts = 0;
+    this.maxP2PRetryAttempts = 20;
 
     // Resiliency & Backoff Reconnect (Phase 5: P1-2)
     this.reconnectAttempts = 0;
@@ -351,6 +353,11 @@ export class P2PClient {
    */
   async connect() {
     this.isSessionIntentionallyClosed = false;
+    this.p2pRetryAttempts = 0;
+    if (this.p2pRetryTimer) {
+      clearTimeout(this.p2pRetryTimer);
+      this.p2pRetryTimer = null;
+    }
     await this.initCrypto();
     console.log('[CamSync] Khởi tạo kết nối');
 
@@ -593,7 +600,29 @@ export class P2PClient {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' }
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            { urls: 'stun:openrelay.metered.ca:80' },
+            {
+              urls: 'turn:openrelay.metered.ca:80',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:openrelay.metered.ca:443',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            },
+            {
+              urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+              username: 'openrelayproject',
+              credential: 'openrelayproject'
+            }
           ]
         }
       });
@@ -605,7 +634,11 @@ export class P2PClient {
 
       this.peer.on('error', (err) => {
         console.warn('[P2P] WebRTC event error:', err.type);
-        if (!this.isCloudReady) {
+        if (err.type === 'peer-unavailable' && !this.isConnected && !this.isSessionIntentionallyClosed) {
+          this.scheduleP2PReconnect();
+        } else if (err.type === 'disconnected' && !this.isSessionIntentionallyClosed && this.peer && !this.peer.destroyed) {
+          try { this.peer.reconnect(); } catch (_) {}
+        } else if (!this.isCloudReady && !this.isConnected) {
           this.updateStatus(false, 'Đang tìm kết nối...');
         }
       });
@@ -614,21 +647,67 @@ export class P2PClient {
     }
   }
 
+  scheduleP2PReconnect() {
+    if (this.isSessionIntentionallyClosed || this.isConnected) return;
+    if (this.p2pRetryTimer) {
+      clearTimeout(this.p2pRetryTimer);
+      this.p2pRetryTimer = null;
+    }
+
+    if (this.p2pRetryAttempts >= this.maxP2PRetryAttempts) {
+      console.warn('[P2P] Quá số lần thử kết nối P2P lại');
+      if (!this.isCloudReady && !this.isConnected) {
+        this.updateStatus(false, 'Chưa tìm thấy máy tính. Chạm để thử lại');
+      }
+      return;
+    }
+
+    this.p2pRetryAttempts++;
+    const delay = Math.min(1000 + (this.p2pRetryAttempts * 300), 3000);
+    console.log(`[P2P] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.p2pRetryAttempts}/${this.maxP2PRetryAttempts})`);
+
+    if (!this.isCloudReady && !this.isConnected) {
+      this.updateStatus(false, `Đang kết nối với máy tính... (${this.p2pRetryAttempts}/${this.maxP2PRetryAttempts})`);
+    }
+
+    this.p2pRetryTimer = setTimeout(() => {
+      this.connectP2PToDesktop();
+    }, delay);
+  }
+
   connectP2PToDesktop() {
-    if (!this.peer || !this.sessionId || this.peer.destroyed) return;
+    if (!this.sessionId || this.isSessionIntentionallyClosed) return;
     if (this.conn && this.conn.open) return;
+    if (!this.peer || this.peer.destroyed) {
+      this.initWebRTC();
+      return;
+    }
+    if (this.peer.disconnected) {
+      try { this.peer.reconnect(); } catch (_) {}
+    }
+
+    if (this.conn) {
+      try { this.conn.close(); } catch (_) {}
+      this.conn = null;
+    }
 
     const desktopPeerId = `his-desktop-${this.sessionId}`;
 
     try {
       this.conn = this.peer.connect(desktopPeerId, { reliable: true });
     } catch (e) {
+      this.scheduleP2PReconnect();
       return;
     }
 
     this.conn.on('open', () => {
       console.log('[P2P] WebRTC DataChannel đã mở trực tiếp!');
       this.isConnected = true;
+      this.p2pRetryAttempts = 0;
+      if (this.p2pRetryTimer) {
+        clearTimeout(this.p2pRetryTimer);
+        this.p2pRetryTimer = null;
+      }
       this.updateStatus(true, '🟢 Đã kết nối');
 
       try {
@@ -698,13 +777,20 @@ export class P2PClient {
 
     this.conn.on('close', () => {
       console.log('[P2P] Kênh WebRTC đóng');
-      if (!this.isCloudReady) {
+      this.isConnected = false;
+      if (!this.isSessionIntentionallyClosed) {
+        this.scheduleP2PReconnect();
+      } else if (!this.isCloudReady) {
         this.updateStatus(false, 'Mất kết nối');
       }
     });
 
-    this.conn.on('error', () => {
-      if (!this.isCloudReady) {
+    this.conn.on('error', (err) => {
+      console.warn('[P2P] Lỗi DataChannel:', err);
+      this.isConnected = false;
+      if (!this.isSessionIntentionallyClosed) {
+        this.scheduleP2PReconnect();
+      } else if (!this.isCloudReady) {
         this.updateStatus(false, 'Đang tìm kết nối...');
       }
     });
