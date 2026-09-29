@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co https://*.metered.ca wss://*.metered.ca; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -468,7 +468,7 @@
   <script src="js/vendor/peerjs.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.2';
-    import { P2PClient } from './js/p2p-client.js?v=2.0.6';
+    import { P2PClient } from './js/p2p-client.js?v=2.0.7';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
     import { unwarpDocument } from './js/perspective.js?v=2.0.2';
 
