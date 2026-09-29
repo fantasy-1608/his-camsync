@@ -1557,10 +1557,6 @@ function getPatientInfoFromDOM() {
     importAesGcmKey(encryptionKeyHex).then(key => {
       if (activeClinicalSession && activeClinicalSession.generation === sessionGen) {
         sessionObj.cryptoKey = key;
-        sessionObj.channelStatus = 'PRIVATE_CHANNEL_READY';
-        if (activeSessionId) {
-          initRealtimeBroadcast(activeSessionId);
-        }
       }
     }).catch(() => {});
 
@@ -2479,37 +2475,30 @@ function getPatientInfoFromDOM() {
               { urls: 'stun:stun.l.google.com:19302' },
               { urls: 'stun:stun1.l.google.com:19302' },
               { urls: 'stun:stun2.l.google.com:19302' },
-              { urls: 'stun:stun3.l.google.com:19302' },
-              { urls: 'stun:stun4.l.google.com:19302' },
               { urls: 'stun:stun.cloudflare.com:3478' },
-              { urls: 'stun:standard.relay.metered.ca:80' },
+              { urls: 'stun:openrelay.metered.ca:80' },
               {
-                urls: 'turn:standard.relay.metered.ca:80',
+                urls: 'turn:openrelay.metered.ca:80',
                 username: 'openrelayproject',
                 credential: 'openrelayproject'
               },
               {
-                urls: 'turn:standard.relay.metered.ca:443',
+                urls: 'turn:openrelay.metered.ca:443',
                 username: 'openrelayproject',
                 credential: 'openrelayproject'
               },
               {
-                urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
                 username: 'openrelayproject',
                 credential: 'openrelayproject'
               },
               {
-                urls: 'turns:standard.relay.metered.ca:443?transport=tcp',
+                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
                 username: 'openrelayproject',
                 credential: 'openrelayproject'
-              },
-              { urls: 'stun:openrelay.metered.ca:80' }
+              }
             ]
           }
-        });
-
-        currentPeer.on('error', (err) => {
-          console.warn('[CamSync] Desktop Peer event error:', err?.type || err);
         });
 
         currentPeer.on('open', (id) => {
