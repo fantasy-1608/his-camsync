@@ -451,7 +451,11 @@ export class P2PClient {
         }, 25000);
 
         this.isCloudReady = true;
-        this.updateStatus(true, '🟢 Đã kết nối');
+        if (this.isConnected) {
+          this.updateStatus(true, '🟢 Đã kết nối');
+        } else {
+          this.updateStatus(false, 'Đang kết nối tới máy tính...');
+        }
 
         // Báo cho máy bàn thông tin thiết bị và yêu cầu dữ liệu bệnh nhân qua RAM broadcast
         this.broadcast('device_info', { device: this.getDeviceMetadata() });
@@ -521,6 +525,7 @@ export class P2PClient {
                 orderId: orderId || null,
                 fingerprint: fingerprint || null
               };
+              this.updateStatus(true, '🟢 Đã kết nối');
               this.onPatientInfo(this.patientInfo);
             }
           } else if (subEvent === 'session_closed') {
@@ -749,12 +754,12 @@ export class P2PClient {
     }
     this.connHandshakeTimer = setTimeout(() => {
       if (this.conn && !this.conn.open && !this.isConnected && !this.isSessionIntentionallyClosed) {
-        console.warn('[P2P] Quá thời gian bắt tay WebRTC (3.5s), thử kết nối lại...');
+        console.warn('[P2P] Quá thời gian bắt tay WebRTC (15s), thử kết nối lại...');
         try { this.conn.close(); } catch (_) {}
         this.conn = null;
         this.scheduleP2PReconnect();
       }
-    }, 3500);
+    }, 15000);
 
     this.conn.on('open', () => {
       if (this.connHandshakeTimer) {
@@ -820,6 +825,7 @@ export class P2PClient {
             orderId: orderId || null,
             fingerprint: fingerprint || null
           };
+          this.updateStatus(true, '🟢 Đã kết nối');
           this.onPatientInfo(this.patientInfo);
         }
       } else if (data.type === 'TRANSFER_ACK') {
@@ -1335,7 +1341,7 @@ export class P2PClient {
     let retryCount = 0;
     this.patientReqRetryTimer = setInterval(() => {
       retryCount++;
-      if (this.patientInfo || retryCount >= 5 || this.isSessionIntentionallyClosed) {
+      if (this.patientInfo || retryCount >= 10 || this.isSessionIntentionallyClosed) {
         this.stopPatientReqRetry();
         return;
       }
@@ -1345,7 +1351,7 @@ export class P2PClient {
       if (this.conn && this.conn.open) {
         try { this.conn.send({ type: 'REQ_PATIENT_INFO' }); } catch (_) {}
       }
-    }, 1200);
+    }, 1000);
   }
 
   stopPatientReqRetry() {
