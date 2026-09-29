@@ -223,6 +223,7 @@ export class P2PClient {
     this.p2pRetryTimer = null;
     this.p2pRetryAttempts = 0;
     this.maxP2PRetryAttempts = 20;
+    this.connHandshakeTimer = null;
 
     // Resiliency & Backoff Reconnect (Phase 5: P1-2)
     this.reconnectAttempts = 0;
@@ -386,6 +387,9 @@ export class P2PClient {
       this.p2pRetryTimer = null;
     }
     await this.initCrypto();
+    if (this.sessionId && (this.encryptionKeyHex || this.cryptoKey)) {
+      this.channelStatus = 'PRIVATE_CHANNEL_READY';
+    }
     console.log('[CamSync] Khởi tạo kết nối');
 
     // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
@@ -637,28 +641,31 @@ export class P2PClient {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
             { urls: 'stun:stun.cloudflare.com:3478' },
-            { urls: 'stun:openrelay.metered.ca:80' },
+            { urls: 'stun:standard.relay.metered.ca:80' },
             {
-              urls: 'turn:openrelay.metered.ca:80',
+              urls: 'turn:standard.relay.metered.ca:80',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             },
             {
-              urls: 'turn:openrelay.metered.ca:443',
+              urls: 'turn:standard.relay.metered.ca:443',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             },
             {
-              urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+              urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
               username: 'openrelayproject',
               credential: 'openrelayproject'
             },
             {
-              urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+              urls: 'turns:standard.relay.metered.ca:443?transport=tcp',
               username: 'openrelayproject',
               credential: 'openrelayproject'
-            }
+            },
+            { urls: 'stun:openrelay.metered.ca:80' }
           ]
         }
       });
@@ -736,7 +743,24 @@ export class P2PClient {
       return;
     }
 
+    if (this.connHandshakeTimer) {
+      clearTimeout(this.connHandshakeTimer);
+      this.connHandshakeTimer = null;
+    }
+    this.connHandshakeTimer = setTimeout(() => {
+      if (this.conn && !this.conn.open && !this.isConnected && !this.isSessionIntentionallyClosed) {
+        console.warn('[P2P] Quá thời gian bắt tay WebRTC (3.5s), thử kết nối lại...');
+        try { this.conn.close(); } catch (_) {}
+        this.conn = null;
+        this.scheduleP2PReconnect();
+      }
+    }, 3500);
+
     this.conn.on('open', () => {
+      if (this.connHandshakeTimer) {
+        clearTimeout(this.connHandshakeTimer);
+        this.connHandshakeTimer = null;
+      }
       console.log('[P2P] WebRTC DataChannel đã mở trực tiếp!');
       this.isConnected = true;
       this.p2pRetryAttempts = 0;
@@ -814,6 +838,10 @@ export class P2PClient {
     });
 
     this.conn.on('close', () => {
+      if (this.connHandshakeTimer) {
+        clearTimeout(this.connHandshakeTimer);
+        this.connHandshakeTimer = null;
+      }
       console.log('[P2P] Kênh WebRTC đóng');
       this.isConnected = false;
       if (!this.isSessionIntentionallyClosed) {
@@ -824,6 +852,10 @@ export class P2PClient {
     });
 
     this.conn.on('error', (err) => {
+      if (this.connHandshakeTimer) {
+        clearTimeout(this.connHandshakeTimer);
+        this.connHandshakeTimer = null;
+      }
       console.warn('[P2P] Lỗi DataChannel:', err);
       this.isConnected = false;
       if (!this.isSessionIntentionallyClosed) {
@@ -1355,6 +1387,10 @@ export class P2PClient {
   destroy() {
     this.isSessionIntentionallyClosed = true;
     this.stopPatientReqRetry();
+    if (this.connHandshakeTimer) {
+      clearTimeout(this.connHandshakeTimer);
+      this.connHandshakeTimer = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
