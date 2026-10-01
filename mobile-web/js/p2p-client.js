@@ -1,3 +1,14 @@
+export function readIceServers(config) {
+  if (config?.version !== 1 || !Array.isArray(config.iceServers) || config.iceServers.length > 12) return [];
+  if (config.iceServers.length && (!Number.isFinite(Date.parse(config.expiresAt)) || Date.parse(config.expiresAt) <= Date.now())) return [];
+  return config.iceServers.flatMap(server => {
+    const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+    if (!urls.length || urls.length > 4 || urls.some(url => typeof url !== 'string' || !/^(stun|turn|turns):[a-z0-9.-]+:\d{1,5}(\?transport=(udp|tcp))?$/i.test(url))) return [];
+    if (urls.some(url => /^turns?:/i.test(url)) && (typeof server.username !== 'string' || !server.username || typeof server.credential !== 'string' || !server.credential)) return [];
+    return [{ urls, ...(server.username ? { username: server.username, credential: server.credential } : {}) }];
+  });
+}
+
 /**
  * HIS-CamSync: Hybrid P2P & Cloud Relay Client
  * Động cơ kép: 
@@ -216,6 +227,8 @@ export class P2PClient {
     this.isConnected = false;
     this.isCloudReady = false;
     this.patientInfo = null;
+    this.relayCapability = options.relayCapability || null;
+    this.relayAuth = null;
 
     this.realtimeWs = null;
     this.realtimeHeartbeatTimer = null;
@@ -224,6 +237,9 @@ export class P2PClient {
     this.p2pRetryAttempts = 0;
     this.maxP2PRetryAttempts = 20;
     this.connHandshakeTimer = null;
+    this.extraIceServers = [];
+    this.lifecycleEpoch = 0;
+    this.networkResume = null;
 
     // Resiliency & Backoff Reconnect (Phase 5: P1-2)
     this.reconnectAttempts = 0;
@@ -386,14 +402,24 @@ export class P2PClient {
       clearTimeout(this.p2pRetryTimer);
       this.p2pRetryTimer = null;
     }
+    const epoch = ++this.lifecycleEpoch;
     await this.initCrypto();
+    try {
+      const response = await fetch(new URL('./connection-config.json', window.location.href), { cache: 'no-store', credentials: 'omit', signal: AbortSignal.timeout(4000) });
+      if (response.ok) {
+        const body = await response.text();
+        if (body.length <= 16384 && epoch === this.lifecycleEpoch) this.extraIceServers = readIceServers(JSON.parse(body));
+      }
+    } catch (_) { console.warn('[CamSync] TURN config unavailable; using bundled servers'); }
+    if (epoch !== this.lifecycleEpoch || this.isSessionIntentionallyClosed) return false;
+    this.bindNetworkRecovery();
     if (this.sessionId && (this.encryptionKeyHex || this.cryptoKey)) {
-      this.channelStatus = 'PRIVATE_CHANNEL_READY';
+      this.channelStatus = 'PRIVATE_CHANNEL_PENDING';
     }
     console.log('[CamSync] Khởi tạo kết nối');
 
-    // Kênh 1: Khởi tạo kết nối Supabase Realtime Broadcast (Zero-Retention on Cloud, RAM-to-RAM)
-    this.initRealtimeBroadcast();
+    // Private Supabase relay is authorized separately from the image encryption key.
+    this.preparePrivateRelay(epoch);
 
     // Kênh 2: Thử bắt tay WebRTC P2P song song (Tối ưu khi cùng Wi-Fi)
     this.initWebRTC();
@@ -404,20 +430,62 @@ export class P2PClient {
   /**
    * Kênh Cloud Relay: Supabase Realtime Broadcast qua WebSocket (Zero-Retention, RAM-to-RAM)
    */
+  async preparePrivateRelay(epoch) {
+    if (!this.relayCapability || typeof window === 'undefined' || !window.CamSyncPrivateRelay) return;
+    const live = () => !this.isSessionIntentionallyClosed && this.lifecycleEpoch === epoch;
+    try {
+      const auth = new window.CamSyncPrivateRelay.RelayAuth({
+        sid: this.sessionId, generation: this.generation, role: 'mobile', capability: this.relayCapability,
+        request: body => window.CamSyncPrivateRelay.request(body, SUPABASE_KEY),
+        onRefresh: grant => {
+          if (live() && this.isCloudReady && this.realtimeWs?.readyState === WebSocket.OPEN) {
+            this.realtimeWs.send(JSON.stringify({ topic: `realtime:${grant.topic}`, event: 'access_token', payload: { access_token: grant.accessToken }, ref: String(++this.realtimeRefCounter) }));
+          }
+        },
+        onExpired: () => {
+          if (!live()) return;
+          this.channelStatus = 'PRIVATE_CHANNEL_PENDING';
+          this.closeRealtime();
+          if (!this.conn?.open) this.updateStatus(false, 'Phiên cloud hết hạn; quét lại QR');
+        }
+      });
+      this.relayAuth?.close(); this.relayAuth = auth;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!live()) { auth.close(); return; }
+        try { await auth.authorize(); break; }
+        catch (error) {
+          if (attempt === 2) throw error;
+          await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      }
+      if (!live()) { auth.close(); return; }
+      this.channelStatus = 'PRIVATE_CHANNEL_READY';
+      this.initRealtimeBroadcast();
+    } catch (_) { console.warn('[CamSync] Private relay unavailable; WebRTC remains available'); }
+  }
+
   initRealtimeBroadcast() {
     if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;
+    const grant = this.relayAuth?.grant;
+    if (!grant) return;
     if (!this.sessionId || typeof WebSocket === 'undefined') return;
 
     this.closeRealtime();
 
-    const topic = `realtime:camsync:${this.sessionId}`;
+    const topic = `realtime:${grant.topic}`;
     const wsUrl = `${SUPABASE_URL.replace(/^http/, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_KEY)}&vsn=1.0.0`;
 
     try {
       this.realtimeWs = new WebSocket(wsUrl);
+      const ws = this.realtimeWs;
+      let joined = false;
+      let joinRef = null;
+      const live = () => this.realtimeWs === ws && !this.isSessionIntentionallyClosed;
       this.realtimeRefCounter = 0;
 
       this.realtimeWs.onopen = () => {
+        if (!live()) return;
+        joinRef = String(++this.realtimeRefCounter);
         console.log('[Realtime] WebSocket đã kết nối');
         this.reconnectAttempts = 0;
         if (this.reconnectTimer) {
@@ -430,12 +498,14 @@ export class P2PClient {
           topic,
           event: 'phx_join',
           payload: {
+            access_token: grant.accessToken,
             config: {
+              private: true,
               broadcast: { ack: true, self: false },
               presence: { key: '' }
             }
           },
-          ref: String(++this.realtimeRefCounter)
+          ref: joinRef
         }));
 
         // Gửi Phoenix heartbeat mỗi 25s duy trì kết nối
@@ -450,30 +520,24 @@ export class P2PClient {
           }
         }, 25000);
 
-        this.isCloudReady = true;
-        if (this.isConnected) {
-          this.updateStatus(true, '🟢 Đã kết nối');
-        } else {
-          this.updateStatus(false, 'Đang kết nối tới máy tính...');
-        }
-
-        // Báo cho máy bàn thông tin thiết bị và yêu cầu dữ liệu bệnh nhân qua RAM broadcast
-        this.broadcast('device_info', { device: this.getDeviceMetadata() });
-        this.broadcast('patient_req', {});
-        this.startPatientReqRetry();
       };
 
       this.realtimeWs.onmessage = async (e) => {
+        if (!live()) return;
         try {
           const msg = JSON.parse(e.data);
           let subEvent = null;
           let subPayload = null;
 
-          if (msg.event === 'phx_reply' && (msg.payload?.status === 'ok' || msg.payload?.response?.status === 'ok')) {
-            // Xác nhận đã join channel thành công -> chủ động gửi lại yêu cầu thông tin bệnh nhân
+          if (msg.event === 'phx_reply' && msg.ref === joinRef && msg.topic === topic) {
+            if (msg.payload?.status !== 'ok') {
+              this.channelStatus = 'PRIVATE_CHANNEL_PENDING'; this.closeRealtime(); return;
+            }
+            joined = true; this.isCloudReady = true; this.reconnectAttempts = 0;
             this.broadcast('device_info', { device: this.getDeviceMetadata() });
-            this.broadcast('patient_req', {});
+            this.broadcast('patient_req', {}); this.startPatientReqRetry(); return;
           }
+          if (!joined || msg.topic !== topic) return;
 
           if (msg.event === 'broadcast' && msg.payload && typeof msg.payload === 'object' && msg.payload.event) {
             subEvent = msg.payload.event;
@@ -556,6 +620,7 @@ export class P2PClient {
       };
 
       this.realtimeWs.onclose = () => {
+        if (!live()) return;
         console.log('[Realtime] WebSocket đóng kết nối');
         if (this.realtimeHeartbeatTimer) {
           clearInterval(this.realtimeHeartbeatTimer);
@@ -566,7 +631,7 @@ export class P2PClient {
         if (!this.isSessionIntentionallyClosed && this.sessionId && this.reconnectAttempts < this.maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), 8000);
           console.log(`[Realtime] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
-          this.updateStatus(false, `Đang kết nối lại... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+          if (!this.conn?.open) this.updateStatus(false, `Đang kết nối lại... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
           this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;
             this.initRealtimeBroadcast();
@@ -588,10 +653,10 @@ export class P2PClient {
    * Phát thông điệp qua Supabase Realtime Broadcast (RAM-to-RAM)
    */
   broadcast(event, payload) {
-    if (!this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
+    if (!this.isCloudReady || !this.relayAuth?.grant || this.relayAuth.grant.tokenExpiresAt <= Date.now() || !this.realtimeWs || this.realtimeWs.readyState !== (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
       return false;
     }
-    const topic = `realtime:camsync:${this.sessionId}`;
+    const topic = `realtime:${this.relayAuth.grant.topic}`;
     this.realtimeWs.send(JSON.stringify({
       topic,
       event: 'broadcast',
@@ -615,18 +680,20 @@ export class P2PClient {
       clearInterval(this.realtimeHeartbeatTimer);
       this.realtimeHeartbeatTimer = null;
     }
-    if (this.realtimeWs) {
+    const ws = this.realtimeWs;
+    this.realtimeWs = null;
+    if (ws) {
       try {
-        if (this.realtimeWs.readyState === (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
-          const topic = `realtime:camsync:${this.sessionId}`;
-          this.realtimeWs.send(JSON.stringify({
+        if (ws.readyState === (typeof WebSocket !== 'undefined' ? WebSocket.OPEN : 1)) {
+          const topic = `realtime:${this.relayAuth?.grant?.topic}`;
+          ws.send(JSON.stringify({
             topic,
             event: 'phx_leave',
             payload: {},
             ref: String(++this.realtimeRefCounter)
           }));
         }
-        this.realtimeWs.close();
+        ws.close();
       } catch (e) {}
       this.realtimeWs = null;
     }
@@ -637,12 +704,14 @@ export class P2PClient {
    * Kênh WebRTC P2P (chạy song song dự phòng)
    */
   initWebRTC() {
+    if (this.isSessionIntentionallyClosed || (this.peer && !this.peer.destroyed)) return;
     if (typeof window.Peer === 'undefined') return;
 
     try {
       this.peer = new window.Peer({
         config: {
           iceServers: [
+            ...this.extraIceServers,
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
@@ -675,19 +744,32 @@ export class P2PClient {
         }
       });
 
+      const peer = this.peer;
       this.peer.on('open', (id) => {
+        if (this.peer !== peer || this.isSessionIntentionallyClosed) return;
         console.log('[P2P] Mobile Peer ID:', id);
         this.connectP2PToDesktop();
       });
 
+      this.peer.on('disconnected', () => {
+        if (this.peer !== peer) return;
+        if (!this.isSessionIntentionallyClosed && !this.conn?.open) this.scheduleP2PReconnect();
+      });
       this.peer.on('error', (err) => {
+        if (this.peer !== peer || this.isSessionIntentionallyClosed) return;
         console.warn('[P2P] WebRTC event error:', err.type);
         if (err.type === 'peer-unavailable' && !this.isConnected && !this.isSessionIntentionallyClosed) {
+          if (this.connHandshakeTimer) clearTimeout(this.connHandshakeTimer);
+          this.connHandshakeTimer = null;
+          const failed = this.conn;
+          this.conn = null;
+          try { failed?.close(); } catch (_) {}
           this.scheduleP2PReconnect();
         } else if (err.type === 'disconnected' && !this.isSessionIntentionallyClosed && this.peer && !this.peer.destroyed) {
           try { this.peer.reconnect(); } catch (_) {}
         } else if (!this.isCloudReady && !this.isConnected) {
           this.updateStatus(false, 'Đang tìm kết nối...');
+          this.scheduleP2PReconnect();
         }
       });
     } catch (e) {
@@ -711,7 +793,7 @@ export class P2PClient {
     }
 
     this.p2pRetryAttempts++;
-    const delay = Math.min(1000 + (this.p2pRetryAttempts * 300), 3000);
+    const delay = Math.min(1000 * (2 ** Math.min(this.p2pRetryAttempts - 1, 4)), 15000) + Math.floor(Math.random() * 500);
     console.log(`[P2P] Sẽ thử kết nối lại sau ${delay}ms (lần ${this.p2pRetryAttempts}/${this.maxP2PRetryAttempts})`);
 
     if (!this.isCloudReady && !this.isConnected) {
@@ -719,6 +801,7 @@ export class P2PClient {
     }
 
     this.p2pRetryTimer = setTimeout(() => {
+      this.p2pRetryTimer = null;
       this.connectP2PToDesktop();
     }, delay);
   }
@@ -726,22 +809,29 @@ export class P2PClient {
   connectP2PToDesktop() {
     if (!this.sessionId || this.isSessionIntentionallyClosed) return;
     if (this.conn && this.conn.open) return;
+    if (this.connHandshakeTimer) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     if (!this.peer || this.peer.destroyed) {
       this.initWebRTC();
       return;
     }
     if (this.peer.disconnected) {
       try { this.peer.reconnect(); } catch (_) {}
+      return;
     }
+    if (!this.peer.open) return;
 
     if (this.conn) {
-      try { this.conn.close(); } catch (_) {}
+      const previous = this.conn;
       this.conn = null;
+      try { previous.close(); } catch (_) {}
     }
 
     const desktopPeerId = `his-desktop-${this.sessionId}`;
 
     try {
+      // Alternate relay-only attempts with direct discovery; do not require TURN on LAN.
+      if (this.peer.options?.config) this.peer.options.config.iceTransportPolicy = this.p2pRetryAttempts % 3 === 2 ? 'relay' : 'all';
       this.conn = this.peer.connect(desktopPeerId, { reliable: true });
     } catch (e) {
       this.scheduleP2PReconnect();
@@ -752,16 +842,20 @@ export class P2PClient {
       clearTimeout(this.connHandshakeTimer);
       this.connHandshakeTimer = null;
     }
+    const conn = this.conn;
     this.connHandshakeTimer = setTimeout(() => {
-      if (this.conn && !this.conn.open && !this.isConnected && !this.isSessionIntentionallyClosed) {
-        console.warn('[P2P] Quá thời gian bắt tay WebRTC (15s), thử kết nối lại...');
-        try { this.conn.close(); } catch (_) {}
+      if (this.conn !== conn) return;
+      this.connHandshakeTimer = null;
+      if (!conn.open && !this.isSessionIntentionallyClosed) {
+        console.warn('[P2P] Quá thời gian bắt tay WebRTC (45s), thử kết nối lại...');
         this.conn = null;
+        try { conn.close(); } catch (_) {}
         this.scheduleP2PReconnect();
       }
-    }, 15000);
+    }, 45000);
 
-    this.conn.on('open', () => {
+    conn.on('open', () => {
+      if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
@@ -783,7 +877,8 @@ export class P2PClient {
       } catch (e) {}
     });
 
-    this.conn.on('data', async (data) => {
+    conn.on('data', async (data) => {
+      if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
       if (!data) return;
       if (data.type === 'PATIENT_INFO') {
         let patientObj = null;
@@ -837,17 +932,21 @@ export class P2PClient {
           '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy.' :
           'Phiên làm việc đã đóng';
         this.updateStatus(false, msg);
+        this.destroy();
         try {
           if (this.onSessionClosed) this.onSessionClosed(data);
         } catch (_) {}
       }
     });
 
-    this.conn.on('close', () => {
+    conn.on('close', () => {
+      if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
       }
+      this.conn = null;
+      this.stopPatientReqRetry();
       console.log('[P2P] Kênh WebRTC đóng');
       this.isConnected = false;
       if (!this.isSessionIntentionallyClosed) {
@@ -857,12 +956,16 @@ export class P2PClient {
       }
     });
 
-    this.conn.on('error', (err) => {
+    conn.on('error', (err) => {
+      if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
       }
-      console.warn('[P2P] Lỗi DataChannel:', err);
+      this.conn = null;
+      try { conn.close(); } catch (_) {}
+      this.stopPatientReqRetry();
+      console.warn('[P2P] Lỗi DataChannel:', err.type);
       this.isConnected = false;
       if (!this.isSessionIntentionallyClosed) {
         this.scheduleP2PReconnect();
@@ -870,6 +973,18 @@ export class P2PClient {
         this.updateStatus(false, 'Đang tìm kết nối...');
       }
     });
+  }
+
+  bindNetworkRecovery() {
+    if (this.networkResume || typeof window === 'undefined' || !window.addEventListener || typeof document === 'undefined' || !document.addEventListener) return;
+    this.networkResume = () => {
+      if (this.isSessionIntentionallyClosed || this.conn?.open || document.visibilityState === 'hidden') return;
+      this.p2pRetryAttempts = 0;
+      this.scheduleP2PReconnect();
+    };
+    window.addEventListener('online', this.networkResume);
+    window.addEventListener('pageshow', this.networkResume);
+    document.addEventListener('visibilitychange', this.networkResume);
   }
 
   updateStatus(connected, text) {
@@ -916,6 +1031,15 @@ export class P2PClient {
    * Truyền ảnh qua Supabase Realtime Broadcast (Zero-Retention, 64KB Chunking, RAM-to-RAM)
    */
   async sendImageViaCloud(blob, metadata = {}, onProgress = null) {
+    if (!this.isCloudReady || !this.relayAuth?.grant) return { success: false, status: 'HIS_REJECTED', retry: false, code: 'CLOUD_NOT_AUTHORIZED' };
+    if (!this.cryptoKey && !/^[a-f0-9]{64}$/i.test(this.encryptionKeyHex || '')) return { success: false, status: 'HIS_REJECTED', retry: false, code: 'E2EE_KEY_REQUIRED' };
+    const reservedTransferId = metadata.transferId || generateSecureToken();
+    // Existing compatibility packets carry both data and chunk; reserve for both
+    // plus the nested Base64 encryption envelope and control overhead.
+    const reservationBytes = Math.ceil(blob.size * 4 / 3) * 4 + 65536;
+    try { await this.relayAuth.reserve(reservedTransferId, reservationBytes); }
+    catch (_) { return { success: false, status: 'HIS_REJECTED', retry: false, code: 'CLOUD_BUDGET_UNAVAILABLE', reason: 'Cloud không sẵn sàng hoặc hết ngân sách; dùng kết nối trực tiếp hoặc kiểm tra cấu hình' }; }
+    metadata = { ...metadata, transferId: reservedTransferId };
     if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
       return { success: false, status: 'HIS_UNKNOWN', retry: false };
     }
@@ -1361,7 +1485,8 @@ export class P2PClient {
     }
   }
 
-  async updateSession(sessionId, cryptoKeyHex, generation) {
+  async updateSession(sessionId, cryptoKeyHex, generation, relayCapability = null) {
+    this.relayAuth?.close(); this.relayAuth = null; this.relayCapability = relayCapability;
     if (!sessionId || !cryptoKeyHex) return;
     this.sessionId = sessionId;
     this.encryptionKeyHex = cryptoKeyHex;
@@ -1369,9 +1494,11 @@ export class P2PClient {
     this.generation = Number.isSafeInteger(generation) ? generation : 1;
     this.isSessionIntentionallyClosed = false;
     this.patientInfo = null;
-    this.channelStatus = 'PRIVATE_CHANNEL_READY';
+    this.channelStatus = 'PRIVATE_CHANNEL_PENDING';
 
     this.stopPatientReqRetry();
+    if (this.connHandshakeTimer) clearTimeout(this.connHandshakeTimer);
+    this.connHandshakeTimer = null;
     this.closeRealtime();
 
     if (this.p2pRetryTimer) {
@@ -1379,8 +1506,9 @@ export class P2PClient {
       this.p2pRetryTimer = null;
     }
     if (this.conn) {
-      try { this.conn.close(); } catch (_) {}
+      const previous = this.conn;
       this.conn = null;
+      try { previous.close(); } catch (_) {}
     }
     if (this.peer && !this.peer.destroyed) {
       try { this.peer.destroy(); } catch (_) {}
@@ -1391,7 +1519,16 @@ export class P2PClient {
   }
 
   destroy() {
+    this.relayAuth?.close(); this.relayAuth = null; this.relayCapability = null;
+    this.lifecycleEpoch++;
+    if (this.networkResume && typeof window !== 'undefined') {
+      window.removeEventListener('online', this.networkResume);
+      window.removeEventListener('pageshow', this.networkResume);
+      document.removeEventListener('visibilitychange', this.networkResume);
+      this.networkResume = null;
+    }
     this.isSessionIntentionallyClosed = true;
+    this.isConnected = false;
     this.stopPatientReqRetry();
     if (this.connHandshakeTimer) {
       clearTimeout(this.connHandshakeTimer);

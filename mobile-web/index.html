@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co https://*.metered.ca wss://*.metered.ca; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' wss://*.peerjs.com https://*.peerjs.com wss://rmbbqtuzkyxovmskhfgj.supabase.co https://rmbbqtuzkyxovmskhfgj.supabase.co https://*.metered.ca wss://*.metered.ca; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -465,10 +465,11 @@
   </div>
 
   <!-- Scripts: Nạp trước PeerJS (~90KB) để kết nối P2P tức thì. heic2any (1.3MB) và jsPDF (357KB) được lazy-load khi cần -->
+  <script src="js/private-relay.js?v=1"></script>
   <script src="js/vendor/peerjs.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.2';
-    import { P2PClient } from './js/p2p-client.js?v=2.0.8';
+    import { P2PClient } from './js/p2p-client.js?v=2.1.0';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
     import { unwarpDocument } from './js/perspective.js?v=2.0.2';
 
@@ -664,6 +665,7 @@
     const SESSION_MAX_AGE_MS = 5 * 60 * 1000; // 5 phút TTL
 
     // Trích xuất session_id, key & gen từ URL hash fragment hoặc query
+    let initialRelayCapability = null;
     let initialSessionId = null;
     let initialCryptoKey = null;
     let initialGeneration = null;
@@ -671,6 +673,7 @@
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
       initialSessionId = hashParams.get('session');
+      initialRelayCapability = hashParams.get('relay');
       initialCryptoKey = hashParams.get('key');
       initialSpecialty = hashParams.get('specialty') || hashParams.get('mode');
       const genParam = hashParams.get('gen');
@@ -702,6 +705,7 @@
           if (cached && cached.sessionId && cached.cryptoKey && (Date.now() - cached.timestamp < SESSION_MAX_AGE_MS)) {
             initialSessionId = cached.sessionId;
             initialCryptoKey = cached.cryptoKey;
+            initialRelayCapability = cached.relayCapability || null;
             if (initialGeneration === null && cached.generation !== undefined) {
               initialGeneration = cached.generation;
             }
@@ -719,6 +723,7 @@
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
           sessionId: initialSessionId,
           cryptoKey: initialCryptoKey,
+          relayCapability: initialRelayCapability,
           generation: initialGeneration,
           specialty: initialSpecialty,
           timestamp: Date.now()
@@ -900,6 +905,7 @@
 
     const p2p = new P2PClient({
       sessionId: initialSessionId || undefined,
+      relayCapability: initialRelayCapability || undefined,
       cryptoKey: initialCryptoKey || undefined,
       encryptionKeyHex: initialCryptoKey || undefined,
       generation: initialGeneration !== null ? initialGeneration : undefined,
@@ -1079,6 +1085,7 @@
       const rawHash = window.location.hash.replace(/^#[/?]*/, '');
       const hashParams = new URLSearchParams(rawHash);
       const newSessionId = hashParams.get('session');
+      const newRelayCapability = hashParams.get('relay');
       const newCryptoKey = hashParams.get('key');
       const newSpecialty = hashParams.get('specialty') || hashParams.get('mode');
       const genParam = hashParams.get('gen');
@@ -1091,6 +1098,7 @@
           sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
             sessionId: newSessionId,
             cryptoKey: newCryptoKey,
+            relayCapability: newRelayCapability,
             generation: newGeneration,
             specialty: newSpecialty,
             timestamp: Date.now()
@@ -1117,7 +1125,7 @@
         }
 
         if (p2p && typeof p2p.updateSession === 'function') {
-          await p2p.updateSession(newSessionId, newCryptoKey, newGeneration);
+          await p2p.updateSession(newSessionId, newCryptoKey, newGeneration, newRelayCapability);
         }
       }
     });
