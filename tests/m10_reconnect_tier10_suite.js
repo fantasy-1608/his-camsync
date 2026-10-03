@@ -362,7 +362,12 @@ function createMobileEnvironment(options = {}) {
       }, 0);
     }
     send(data) {
-      this.sent.push(typeof data === 'string' ? JSON.parse(data) : data);
+      const msg = typeof data === 'string' ? JSON.parse(data) : data;
+      this.sent.push(msg);
+      if (msg.event === 'phx_join') {
+        this.onmessage?.({ data: JSON.stringify({ topic: msg.topic, ref: msg.ref,
+          event: 'phx_reply', payload: { status: 'ok' } }) });
+      }
     }
     close(code = 1000, reason = '') {
       this.readyState = MockMobileWebSocket.CLOSED;
@@ -377,7 +382,7 @@ function createMobileEnvironment(options = {}) {
     simulateBroadcast(event, payload) {
       const eventData = {
         data: JSON.stringify({
-          topic: 'mock',
+          topic: this.sent.find(m => m.event === 'phx_join')?.topic,
           event: 'broadcast',
           payload: { type: 'broadcast', event, payload }
         })
@@ -520,13 +525,13 @@ async function runReconnectSuite() {
     // Trigger onopen on the websocket
     ws1.onopen();
 
-    const attemptsReset = mobile.client.reconnectAttempts === 0;
+    const budgetPreserved = mobile.client.reconnectAttempts === 3;
     const isReady = mobile.client.isCloudReady === true;
 
     reporter.record(
       'TC-REC-1.3',
-      'Successful reconnection (onopen) resets reconnectAttempts to 0 and clears timers',
-      attemptsReset && isReady,
+      'Repeated socket open preserves the per-session reconnect budget',
+      budgetPreserved && isReady,
       `reconnectAttempts after onopen: ${mobile.client.reconnectAttempts}, isCloudReady: ${isReady}`
     );
     mobile.destroy();

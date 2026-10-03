@@ -997,6 +997,10 @@ async function runAdversarialSuite() {
       readyState: 1,
       send: () => {}
     };
+    // This test targets the application ACK after an already completed join.
+    client.isCloudReady = true;
+    client.realtimeJoinRef = '1';
+    client.realtimeTopic = `realtime:camsync:${client.sessionId}`;
 
     let capturedTimeoutFn = null;
     const realSetTimeout = global.setTimeout;

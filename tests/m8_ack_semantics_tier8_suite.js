@@ -1061,16 +1061,21 @@ async function runAckSemanticsSuite() {
       send(data) {
         try {
           const parsed = JSON.parse(data);
+          if (parsed.event === 'phx_join') {
+            this.onmessage?.({ data: JSON.stringify({ topic: parsed.topic, ref: parsed.ref,
+              event: 'phx_reply', payload: { status: 'ok' } }) });
+          }
           if (parsed.payload?.event === 'chunk_complete') {
             const transferId = parsed.payload.payload.transferId;
             setTimeout(() => {
-              const spoofed = { data: JSON.stringify({ event: 'broadcast', payload: {
+              const spoofed = { data: JSON.stringify({ topic: parsed.topic, event: 'broadcast', payload: {
                 event: 'transfer_ack', payload: { transferId, sid: 'wrong_session', generation: 1,
                   status: 'HIS_COMMITTED', success: true }
               } }) };
               if (this.onmessage) this.onmessage(spoofed);
               const eventData = {
                 data: JSON.stringify({
+                  topic: parsed.topic,
                   event: 'broadcast',
                   payload: {
                     event: 'transfer_ack',
@@ -1128,6 +1133,8 @@ async function runAckSemanticsSuite() {
     const P2PClient = mobileContext.P2PClient;
     const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
     client.patientInfo = { id: '889900', orderId: 'CD889900' };
+    client.initRealtimeBroadcast();
+    await new Promise(r => setTimeout(r, 20));
 
     const syntheticBlob = {
       size: 512,
@@ -1255,6 +1262,7 @@ async function runAckSemanticsSuite() {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
 
     class SilentWebSocket extends EventEmitter {
+      static OPEN = 1;
       constructor() {
         super();
         this.readyState = 1;
@@ -1299,6 +1307,11 @@ async function runAckSemanticsSuite() {
     const P2PClient = mobileContext.P2PClient;
     const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
     client.patientInfo = { id: '889900' };
+    // Synthetic already joined channel: this case tests missing transfer ACK.
+    client.realtimeWs = new SilentWebSocket();
+    client.isCloudReady = true;
+    client.realtimeJoinRef = '1';
+    client.realtimeTopic = 'realtime:camsync:test_session_id';
 
     const syntheticBlob = {
       size: 512,
