@@ -633,6 +633,7 @@ export class P2PClient {
 
       ws.onclose = () => {
         if (this.realtimeWs !== ws) return;
+        this.pendingDelivery?.cancel();
         console.log('[Realtime] WebSocket đóng kết nối');
         if (this.realtimeHeartbeatTimer) {
           clearInterval(this.realtimeHeartbeatTimer);
@@ -890,6 +891,7 @@ export class P2PClient {
 
     conn.on('open', () => {
       if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
+      this.pendingDelivery?.cancel();
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
@@ -975,6 +977,7 @@ export class P2PClient {
 
     conn.on('close', () => {
       if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
+      this.pendingDelivery?.cancel();
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
@@ -992,6 +995,7 @@ export class P2PClient {
 
     conn.on('error', (err) => {
       if (this.conn !== conn || this.isSessionIntentionallyClosed) return;
+      this.pendingDelivery?.cancel();
       if (this.connHandshakeTimer) {
         clearTimeout(this.connHandshakeTimer);
         this.connHandshakeTimer = null;
@@ -1026,10 +1030,47 @@ export class P2PClient {
     this.onStatusChange(connected, text);
   }
 
+  createDeliveryWaiter(transferId, method, onProgress) {
+    const sid = this.sessionId, generation = this.generation;
+    let settle, timer, settled = false;
+    const promise = new Promise(resolve => { settle = resolve; });
+    const finish = result => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (this.onTransferAck === handler) this.onTransferAck = null;
+      if (this.pendingDelivery?.promise === promise) this.pendingDelivery = null;
+      settle({...result,method});
+    };
+    const handler = ack => {
+      if (ack?.transferId !== transferId || (ack.sid || ack.sessionId) !== sid || ack.generation !== generation) return;
+      if (ack.status === 'TRANSFER_RECEIVED') return;
+      const success = ack.status === 'FILE_READY' && ack.success === true;
+      if (success && onProgress) onProgress(100,'Đã chuyển file tới máy tính');
+      finish({success,status:success?'FILE_READY':(ack.success === false?'HIS_REJECTED':'HIS_UNKNOWN'),
+        reason:success?null:(ack.reason || 'Kiểm tra ô đính kèm trên máy tính trước khi gửi lại.'),retry:false,ack});
+    };
+    const cancel = () => finish({success:false,status:'HIS_UNKNOWN',retry:false,reason:'Kết nối gián đoạn; kiểm tra ô đính kèm trước khi gửi lại.'});
+    this.pendingDelivery?.cancel();
+    this.onTransferAck = handler;
+    timer = setTimeout(()=>finish({success:false,status:'HIS_UNKNOWN',timeout:true,retry:false,
+      reason:'Chưa nhận được xác nhận chuyển file; kiểm tra ô đính kèm trước khi gửi lại.'}),25000);
+    this.pendingDelivery = {promise,cancel};
+    return this.pendingDelivery;
+  }
+
   /**
    * Gửi ảnh sang máy tính bàn (Tự động chọn WebRTC hoặc Cloud Relay)
    */
   async sendImage(blob, metadata = {}, onProgress = null) {
+    if (this.sendingImage) return {success:false,status:'HIS_REJECTED',code:'TRANSFER_BUSY',retry:false,reason:'Đang chuyển file trước. Vui lòng chờ.'};
+    this.sendingImage = true;
+    try {
+      return await this.sendImageOnce(blob, metadata, onProgress);
+    } finally { this.sendingImage = false; }
+  }
+
+  async sendImageOnce(blob, metadata = {}, onProgress = null) {
     if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
       return { success: false, status: 'HIS_UNKNOWN', retry: false,
         reason: 'Phiên QR thiếu định danh thế hệ; quét lại mã trên HIS' };
@@ -1049,10 +1090,10 @@ export class P2PClient {
         console.log('[CamSync] Đang truyền ảnh qua WebRTC P2P');
         const res = await this.sendImageViaWebRTC(blob, meta, onProgress);
         return res?.status ? res : { success: false, status: 'HIS_UNKNOWN', retry: false,
-          reason: 'Chưa xác định trạng thái lưu; kiểm tra HIS trước khi gửi lại' };
+          reason: 'Chưa xác nhận chuyển file; kiểm tra ô đính kèm trước khi gửi lại' };
       } catch (_err) {
         return { success: false, status: 'HIS_UNKNOWN', retry: false,
-          reason: 'Kết nối gián đoạn; kiểm tra HIS trước khi gửi lại' };
+          reason: 'Kết nối gián đoạn; kiểm tra ô đính kèm trước khi gửi lại' };
       }
     }
 
@@ -1072,7 +1113,7 @@ export class P2PClient {
     const transferGeneration = this.generation;
     const transferEpoch = this.lifecycleEpoch;
     const isCurrentTransfer = () => this.realtimeWs === transferSocket && this.sessionId === transferSessionId && this.generation === transferGeneration && this.lifecycleEpoch === transferEpoch && this.isCloudReady && !this.isSessionIntentionallyClosed;
-    const interrupted = () => ({ success: false, status: 'HIS_UNKNOWN', retry: false, reason: 'Kết nối gián đoạn; kiểm tra HIS trước khi gửi lại' });
+    const interrupted = () => ({ success: false, status: 'HIS_UNKNOWN', retry: false, reason: 'Kết nối gián đoạn; kiểm tra ô đính kèm trước khi gửi lại' });
     if (!isCurrentTransfer()) return interrupted();
     const reservedTransferId = metadata.transferId || generateSecureToken();
     // Existing compatibility packets carry both data and chunk; reserve for both
@@ -1115,9 +1156,6 @@ export class P2PClient {
         mimeType: mimeType || 'image/jpeg',
         meta: {
           ...metadata,
-          patientId: this.patientInfo?.id || null,
-          orderId: this.patientInfo?.orderId || null,
-          fingerprint: this.patientInfo?.fingerprint || null,
           device: this.getDeviceMetadata(),
           timestamp: Date.now()
         }
@@ -1152,6 +1190,8 @@ export class P2PClient {
       throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
     }
 
+    const delivery = this.createDeliveryWaiter(transferId,'realtime_broadcast',onProgress);
+    try {
     // 1. Gửi chunk_start (V2 Schema - ZERO PHI in outer header)
     const startPayload = {
       type: 'TransferStart',
@@ -1219,79 +1259,12 @@ export class P2PClient {
 
     // Báo trạng thái 95%: Toàn bộ dữ liệu ảnh đã chuyển qua Cloud Relay, đang chờ máy chủ HIS xác nhận lưu
     if (typeof onProgress === 'function') {
-      onProgress(95, 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...');
+      onProgress(95, 'Đang đặt file vào ô đính kèm trên máy tính...');
     }
 
     // 4. Chờ transfer_ack từ máy tính (Fail-Closed: Timeout hoặc Error ACK đều coi là thất bại)
-    return new Promise((resolve) => {
-      const ackTimeout = setTimeout(() => {
-        this.onTransferAck = null;
-        resolve({
-          success: false,
-          status: 'HIS_UNKNOWN',
-          method: 'realtime_broadcast',
-          timeout: true,
-          error: 'Hết thời gian chờ xác nhận từ máy HIS',
-          reason: 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
-          retry: false
-        });
-      }, 25000);
-
-      const expectedSid = this.sessionId;
-      const expectedGeneration = this.generation;
-      this.onTransferAck = (ackData) => {
-        const sidMatches = (ackData?.sid === expectedSid || ackData?.sessionId === expectedSid);
-        const genMatches = (
-          ackData?.generation === expectedGeneration ||
-          (ackData?.generation === undefined && expectedGeneration !== undefined) ||
-          expectedGeneration === undefined
-        );
-        if (ackData?.transferId === transferId && sidMatches && genMatches) {
-          // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
-          if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
-            if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
-            return; // Tiếp tục chờ ACK cuối cùng
-          }
-
-          clearTimeout(ackTimeout);
-          this.onTransferAck = null;
-
-          const isCommitted = (ackData?.status === 'HIS_COMMITTED' || ackData?.status === 'COMPLETED' || ackData?.status === 'SUCCESS' || (ackData?.success === true && !ackData?.status)) && ackData?.success === true;
-
-          if (ackData && ackData.status === 'HIS_UNKNOWN') {
-            resolve({
-              success: false,
-              status: 'HIS_UNKNOWN',
-              method: 'realtime_broadcast',
-              error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
-              reason: ackData.reason || null,
-              retry: false,
-              ack: ackData
-            });
-          } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
-            resolve({
-              success: false,
-              status: ackData.status === 'HIS_REJECTED' ? 'HIS_REJECTED' : 'HIS_UNKNOWN',
-              method: 'realtime_broadcast',
-              error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
-              reason: ackData.reason || null,
-              retry: ackData.retry !== undefined ? ackData.retry : false,
-              ack: ackData
-            });
-          } else if (isCommitted) {
-            if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
-            resolve({
-              success: true,
-              status: 'HIS_COMMITTED',
-              method: 'realtime_broadcast',
-              ack: ackData
-            });
-          } else {
-            resolve({ success: false, status: 'HIS_UNKNOWN', retry: false, ack: ackData });
-          }
-        }
-      };
-    });
+    return await delivery.promise;
+    } finally { delivery.cancel(); }
   }
 
   /**
@@ -1301,6 +1274,11 @@ export class P2PClient {
     if (!this.sessionId || !Number.isSafeInteger(this.generation) || this.generation < 1) {
       return { success: false, status: 'HIS_UNKNOWN', retry: false };
     }
+    const connection = this.conn, sid = this.sessionId, generation = this.generation, epoch = this.lifecycleEpoch;
+    const current = () => this.conn === connection && connection?.open && this.sessionId === sid && this.generation === generation && this.lifecycleEpoch === epoch && !this.isSessionIntentionallyClosed;
+    if (!current()) return {success:false,status:'HIS_REJECTED',retry:false};
+    if (!this.cryptoKey && this.encryptionKeyHex) this.cryptoKey = await importAesGcmKey(this.encryptionKeyHex);
+    if (!this.cryptoKey) return {success:false,status:'HIS_REJECTED',code:'E2EE_KEY_REQUIRED',retry:false};
     const reader = new FileReader();
     const base64Data = await new Promise((resolve, reject) => {
       reader.onloadend = () => resolve(reader.result);
@@ -1324,9 +1302,6 @@ export class P2PClient {
         mimeType,
         meta: {
           ...metadata,
-          patientId: this.patientInfo?.id || null,
-          orderId: this.patientInfo?.orderId || null,
-          fingerprint: this.patientInfo?.fingerprint || null,
           device: this.getDeviceMetadata(),
           timestamp: Date.now()
         }
@@ -1361,7 +1336,10 @@ export class P2PClient {
       throw new Error(`Số lượng gói tin (${totalChunks}) vượt quá giới hạn an toàn ${MAX_TOTAL_CHUNKS}`);
     }
 
-    this.conn.send({
+    if (!current()) return {success:false,status:'HIS_UNKNOWN',retry:false};
+    const delivery = this.createDeliveryWaiter(transferId,'webrtc_chunked',onProgress);
+    try {
+    connection.send({
       type: 'CHUNK_START',
       v: 2,
       transferId,
@@ -1386,12 +1364,12 @@ export class P2PClient {
     });
 
     for (let i = 0; i < totalChunks; i++) {
-      if (!this.conn || !this.conn.open) {
+      if (!current()) {
         throw new Error('Kết nối WebRTC bị gián đoạn');
       }
 
       const chunk = payloadToSend.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      this.conn.send({
+      connection.send({
         type: 'CHUNK_DATA',
         v: 2,
         sid: this.sessionId,
@@ -1414,7 +1392,8 @@ export class P2PClient {
       }
     }
 
-    this.conn.send({
+    if (!current()) throw new Error('SESSION_REPLACED');
+    connection.send({
       type: 'CHUNK_COMPLETE',
       v: 2,
       sid: this.sessionId,
@@ -1422,78 +1401,11 @@ export class P2PClient {
     });
 
     if (typeof onProgress === 'function') {
-      onProgress(95, 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...');
+      onProgress(95, 'Đang đặt file vào ô đính kèm trên máy tính...');
     }
 
-    return new Promise((resolve) => {
-      const ackTimeout = setTimeout(() => {
-        this.onTransferAck = null;
-        resolve({
-          success: false,
-          status: 'HIS_UNKNOWN',
-          method: 'webrtc_chunked',
-          timeout: true,
-          error: 'Hết thời gian chờ xác nhận từ máy HIS qua P2P',
-          reason: 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
-          retry: false
-        });
-      }, 25000);
-
-      const expectedSid = this.sessionId;
-      const expectedGeneration = this.generation;
-      this.onTransferAck = (ackData) => {
-        const sidMatches = (ackData?.sid === expectedSid || ackData?.sessionId === expectedSid);
-        const genMatches = (
-          ackData?.generation === expectedGeneration ||
-          (ackData?.generation === undefined && expectedGeneration !== undefined) ||
-          expectedGeneration === undefined
-        );
-        if (ackData?.transferId === transferId && sidMatches && genMatches) {
-          // Xử lý ACK trung gian: TRANSFER_RECEIVED / HIS_PENDING / HIS_UPLOAD_PENDING
-          if (ackData && (ackData.status === 'TRANSFER_RECEIVED' || ackData.status === 'HIS_PENDING' || ackData.status === 'HIS_UPLOAD_PENDING')) {
-            if (typeof onProgress === 'function') onProgress(95, 'Máy tính đã nhận ảnh, đang chờ máy chủ HIS xác nhận lưu trữ...');
-            return; // Tiếp tục chờ ACK cuối cùng
-          }
-
-          clearTimeout(ackTimeout);
-          this.onTransferAck = null;
-
-          const isCommitted = (ackData?.status === 'HIS_COMMITTED' || ackData?.status === 'COMPLETED' || ackData?.status === 'SUCCESS' || (ackData?.success === true && !ackData?.status)) && ackData?.success === true;
-
-          if (ackData && ackData.status === 'HIS_UNKNOWN') {
-            resolve({
-              success: false,
-              status: 'HIS_UNKNOWN',
-              method: 'webrtc_chunked',
-              error: ackData.reason || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại',
-              reason: ackData.reason || null,
-              retry: false,
-              ack: ackData
-            });
-          } else if (ackData && (ackData.status === 'HIS_REJECTED' || ackData.status === 'error' || ackData.success === false)) {
-            resolve({
-              success: false,
-              status: ackData.status === 'HIS_REJECTED' ? 'HIS_REJECTED' : 'HIS_UNKNOWN',
-              method: 'webrtc_chunked',
-              error: ackData.reason || ackData.error || 'Lỗi nhận ảnh từ máy HIS',
-              reason: ackData.reason || null,
-              retry: ackData.retry !== undefined ? ackData.retry : false,
-              ack: ackData
-            });
-          } else if (isCommitted) {
-            if (typeof onProgress === 'function') onProgress(100, 'Máy chủ HIS đã lưu trữ thành công!');
-            resolve({
-              success: true,
-              status: 'HIS_COMMITTED',
-              method: 'webrtc_chunked',
-              ack: ackData
-            });
-          } else {
-            resolve({ success: false, status: 'HIS_UNKNOWN', retry: false, ack: ackData });
-          }
-        }
-      };
-    });
+    return await delivery.promise;
+    } finally { delivery.cancel(); }
   }
 
   startPatientReqRetry() {
@@ -1561,6 +1473,7 @@ export class P2PClient {
   }
 
   destroy() {
+    this.pendingDelivery?.cancel();
     this.relayAuth?.close(); this.relayAuth = null; this.relayCapability = null;
     this.lifecycleEpoch++;
     if (this.networkResume && typeof window !== 'undefined') {
