@@ -96,6 +96,8 @@ class MockWebSocket extends EventEmitter {
     }, 0);
   }
   send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
     const parsed = typeof data === 'string' ? JSON.parse(data) : data;
     this.sent.push(parsed);
     this.emit('sent', parsed);
@@ -109,7 +111,7 @@ class MockWebSocket extends EventEmitter {
     const msg = {
       event: 'broadcast',
       payload: { event, payload },
-      topic: 'realtime:camsync:mock'
+      topic: this.sent.find(message => message.event === 'phx_join')?.topic || 'realtime:camsync:mock'
     };
     if (this.onmessage) this.onmessage({ data: JSON.stringify(msg) });
   }
@@ -349,7 +351,7 @@ function createClinicalTestEnvironment(options = {}) {
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
   // Expose internals for verification
   code = code.replace('let activeClinicalSession = null;', 'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;');
   code = code.replace('let activeSessionId = null;', 'let activeSessionId = null; window.__getActiveSessionId = () => activeSessionId;');

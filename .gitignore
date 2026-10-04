@@ -2,3 +2,8 @@ node_modules
 .DS_Store
 .agents/
 *.zip
+
+output/playwright/
+
+store-submission/review-demo/
+qr-pairing-preview.png

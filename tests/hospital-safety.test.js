@@ -45,6 +45,81 @@ for (const wrong of [
 const verified = new Adapter({ document: doc, verifyServerRecord: async () => record });
 verified._uploadInitiated = true;
 assert.equal(await verified.awaitPersisted(makeEvidence(), 25), 'COMMITTED', 'matching server record');
+// Rejections need authentic transfer/context correlation, not a persisted file ID.
+const rejection = { ...record, status: 'REJECTED' };
+delete rejection.fileId;
+delete rejection.fileToken;
+for (const [overrides, result] of [
+  [{}, 'REJECTED'], [{ source: 'DOM_PREVIEW' }, 'UNKNOWN'],
+  [{ transferId: 'TX2' }, 'UNKNOWN'], [{ patientId: 'P2' }, 'UNKNOWN'],
+  [{ encounterId: 'E2' }, 'UNKNOWN'], [{ orderId: 'O2' }, 'UNKNOWN']
+]) {
+  const rejecting = new Adapter({ document: doc,
+    verifyServerRecord: async () => ({ ...rejection, ...overrides }) });
+  rejecting._uploadInitiated = true;
+  assert.equal(await rejecting.awaitPersisted(makeEvidence(), 100), result);
+}
+
+// Cache is reusable only for the same authenticated transfer/token/context.
+let calls = 0;
+const cachedAdapter = new Adapter({ document: doc, verifyServerRecord: async () => {
+  calls++;
+  return calls === 1 ? record : null;
+} });
+cachedAdapter._uploadInitiated = true;
+assert.equal(await cachedAdapter.awaitPersisted(makeEvidence(), 100), 'COMMITTED');
+assert.equal(await cachedAdapter.awaitPersisted(makeEvidence(), 100), 'COMMITTED');
+assert.equal(calls, 1, 'repeat must not invoke verifier');
+assert.equal(await cachedAdapter.awaitPersisted({ ...makeEvidence(), fileToken: 'other.jpg' }, 100), 'UNKNOWN');
+assert.equal(calls, 2, 'different token must not reuse evidence');
+doc.fields.orderId.value = 'O2';
+assert.equal(await cachedAdapter.awaitPersisted({ ...makeEvidence(),
+  expectedContext: { patientId: 'P1', encounterId: 'E1', orderId: 'O2' } }, 100), 'UNKNOWN');
+assert.equal(calls, 3, 'different order must not reuse evidence');
+doc.fields.orderId.value = 'O1';
+doc.fields.encounterId.value = 'E2';
+assert.equal(await cachedAdapter.awaitPersisted(makeEvidence(), 100), 'UNKNOWN');
+assert.equal(calls, 3, 'live context gate precedes cached result');
+doc.fields.encounterId.value = 'E1';
+cachedAdapter.cleanup();
+cachedAdapter._uploadInitiated = true;
+assert.equal(await cachedAdapter.awaitPersisted(makeEvidence(), 100), 'UNKNOWN');
+assert.equal(calls, 4, 'cleanup clears cached evidence');
+
+// Session teardown resolves waiters even if a verifier ignores AbortSignal.
+for (const method of ['cleanup', 'destroy']) {
+  let complete;
+  let signal;
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const pendingAdapter = new Adapter({ document: doc, verifyServerRecord: args => {
+    signal = args.signal;
+    started();
+    return new Promise(resolve => { complete = resolve; });
+  } });
+  pendingAdapter._uploadInitiated = true;
+  const pending = pendingAdapter.awaitPersisted(makeEvidence(), 1000);
+  await ready;
+  assert.equal(pendingAdapter._pendingPersistResolvers.size, 1);
+  pendingAdapter[method]('COMMITTED');
+  assert.equal(signal.aborted, true);
+  let watchdog;
+  try {
+    assert.equal(await Promise.race([pending, new Promise(resolve => {
+      watchdog = setTimeout(() => resolve('NOT_CANCELLED'), 100);
+    })]), 'UNKNOWN', `${method} promptly cancels verifier`);
+  } finally { clearTimeout(watchdog); }
+  complete(record);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(pendingAdapter._persistedEvidence.size, 0, 'late commit cannot restore evidence');
+  assert.equal(pendingAdapter._pendingPersistResolvers.size, 0);
+}
+const racingAdapter = new Adapter({ document: doc, verifyServerRecord: async () => record });
+racingAdapter._uploadInitiated = true;
+const racing = racingAdapter.awaitPersisted(makeEvidence(), 100);
+racingAdapter.cleanup();
+assert.equal(await racing, 'UNKNOWN', 'cleanup during initial context read invalidates operation');
+
 doc.fields.encounterId.value = 'E2';
 const changed = new Adapter({ document: doc, verifyServerRecord: async () => record });
 changed._uploadInitiated = true;
@@ -72,6 +147,34 @@ parent.querySelectorAll = (selector) => selector === 'iframe'
   ? [{ contentDocument: uploadFrame }] : [];
 assert.equal(guard.getClinicalContextFromDOM(() => parent).valid, false,
   'parent patient and upload iframe cannot disagree');
+
+// HIS retains old upload dialogs in hidden module frames. They must not block
+// the current form, while a visible/unknown conflicting form must still stop QR.
+const currentForm = hisDocument();
+const staleForm = hisDocument({ patientId: 'P2', encounterId: 'E2', orderId: 'O2' });
+const hiddenFrame = { contentDocument: staleForm, hidden: true };
+currentForm.querySelectorAll = selector => selector === 'iframe' ? [hiddenFrame] : [];
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, true, 'hidden stale frame does not block QR');
+hiddenFrame.hidden = false;
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, false, 'visible/unknown conflicting frame blocks QR');
+for (const state of [
+  { style: { display: 'none' } },
+  { style: { visibility: 'hidden' } },
+  { getAttribute: name => name === 'aria-hidden' ? 'true' : null },
+  { tagName: 'DIALOG', open: false }
+]) {
+  hiddenFrame.parentElement = state;
+  assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, true, 'hidden ancestor excludes its iframe');
+}
+hiddenFrame.parentElement = { style: { display: 'block' } };
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, false, 'reopened conflicting dialog blocks QR again');
+hiddenFrame.parentElement = null;
+hiddenFrame.ownerDocument = { defaultView: { getComputedStyle: () => ({ display: 'none' }) } };
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, true, 'CSS-hidden iframe is excluded');
+hiddenFrame.ownerDocument.defaultView.getComputedStyle = () => { throw new Error('visibility unavailable'); };
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, false, 'unreadable visibility does not bypass conflict');
+currentForm.querySelectorAll = () => [];
+assert.equal(guard.getClinicalContextFromDOM(() => currentForm).valid, true);
 
 // VNPT HIS QLBA (BenhAn / PhieuScan) nested iframe context inheritance verification
 const baParentDoc = {

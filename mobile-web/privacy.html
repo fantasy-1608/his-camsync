@@ -96,37 +96,35 @@
   <div class="container">
     <h1>
       HIS CamSync — Privacy Policy
-      <span class="badge">Bản dự thảo</span>
+      <span class="badge">1.6.2</span>
     </h1>
-    <div class="updated">Cập nhật lần cuối: 26/09/2026 • Chờ bệnh viện duyệt phạm vi xử lý dữ liệu</div>
-
-    <div class="highlight-box">
-      <strong>Phạm vi hiện tại:</strong> Ảnh và thông tin bệnh nhân được xử lý trên điện thoại, máy trạm và HIS; dữ liệu có thể đi qua WebRTC hoặc Supabase Realtime. Cấu hình quyền truy cập, nơi xử lý và thời hạn lưu giữ của các bên cung cấp dịch vụ phải được bệnh viện xác nhận trước khi dùng thường quy.
-    </div>
-
-    <h2>1. Mục đích duy nhất (Single Purpose)</h2>
-    <p>Tiện ích HIS CamSync được phát triển với mục đích duy nhất: hỗ trợ nhân viên y tế chụp ảnh dải băng Điện tâm đồ (ECG) hoặc hình ảnh siêu âm/nội soi từ điện thoại di động và đồng bộ tức thì vào phần mềm quản lý bệnh viện VNPT HIS trên máy trạm thông qua mã QR và giao thức truyền tải bảo mật.</p>
-
-    <h2>2. Dữ liệu thu thập và phương thức xử lý</h2>
+    <div class="updated">Cập nhật lần cuối: 04/10/2026 • Bản chuẩn bị phát hành 1.6.2</div>
+    <div class="highlight-box"><strong>Phạm vi:</strong> CamSync chuyển ảnh và tài liệu PDF từ điện thoại đến máy trạm VNPT HIS. Dữ liệu được xử lý trên thiết bị và có thể được chuyển tiếp dưới dạng mã hóa qua dịch vụ bên ngoài. Việc sử dụng dữ liệu y tế thật phải tuân theo quy định và phạm vi được cơ sở y tế cho phép.</div>
+    <h2>1. Mục đích</h2>
+    <p>Hỗ trợ nhân viên y tế được phép chuyển ảnh ECG, hình ảnh cận lâm sàng và tài liệu PDF vào giao diện đính kèm VNPT HIS. Ảnh JPG/PNG có thể tự kích hoạt Upload tại dialog CDHA khi định danh bệnh nhân và mẫu bệnh phẩm/kết quả/dịch vụ vẫn khớp phiên QR. Phiếu Scan PDF cần người dùng chọn tên phiếu và Lưu; CamSync không tự ký số.</p>
+    <h2>2. Dữ liệu được xử lý</h2>
     <ul>
-      <li><strong>Dữ liệu hình ảnh y tế:</strong> Ảnh ECG, siêu âm hoặc nội soi được xử lý trong trình duyệt, có thể đóng dấu mã bệnh nhân, rồi nạp vào HIS. Bản gốc và ảnh đã chỉnh có thể tồn tại trong bộ nhớ trình duyệt trong phiên; HIS lưu ảnh theo chính sách bệnh viện.</li>
-      <li><strong>Thông tin bệnh nhân (PHI):</strong> Mã, họ tên, lượt khám và phiếu chỉ định được dùng để đối chiếu hồ sơ và có thể xuất hiện trên ảnh đóng dấu. Mã QR/URL chứa mã phiên và khóa mã hóa, cần được giữ kín, không chụp hoặc chia sẻ ngoài nhân viên được phép.</li>
-      <li><strong>Dữ liệu phiên làm việc:</strong> Mã phiên và khóa được tạo ngẫu nhiên; phiên trên máy trạm hết hạn sau tối đa 5 phút hoặc khi đóng/hủy. Bản ghi thao tác cục bộ chỉ lưu loại sự kiện và mã lỗi được giới hạn.</li>
+      <li>Ảnh, tài liệu PDF và thông tin y tế bên trong file được xử lý trong trình duyệt để xem trước, chuyển đổi và truyền đến máy trạm. Họ tên có thể được dùng trong tên file; định danh bệnh nhân và phiếu được đọc để đối chiếu đúng biểu mẫu.</li>
+      <li>Mã phiên, thế hệ phiên, quyền relay và khóa AES-GCM được sinh cho phiên kết nối. QR chứa thông tin truy cập phiên và phải được giữ kín. Trình duyệt điện thoại dùng sessionStorage để phục hồi phiên, bao gồm khóa và quyền phiên; đây là lưu trữ tại thiết bị, không phải dữ liệu công khai.</li>
+      <li>Nhật ký vận hành cục bộ có tối đa 200 bản ghi loại sự kiện, thời gian, trạng thái, mã lỗi và bộ đếm; bộ ghi này không lưu ảnh, tên file, định danh bệnh nhân, khóa hoặc token HIS.</li>
     </ul>
-
-    <h2>3. Lưu trữ và Truyền tải dữ liệu</h2>
+    <h2>3. Truyền tải, dịch vụ và lưu giữ</h2>
     <ul>
-      <li><strong>WebRTC:</strong> Truyền dữ liệu giữa thiết bị khi thiết lập được kết nối; dịch vụ PeerJS signaling và máy chủ ICE/TURN có thể tham gia thiết lập hoặc chuyển tiếp tùy mạng.</li>
-      <li><strong>Supabase Realtime:</strong> Kênh dự phòng qua WSS. Chính sách quyền kênh riêng, giới hạn truy cập và lưu giữ của nhà cung cấp đang chờ kiểm chứng; không dùng cho vận hành toàn viện trước khi được phê duyệt.</li>
+      <li>WebRTC được ưu tiên khi thiết lập được kết nối. PeerJS signaling và máy chủ STUN/TURN tùy cấu hình tham gia thiết lập hoặc chuyển tiếp; nhà cung cấp có thể xử lý địa chỉ IP và metadata kết nối.</li>
+      <li>Khi dùng cloud relay, Supabase Realtime chuyển tiếp payload ảnh/tài liệu đã mã hóa AES-256-GCM trên kênh riêng qua WSS. Khóa giải mã không được gửi đến endpoint cấp quyền relay. Backend lưu metadata phiên, quyền và hạn mức/reservation; ứng dụng không chủ động lưu file ảnh/PDF vào Supabase Database hoặc Storage.</li>
+      <li>GitHub Pages phục vụ trang điện thoại và cấu hình kết nối. Yêu cầu tải trang/cấu hình có thể tạo metadata mạng tại nhà cung cấp.</li>
+      <li>Phiên máy trạm có thời hạn tối đa 5 phút. File và preview tồn tại trong bộ nhớ phiên; đóng phiên/đóng tab giúp giải phóng dữ liệu. Nhật ký cục bộ tồn tại cho đến khi bị ghi đè, xóa dữ liệu tiện ích hoặc gỡ tiện ích. Thời hạn lưu metadata/logs của nhà cung cấp và dữ liệu đã lưu trong HIS tuân theo cấu hình dịch vụ và chính sách của cơ sở y tế; thời hạn phiên không đồng nghĩa xóa mọi log phía nhà cung cấp.</li>
+      <li>Thông báo chuyển file thành công hoặc kích hoạt Upload không tự chứng minh file đã được HIS lưu bền vững. Người dùng kiểm tra kết quả trên HIS.</li>
     </ul>
-
-    <h2>4. Chia sẻ dữ liệu với bên thứ ba</h2>
-    <p>HIS CamSync <strong>KHÔNG</strong> bán, không cho thuê, không chia sẻ và không thương mại hóa dữ liệu người dùng hoặc dữ liệu y tế dưới bất kỳ hình thức nào. Chúng tôi không sử dụng cookies theo dõi, không tích hợp mạng quảng cáo và không dùng công cụ phân tích hành vi của bên thứ ba.</p>
-
-    <h2>5. Quyền hạn trình duyệt yêu cầu (Permissions Justification)</h2>
+    <h2>4. Sử dụng và chia sẻ</h2>
+    <p>CamSync không bán dữ liệu, không dùng dữ liệu cho quảng cáo hoặc chấm điểm tín dụng, và không truyền dữ liệu cho mục đích không liên quan chức năng chuyển file. Các nhà cung cấp dịch vụ nêu trên có thể xử lý dữ liệu mã hóa và metadata để vận hành dịch vụ. CamSync không tích hợp quảng cáo hoặc công cụ phân tích hành vi.</p>
+    <h2>5. Quyền trình duyệt và kiểm soát</h2>
     <ul>
-      <li><strong>storage:</strong> Dùng để ghi nhớ cấu hình cục bộ của nhân viên y tế (ví dụ: chế độ chuyên khoa ưa thích, cài đặt bộ lọc ảnh) trên chính máy tính đang dùng.</li>
-      <li><strong>host_permissions (*.vncare.vn):</strong> Dùng để hoạt động trên giao diện VNPT HIS. Quyền Supabase đã loại khỏi manifest cho đến khi kênh riêng được nghiệm thu.</li>
+      <li><strong>storage:</strong> Lưu nhật ký vận hành giới hạn trên máy trạm.</li>
+      <li><strong>vncare.vn (HTTP/HTTPS):</strong> Tích hợp vào các giao diện VNPT HIS được người dùng phép truy cập. Hãy dùng HIS qua HTTPS khi triển khai dữ liệu y tế.</li>
+      <li><strong>fantasy-1608.github.io:</strong> Service worker tải cấu hình kết nối từ URL cố định, không tải mã thực thi từ xa.</li>
+      <li><strong>rmbbqtuzkyxovmskhfgj.supabase.co:</strong> Cấp quyền relay ngắn hạn cho phiên CamSync.</li>
+      <li>Người dùng có thể đóng phiên QR, đóng tab điện thoại, xóa dữ liệu trang/tiện ích hoặc gỡ tiện ích. Việc xóa dữ liệu đã lưu trên HIS cần thực hiện theo quyền và quy trình của cơ sở y tế.</li>
     </ul>
 
     <h2>6. Thông tin liên hệ</h2>

@@ -13,15 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run check:syntax
-      - run: npm run test:safety
-      - run: npm run test:all
-      - run: npm audit --omit=dev --audit-level=high
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run check:syntax
+      - run: pnpm run test:safety
+      - run: pnpm run test:all
+      - run: pnpm audit --prod --audit-level=high
       - name: Validate extension package
         run: |
           python3 -m json.tool extension/manifest.json >/dev/null

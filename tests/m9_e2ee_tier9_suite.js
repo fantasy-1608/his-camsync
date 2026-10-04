@@ -105,6 +105,8 @@ class MockDataConnection extends EventEmitter {
     this.sent = [];
   }
   send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
     this.sent.push(data);
     this.emit('sent', data);
   }
@@ -299,6 +301,8 @@ function createE2EEEnvironment(options = {}) {
       }, 0);
     }
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
       this.sent.push(parsed);
       if (parsed.event === 'phx_join' && parsed.topic) {
@@ -410,7 +414,7 @@ function createE2EEEnvironment(options = {}) {
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');
@@ -491,7 +495,9 @@ function createMobileClient(options = {}) {
         this.readyState = 1;
         this.sent = [];
       }
-      send(data) { this.sent.push(JSON.parse(data)); }
+      send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0); this.sent.push(JSON.parse(data)); }
       close() { this.readyState = 3; }
     },
     Peer: options.Peer || class extends EventEmitter {
@@ -586,6 +592,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     await new Promise(r => setTimeout(r, 20));
 
     const session = env.getClinicalSession();
@@ -785,6 +792,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -842,6 +850,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -901,6 +910,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     // Mobile uses an arbitrary different 256-bit key
     const wrongKeyHex = crypto.randomBytes(32).toString('hex');
@@ -955,6 +965,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1017,6 +1028,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1079,6 +1091,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1146,6 +1159,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1222,6 +1236,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1295,6 +1310,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     const ws = env.getWebSocket();
     const transferId = 'tx_legacy_plain_' + Date.now();
@@ -1346,6 +1362,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1411,6 +1428,7 @@ async function runE2EESuite() {
   {
     const env = createE2EEEnvironment();
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const keyHex = session.encryptionKeyHex;
 
@@ -1491,6 +1509,7 @@ async function runE2EESuite() {
     // TC-E2EE-5.1: Realtime Cloud Relay: patient_req responds with strictly encrypted envelope; zero wire plaintext
     const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const ws = env.getWebSocket();
 
@@ -1527,6 +1546,7 @@ async function runE2EESuite() {
     // TC-E2EE-5.2: WebRTC DataChannel: Zero unencrypted PATIENT_INFO on open; encrypted response on REQ_PATIENT_INFO
     const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const peer = env.getPeer();
     const conn = peer.connectSimulatedPhone();
@@ -1570,6 +1590,7 @@ async function runE2EESuite() {
     // TC-E2EE-5.3: Cryptographic Fail-Closed: Corrupted key triggers abortClinicalSession(CRYPTO_FAILED) and zero unencrypted broadcast
     const env = createE2EEEnvironment({ patientText: 'Mã bệnh nhân: 889900 - Tên bệnh nhân: NGUYEN VAN TIEN' });
     env.openModal();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const session = env.getClinicalSession();
     const ws = env.getWebSocket();
 
@@ -1600,7 +1621,7 @@ async function runE2EESuite() {
     mockConn.send = () => {};
 
     class CustomMobilePeer extends EventEmitter {
-      constructor() { super(); }
+      constructor() { super(); this.open = true; }
       connect() { return mockConn; }
       destroy() {}
     }

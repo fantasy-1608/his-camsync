@@ -54,6 +54,8 @@ class MockDataConnection extends EventEmitter {
     this.sent = [];
   }
   send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
     this.sent.push(data);
     this.emit('sent', data);
   }
@@ -250,6 +252,8 @@ function createDesktopTestEnv(options = {}) {
       }, 0);
     }
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
       this.sent.push(parsed);
       if (parsed.event === 'phx_join' && parsed.topic) {
@@ -361,7 +365,7 @@ function createDesktopTestEnv(options = {}) {
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');

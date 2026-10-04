@@ -95,6 +95,8 @@ class MockDataConnection extends EventEmitter {
   }
 
   send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
     this.sent.push(data);
     this.emit('sent', data);
   }
@@ -324,6 +326,8 @@ function createAckEnvironment(options = {}) {
       }, 0);
     }
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
       this.sent.push(parsed);
       if (parsed.event === 'phx_join' && parsed.topic) {
@@ -425,7 +429,7 @@ function createAckEnvironment(options = {}) {
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
   code = code.replace('const activeChunkTransfers = {};', 'const activeChunkTransfers = window.__activeChunkTransfers = {};');
   code = code.replace('let activeSessionId = null;', 'let activeSessionId = null; window.__getActiveSessionId = () => activeSessionId;');
   code = code.replace('let activeClinicalSession = null;', 'let activeClinicalSession = null; window.__getClinicalSession = () => activeClinicalSession;');
@@ -1047,7 +1051,7 @@ async function runAckSemanticsSuite() {
   // TC-ACK-5.1: Mobile sendImageViaCloud parses error ACK and extracts reason
   {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
-    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */') + '; globalThis.P2PClient = P2PClient;';
+    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "this.relayAuth = { grant: { topic: `camsync:${this.sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };") + '; globalThis.P2PClient = P2PClient;';
 
     class MobileMockWebSocket extends EventEmitter {
       static OPEN = 1;
@@ -1059,6 +1063,8 @@ async function runAckSemanticsSuite() {
         }, 0);
       }
       send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
         try {
           const parsed = JSON.parse(data);
           if (parsed.payload?.event === 'chunk_complete') {
@@ -1072,6 +1078,7 @@ async function runAckSemanticsSuite() {
               const eventData = {
                 data: JSON.stringify({
                   event: 'broadcast',
+                  topic: parsed.topic,
                   payload: {
                     event: 'transfer_ack',
                     payload: {
@@ -1115,9 +1122,7 @@ async function runAckSemanticsSuite() {
           }, 0);
         }
       },
-      crypto: {
-        getRandomValues: (arr) => crypto.randomFillSync(arr)
-      }
+      crypto: crypto.webcrypto
     };
     mobileContext.window = mobileContext;
     mobileContext.globalThis = mobileContext;
@@ -1127,7 +1132,11 @@ async function runAckSemanticsSuite() {
 
     const P2PClient = mobileContext.P2PClient;
     const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
+    client.encryptionKeyHex = 'd'.repeat(64);
+    client.isCloudReady = true; client.realtimeJoinRef = 'synthetic-join'; client.realtimeTopic = 'realtime:synthetic'; client.relayAuth = { grant: { topic: 'camsync:test_session_id', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };
     client.patientInfo = { id: '889900', orderId: 'CD889900' };
+    client.initRealtimeBroadcast();
+    await new Promise(resolve => setTimeout(resolve, 20));
 
     const syntheticBlob = {
       size: 512,
@@ -1156,7 +1165,7 @@ async function runAckSemanticsSuite() {
   // TC-ACK-5.2: Mobile sendImageViaWebRTC parses error ACK and extracts reason
   {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
-    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */') + '; globalThis.P2PClient = P2PClient;';
+    const runnableCode = mobileCode.replace(/\bexport\s+/g, '').replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "this.relayAuth = { grant: { topic: `camsync:${this.sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };") + '; globalThis.P2PClient = P2PClient;';
 
     class SimulatedConn extends EventEmitter {
       constructor() {
@@ -1164,6 +1173,8 @@ async function runAckSemanticsSuite() {
         this.open = true;
       }
       send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
         if (data.type === 'CHUNK_COMPLETE') {
           setTimeout(() => {
             this.emit('data', { type: 'TRANSFER_ACK', transferId: data.transferId,
@@ -1204,9 +1215,7 @@ async function runAckSemanticsSuite() {
           }, 0);
         }
       },
-      crypto: {
-        getRandomValues: (arr) => crypto.randomFillSync(arr)
-      }
+      crypto: crypto.webcrypto
     };
     mobileContext.window = mobileContext;
     mobileContext.globalThis = mobileContext;
@@ -1216,6 +1225,8 @@ async function runAckSemanticsSuite() {
 
     const P2PClient = mobileContext.P2PClient;
     const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
+    client.encryptionKeyHex = 'd'.repeat(64);
+    client.isCloudReady = true; client.realtimeJoinRef = 'synthetic-join'; client.realtimeTopic = 'realtime:synthetic'; client.relayAuth = { grant: { topic: 'camsync:test_session_id', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };
     client.patientInfo = { id: '889900', orderId: 'CD889900' };
     client.conn = new SimulatedConn();
 
@@ -1255,6 +1266,7 @@ async function runAckSemanticsSuite() {
     const mobileCode = fs.readFileSync(path.join(rootDir, 'mobile-web/js/p2p-client.js'), 'utf8');
 
     class SilentWebSocket extends EventEmitter {
+      static OPEN = 1;
       constructor() {
         super();
         this.readyState = 1;
@@ -1283,9 +1295,7 @@ async function runAckSemanticsSuite() {
           }, 0);
         }
       },
-      crypto: {
-        getRandomValues: (arr) => crypto.randomFillSync(arr)
-      }
+      crypto: crypto.webcrypto
     };
     mobileContext.window = mobileContext;
     mobileContext.globalThis = mobileContext;
@@ -1298,7 +1308,10 @@ async function runAckSemanticsSuite() {
 
     const P2PClient = mobileContext.P2PClient;
     const client = new P2PClient({ sessionId: 'test_session_id', generation: 1 });
+    client.encryptionKeyHex = 'd'.repeat(64);
+    client.isCloudReady = true; client.realtimeJoinRef = 'synthetic-join'; client.realtimeTopic = 'realtime:synthetic'; client.relayAuth = { grant: { topic: 'camsync:test_session_id', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };
     client.patientInfo = { id: '889900' };
+    client.realtimeWs = new SilentWebSocket();
 
     const syntheticBlob = {
       size: 512,

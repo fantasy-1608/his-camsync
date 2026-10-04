@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src wss://*.peerjs.com https://*.peerjs.com wss://*.supabase.co https://*.supabase.co https://*.metered.ca wss://*.metered.ca; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'self' wss://*.peerjs.com https://*.peerjs.com wss://rmbbqtuzkyxovmskhfgj.supabase.co https://rmbbqtuzkyxovmskhfgj.supabase.co https://*.metered.ca wss://*.metered.ca; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
@@ -32,9 +32,9 @@
         <svg class="patient-shield-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span id="patientName" class="patient-name">Chờ đồng bộ bệnh nhân...</span>
+        <span id="patientName" class="patient-name">Chờ tên file từ máy tính...</span>
       </div>
-      <span id="patientIdBadge" class="patient-id-badge">BN: ---</span>
+      <span id="patientIdBadge" class="patient-id-badge">Tên file</span>
     </div>
     <div class="patient-meta-row">
       <span id="patientDemographics">Mở hồ sơ trên HIS để đồng bộ</span>
@@ -273,7 +273,7 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
-            <span id="btnSendText">Gửi Lên HIS</span>
+            <span id="btnSendText">Gửi tới máy tính</span>
           </button>
         </div>
       </div>
@@ -399,7 +399,7 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
-            <span id="btnDocSendText">Gửi lên HIS</span>
+            <span id="btnDocSendText">Gửi tới máy tính</span>
           </button>
         </div>
       </div>
@@ -431,7 +431,7 @@
           <button type="button" class="btn-doc-modal-cancel" id="btnDocModalClose">Quay lại</button>
           <button type="button" class="btn-doc-modal-send" id="btnDocModalSend">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span>Gửi lên HIS</span>
+            <span>Gửi tới máy tính</span>
           </button>
         </div>
       </div>
@@ -445,7 +445,7 @@
         <div class="upload-spinner" id="uploadSpinner"></div>
         <span class="upload-pct-badge" id="uploadPctBadge">0%</span>
       </div>
-      <h3 class="upload-title" id="uploadTitle">Đang truyền ảnh lên HIS...</h3>
+      <h3 class="upload-title" id="uploadTitle">Đang chuyển ảnh tới máy tính...</h3>
       <p class="upload-meta" id="uploadMeta">Chuẩn bị truyền dữ liệu...</p>
     </div>
   </div>
@@ -455,7 +455,7 @@
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>
-    <span id="toastText">Đã lưu vào HIS thành công!</span>
+    <span id="toastText">Đã chuyển file tới máy tính</span>
   </div>
 
   <!-- Loading Overlay (Chuyển đổi HEIC sang JPEG) -->
@@ -465,10 +465,11 @@
   </div>
 
   <!-- Scripts: Nạp trước PeerJS (~90KB) để kết nối P2P tức thì. heic2any (1.3MB) và jsPDF (357KB) được lazy-load khi cần -->
+  <script src="js/private-relay.js?v=2.2.1"></script>
   <script src="js/vendor/peerjs.min.js"></script>
   <script type="module">
     import { ImageEditor } from './js/editor.js?v=2.0.2';
-    import { P2PClient } from './js/p2p-client.js?v=2.0.8';
+    import { P2PClient } from './js/p2p-client.js?v=2.2.1';
     import { buildPdf, createThumbnail, estimatePdfSize } from './js/pdf-builder.js?v=2.0.2';
     import { unwarpDocument } from './js/perspective.js?v=2.0.2';
 
@@ -664,6 +665,7 @@
     const SESSION_MAX_AGE_MS = 5 * 60 * 1000; // 5 phút TTL
 
     // Trích xuất session_id, key & gen từ URL hash fragment hoặc query
+    let initialRelayCapability = null;
     let initialSessionId = null;
     let initialCryptoKey = null;
     let initialGeneration = null;
@@ -671,6 +673,7 @@
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#[/?]*/, ''));
       initialSessionId = hashParams.get('session');
+      initialRelayCapability = hashParams.get('relay');
       initialCryptoKey = hashParams.get('key');
       initialSpecialty = hashParams.get('specialty') || hashParams.get('mode');
       const genParam = hashParams.get('gen');
@@ -702,6 +705,7 @@
           if (cached && cached.sessionId && cached.cryptoKey && (Date.now() - cached.timestamp < SESSION_MAX_AGE_MS)) {
             initialSessionId = cached.sessionId;
             initialCryptoKey = cached.cryptoKey;
+            initialRelayCapability = cached.relayCapability || null;
             if (initialGeneration === null && cached.generation !== undefined) {
               initialGeneration = cached.generation;
             }
@@ -719,6 +723,7 @@
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
           sessionId: initialSessionId,
           cryptoKey: initialCryptoKey,
+          relayCapability: initialRelayCapability,
           generation: initialGeneration,
           specialty: initialSpecialty,
           timestamp: Date.now()
@@ -900,6 +905,7 @@
 
     const p2p = new P2PClient({
       sessionId: initialSessionId || undefined,
+      relayCapability: initialRelayCapability || undefined,
       cryptoKey: initialCryptoKey || undefined,
       encryptionKeyHex: initialCryptoKey || undefined,
       generation: initialGeneration !== null ? initialGeneration : undefined,
@@ -908,10 +914,10 @@
         if (connected) {
           statusBadge.classList.remove('disconnected');
           btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi Lên HIS';
+          btnSendText.textContent = 'Gửi tới máy tính';
           if (btnDocSendPdf) {
             btnDocSendPdf.disabled = docPages.length === 0;
-            btnDocSendText.textContent = 'Gửi lên HIS';
+            btnDocSendText.textContent = 'Gửi tới máy tính';
           }
         } else {
           statusBadge.classList.add('disconnected');
@@ -938,22 +944,12 @@
         triggerHaptic('warning');
       },
       onPatientInfo: (patient) => {
-        if (patient && (patient.name || patient.id)) {
-          patientNameEl.textContent = patient.name ? patient.name.toUpperCase() : (patient.id ? `BỆNH NHÂN (${patient.id})` : 'BỆNH NHÂN');
-          patientIdBadgeEl.textContent = patient.id ? `BN: ${patient.id}` : 'BN: ---';
-          
-          const metaParts = [];
-          if (patient.age) {
-            metaParts.push(typeof patient.age === 'number' ? `${patient.age} tuổi` : String(patient.age));
-          }
-          if (patient.gender) metaParts.push(patient.gender);
-          if (patient.room) metaParts.push(`Buồng ${patient.room}`);
-          if (patient.department) metaParts.push(patient.department);
-
-          patientDemographicsEl.textContent = metaParts.length > 0 ? metaParts.join(' • ') : 'Đã kết nối hồ sơ lâm sàng';
-          triggerHaptic('success');
-        }
+        patientNameEl.textContent = (patient?.name || 'Tai_lieu').toUpperCase();
+        patientIdBadgeEl.textContent = 'Tên file';
+        patientDemographicsEl.textContent = 'Kiểm tra file và bấm Upload trên máy tính';
+        triggerHaptic('success');
       }
+
     });
 
     if (initialSessionId && initialCryptoKey) {
@@ -962,7 +958,7 @@
       statusBadge.classList.add('disconnected');
       statusText.textContent = 'Chờ quét mã QR trên máy tính';
       patientNameEl.textContent = 'Chưa quét mã QR';
-      patientIdBadgeEl.textContent = 'BN: ---';
+      patientIdBadgeEl.textContent = 'Tên file';
       patientDemographicsEl.textContent = 'Vui lòng quét mã QR từ màn hình HIS để kết nối';
     }
 
@@ -1079,6 +1075,7 @@
       const rawHash = window.location.hash.replace(/^#[/?]*/, '');
       const hashParams = new URLSearchParams(rawHash);
       const newSessionId = hashParams.get('session');
+      const newRelayCapability = hashParams.get('relay');
       const newCryptoKey = hashParams.get('key');
       const newSpecialty = hashParams.get('specialty') || hashParams.get('mode');
       const genParam = hashParams.get('gen');
@@ -1091,6 +1088,7 @@
           sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
             sessionId: newSessionId,
             cryptoKey: newCryptoKey,
+            relayCapability: newRelayCapability,
             generation: newGeneration,
             specialty: newSpecialty,
             timestamp: Date.now()
@@ -1101,9 +1099,9 @@
           window.history.replaceState(null, '', window.location.pathname);
         } catch (_) {}
 
-        patientNameEl.textContent = 'Chờ đồng bộ bệnh nhân...';
-        patientIdBadgeEl.textContent = 'BN: ---';
-        patientDemographicsEl.textContent = 'Đang đồng bộ hồ sơ lâm sàng...';
+        patientNameEl.textContent = 'Chờ tên file từ máy tính...';
+        patientIdBadgeEl.textContent = 'Tên file';
+        patientDemographicsEl.textContent = 'Đang nhận tên file từ máy tính...';
         statusBadge.classList.add('disconnected');
         statusText.textContent = 'Đang kết nối...';
 
@@ -1117,7 +1115,7 @@
         }
 
         if (p2p && typeof p2p.updateSession === 'function') {
-          await p2p.updateSession(newSessionId, newCryptoKey, newGeneration);
+          await p2p.updateSession(newSessionId, newCryptoKey, newGeneration, newRelayCapability);
         }
       }
     });
@@ -1341,7 +1339,7 @@
       hideErrorBanner();
       hideWarningBanner();
       btnSendToHis.disabled = false;
-      btnSendText.textContent = 'Gửi Lên HIS';
+      btnSendText.textContent = 'Gửi tới máy tính';
     });
 
     statusBadge.addEventListener('click', () => {
@@ -1354,7 +1352,7 @@
     // Gửi ảnh lên HIS
     btnSendToHis.addEventListener('click', async () => {
       if (p2p.isSessionIntentionallyClosed) {
-        showErrorBanner('Phiên chụp đã đóng hoặc bệnh nhân trên máy tính đã thay đổi. Vui lòng quét lại mã QR trên HIS.');
+        showErrorBanner('Phiên chụp đã đóng hoặc ô đính kèm trên máy tính đã đóng. Vui lòng quét lại mã QR trên HIS.');
         return;
       }
       if (!p2p.isConnected) {
@@ -1368,19 +1366,19 @@
         uploadProgressModal.style.display = 'flex';
         uploadPctBadge.textContent = '10%';
         uploadTitle.textContent = 'Đang xuất ảnh...';
-        uploadMeta.textContent = 'Chuẩn hóa định dạng JPEG lâm sàng...';
+        uploadMeta.textContent = 'Chuẩn bị ảnh JPEG...';
 
         const blob = await editor.exportBlob(0.90, {
-          patient: p2p.patientInfo,
+          watermark: false,
           timestamp: Date.now()
         });
         const approxKB = Math.round(blob.size / 1024);
 
-        uploadTitle.textContent = 'Đang truyền ảnh lên HIS...';
+        uploadTitle.textContent = 'Đang chuyển ảnh tới máy tính...';
         uploadMeta.textContent = `Dung lượng: ${approxKB} KB`;
 
         const patient = p2p.patientInfo;
-        const prefix = currentSpecialty === 'ultrasound' ? (patient?.id ? `SA_${patient.id}` : 'SA') : (patient?.id ? `ECG_${patient.id}` : 'ECG');
+        const prefix = (patient?.name || 'Tai_lieu').replace(/[\/\\:*?"<>|\x00-\x1f]/g, '_');
         const filename = `${prefix}_${Date.now()}.jpg`;
 
         hideErrorBanner();
@@ -1393,10 +1391,10 @@
         }, (pct, statusMsg) => {
           uploadPctBadge.textContent = `${pct}%`;
           if (pct >= 90) {
-            uploadTitle.textContent = 'Đang lưu vào máy chủ HIS...';
-            uploadMeta.textContent = statusMsg || 'Đã nạp tệp lên máy tính, chờ xác nhận lưu hồ sơ...';
+            uploadTitle.textContent = 'Đang gắn file trên máy tính...';
+            uploadMeta.textContent = statusMsg || 'Chờ máy tính xác nhận file đã sẵn sàng...';
           } else {
-            uploadTitle.textContent = 'Đang truyền ảnh lên HIS...';
+            uploadTitle.textContent = 'Đang chuyển ảnh tới máy tính...';
             uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
           }
         });
@@ -1404,24 +1402,24 @@
         // Xử lý các trạng thái xác thực HIS:
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressModal.style.display = 'none';
-          showWarningBanner(res.reason || res.error || 'Chưa xác định trạng thái lưu; vui lòng kiểm tra trực tiếp trên HIS trước khi gửi lại');
+          showWarningBanner(res.reason || res.error || 'Chưa xác nhận chuyển file; kiểm tra ô đính kèm trên máy tính trước khi gửi lại');
           btnSendToHis.disabled = true;
-          btnSendText.textContent = 'Chưa xác định lưu';
+          btnSendText.textContent = 'Kiểm tra máy tính';
           return;
         }
 
-        if (!res || !res.success || res.status === 'HIS_REJECTED') {
+        if (!res || !res.success || res.status !== 'FILE_READY') {
           uploadProgressModal.style.display = 'none';
-          showErrorBanner(res?.reason || res?.error || 'Máy chủ HIS từ chối lưu ảnh.');
+          showErrorBanner(res?.reason || res?.error || 'Không thể gắn file vào ô đính kèm trên máy tính.');
           btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi Lên HIS';
+          btnSendText.textContent = 'Gửi tới máy tính';
           return;
         }
 
-        const isCommitted = res?.status === 'HIS_COMMITTED' && res?.success === true;
+        const isCommitted = res?.status === 'FILE_READY' && res?.success === true;
         if (!isCommitted) {
           uploadProgressModal.style.display = 'none';
-          showWarningBanner(res?.reason || res?.error || 'Chưa nhận được xác nhận lưu trữ từ máy chủ HIS');
+          showWarningBanner(res?.reason || res?.error || 'Chưa nhận được xác nhận file đã sẵn sàng trên máy tính');
           return;
         }
 
@@ -1431,9 +1429,9 @@
         }
 
         uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = 'Đã lưu vào HIS';
-        uploadMeta.textContent = 'Ảnh đã được máy chủ HIS lưu trữ thành công';
-        if (toastText) toastText.textContent = 'Đã lưu vào HIS thành công!';
+        uploadTitle.textContent = 'Đã chuyển file tới máy tính';
+        uploadMeta.textContent = 'Kiểm tra file trên máy tính và bấm Upload trên HIS';
+        if (toastText) toastText.textContent = 'Đã chuyển file tới máy tính';
 
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
@@ -1447,7 +1445,7 @@
           document.body.classList.remove('in-editor');
           if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'flex';
           btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi Lên HIS';
+          btnSendText.textContent = 'Gửi tới máy tính';
 
           setTimeout(() => {
             toast.classList.remove('visible');
@@ -1458,7 +1456,7 @@
         uploadProgressModal.style.display = 'none';
         showErrorBanner(err.message || 'Lỗi gửi ảnh lên máy HIS');
         btnSendToHis.disabled = false;
-        btnSendText.textContent = 'Gửi Lên HIS';
+        btnSendText.textContent = 'Gửi tới máy tính';
       }
     });
 
@@ -2419,11 +2417,11 @@
       });
     });
 
-    // ---- Xuất PDF & Gửi lên HIS ----
+    // ---- Xuất PDF & Gửi tới máy tính ----
     btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
       if (p2p.isSessionIntentionallyClosed) {
-        showErrorBanner('Phiên làm việc đã kết thúc hoặc bệnh nhân trên máy tính đã thay đổi. Vui lòng quét lại QR trên HIS.');
+        showErrorBanner('Phiên làm việc đã kết thúc hoặc ô đính kèm trên máy tính đã đóng. Vui lòng quét lại QR trên HIS.');
         return;
       }
       if (!p2p.isConnected) {
@@ -2446,7 +2444,7 @@
           docPages.map(p => ({ file: p.file, rotation: p.rotation || 0 })),
           {
             preset: docPreset,
-            filename: `scan_${p2p.patientInfo?.id || 'doc'}_${Date.now()}.pdf`,
+            filename: `Tai_lieu_${Date.now()}.pdf`,
             onProgress: (pageIdx, total) => {
               const pct = Math.round(10 + (pageIdx / total) * 40);
               uploadPctBadge.textContent = `${pct}%`;
@@ -2456,7 +2454,7 @@
         );
 
         uploadPctBadge.textContent = '55%';
-        uploadTitle.textContent = 'Đang truyền PDF lên HIS...';
+        uploadTitle.textContent = 'Đang chuyển PDF tới máy tính...';
         uploadMeta.textContent = `Dung lượng: ${pdfResult.sizeKB} KB (${pdfResult.pageCount} trang)`;
         hideErrorBanner();
         hideWarningBanner();
@@ -2473,20 +2471,20 @@
             uploadTitle.textContent = 'Đang gửi vào Phiếu Scan HIS...';
             uploadMeta.textContent = statusMsg || 'Chờ xác nhận đính kèm file...';
           } else {
-            uploadTitle.textContent = 'Đang truyền PDF lên HIS...';
+            uploadTitle.textContent = 'Đang chuyển PDF tới máy tính...';
             uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * pdfResult.sizeKB)} / ${pdfResult.sizeKB} KB...`;
           }
         });
 
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressModal.style.display = 'none';
-          showWarningBanner('PDF đã gửi đến HIS. Vui lòng kiểm tra Phiếu Scan trên HIS, chọn loại phiếu và nhấn Lưu.');
+          showWarningBanner('Chưa xác nhận chuyển PDF. Kiểm tra ô đính kèm trên máy tính trước khi gửi lại.');
           btnDocSendPdf.disabled = false;
           triggerHaptic('warning');
           return;
         }
 
-        if (!res || !res.success || res.status === 'HIS_REJECTED') {
+        if (!res || !res.success || res.status !== 'FILE_READY') {
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
           btnDocSendPdf.disabled = false;
@@ -2496,9 +2494,9 @@
 
         triggerHaptic('success');
         uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = 'Đã gửi PDF vào HIS';
+        uploadTitle.textContent = 'Đã chuyển PDF tới máy tính';
         uploadMeta.textContent = `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`;
-        if (toastText) toastText.textContent = 'PDF đã gửi vào Phiếu Scan thành công!';
+        if (toastText) toastText.textContent = 'Đã chuyển PDF tới máy tính. Kiểm tra và bấm Lưu.';
 
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';

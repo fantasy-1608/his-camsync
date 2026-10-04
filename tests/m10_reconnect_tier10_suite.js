@@ -214,6 +214,8 @@ function createDesktopEnvironment(options = {}) {
       }, 0);
     }
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
       this.sent.push(parsed);
       if (parsed.event === 'phx_join' && parsed.topic) {
@@ -298,7 +300,7 @@ function createDesktopEnvironment(options = {}) {
   const transferCode = fs.readFileSync(transferPath, 'utf8');
   let extensionCode = fs.readFileSync(extensionPath, 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  extensionCode = extensionCode.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
 
   extensionCode = extensionCode.replace('function openQrModal() {', 'window.__openQrModal = openQrModal; function openQrModal() {');
   extensionCode = extensionCode.replace('function closeQrModal() {', 'window.__closeQrModal = closeQrModal; function closeQrModal() {');
@@ -342,7 +344,8 @@ function createMobileEnvironment(options = {}) {
   const mobileScriptPath = path.resolve(__dirname, '../mobile-web/js/p2p-client.js');
   let code = fs.readFileSync(mobileScriptPath, 'utf8');
   // Synthetic authorized-channel fixture for reconnect mechanics only.
-  code = code.replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  code = code.replace("if (this.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "this.relayAuth = { grant: { topic: `camsync:${this.sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {}, async reserve() { return { reserved: true }; } };");
+  code = code.replace('this.preparePrivateRelay(epoch);', 'this.initRealtimeBroadcast();');
   code = code.replace(/\bexport\s+/g, '');
 
   let historyState = null;
@@ -362,6 +365,8 @@ function createMobileEnvironment(options = {}) {
       }, 0);
     }
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       this.sent.push(typeof data === 'string' ? JSON.parse(data) : data);
     }
     close(code = 1000, reason = '') {
@@ -377,7 +382,7 @@ function createMobileEnvironment(options = {}) {
     simulateBroadcast(event, payload) {
       const eventData = {
         data: JSON.stringify({
-          topic: 'mock',
+          topic: this.sent.find(message => message.event === 'phx_join')?.topic || 'mock',
           event: 'broadcast',
           payload: { type: 'broadcast', event, payload }
         })
@@ -520,13 +525,13 @@ async function runReconnectSuite() {
     // Trigger onopen on the websocket
     ws1.onopen();
 
-    const attemptsReset = mobile.client.reconnectAttempts === 0;
+    const attemptsPreserved = mobile.client.reconnectAttempts === 3;
     const isReady = mobile.client.isCloudReady === true;
 
     reporter.record(
       'TC-REC-1.3',
-      'Successful reconnection (onopen) resets reconnectAttempts to 0 and clears timers',
-      attemptsReset && isReady,
+      'Duplicate onopen preserves the reconnect budget and does not restart the joined channel',
+      attemptsPreserved && isReady,
       `reconnectAttempts after onopen: ${mobile.client.reconnectAttempts}, isCloudReady: ${isReady}`
     );
     mobile.destroy();

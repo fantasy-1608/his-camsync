@@ -253,6 +253,8 @@ function createContentScriptEnvironment(options = {}) {
     }
 
     send(data) {
+      const joinMessage = typeof data === 'string' ? JSON.parse(data) : data;
+      if (joinMessage?.event === 'phx_join') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ topic: joinMessage.topic, event: 'phx_reply', ref: joinMessage.ref, payload: { status: 'ok', response: {} } }) }), 0);
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
       this.sent.push(parsed);
       if (parsed.event === 'phx_join' && parsed.topic) {
@@ -384,7 +386,7 @@ function createContentScriptEnvironment(options = {}) {
   const transferCode = fs.readFileSync(path.join(rootDir, 'extension/content/transfer-receiver.js'), 'utf8');
   let code = fs.readFileSync(path.join(rootDir, 'extension/content/camsync-content.js'), 'utf8');
   // Synthetic transport fixture: exercises protocol logic, not channel authorization.
-  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", '/* synthetic authorized channel */');
+  code = code.replace("if (activeClinicalSession?.channelStatus !== 'PRIVATE_CHANNEL_READY') return;", "activeClinicalSession.relayAuth = { grant: { topic: `camsync:${sessionId}`, accessToken: 'synthetic', tokenExpiresAt: Date.now()+60000 }, close() {} };");
   // Inject hooks to directly inspect internal variables for empirical testing
   code = code.replace(
     'const activeChunkTransfers = {};',
@@ -993,6 +995,8 @@ async function runAdversarialSuite() {
   // TC-ADV-3.5: P2PClient ACK timeout fail-closed
   {
     const client = new P2PClient({ sessionId: generateSecureToken(), generation: 1 });
+    client.encryptionKeyHex = 'd'.repeat(64);
+    client.isCloudReady = true; client.realtimeJoinRef = 'synthetic-join'; client.realtimeTopic = 'realtime:synthetic'; client.relayAuth = { grant: { topic: 'synthetic', tokenExpiresAt: Date.now()+60000 }, async reserve() { return { reserved: true }; } };
     client.realtimeWs = {
       readyState: 1,
       send: () => {}
@@ -1001,7 +1005,7 @@ async function runAdversarialSuite() {
     let capturedTimeoutFn = null;
     const realSetTimeout = global.setTimeout;
     global.setTimeout = (fn, delay) => {
-      if (delay === 8000) {
+      if (delay === 25000) {
         capturedTimeoutFn = fn;
         return 999;
       }
@@ -1011,7 +1015,7 @@ async function runAdversarialSuite() {
     const dummyBlob = new Blob(['JPEG_DATA'], { type: 'image/jpeg' });
     const sendPromise = client.sendImageViaCloud(dummyBlob, { name: 'timeout_test.jpg' });
 
-    // Allow chunk loop and inner 20ms delay to complete so 8000ms ack timeout is registered
+    // Allow chunk loop and inner 20ms delay to complete so 25000ms ack timeout is registered
     await new Promise(r => realSetTimeout(r, 60));
     global.setTimeout = realSetTimeout;
 
