@@ -1,4 +1,4 @@
-# CamSync 1.6.0 / mobile 2.2.0 — 04/10/2026
+# CamSync 1.6.0 / mobile 2.2.1 — 04/10/2026
 
 ## Phạm vi đã chốt
 
@@ -11,7 +11,7 @@ Chờ ACK được đăng ký trước khi gửi gói đầu tiên, tránh bỏ 
 ## Triển khai
 
 - Extension: ZIP 1.6.0, Load unpacked rồi tải lại HIS.
-- GitHub Pages: mobile 2.2.0 ở cả đường dẫn gốc và `/mobile-web/`, runtime giống nhau.
+- GitHub Pages: mobile 2.2.1 ở cả đường dẫn gốc và `/mobile-web/`, runtime giống nhau.
 - Supabase: `camsync-relay-auth` v7 ACTIVE, phục vụ quyền relay theo phiên. Luồng manual attachment không yêu cầu đổi schema, RLS hay secrets.
 - Không gửi Chrome Web Store trong đợt này.
 

@@ -16,7 +16,7 @@ QR gắn với một ô đính kèm cụ thể, có hạn 5 phút. Khi đóng/th
 
 - Nếu extension được Load unpacked từ thư mục `extension` của dự án này: bấm Reload trong `chrome://extensions`, rồi tải lại tab HIS.
 - Nếu đang dùng thư mục giải nén ZIP cũ: giải nén `camsync-extension-v1.6.0.zip`, chọn **Load unpacked** trỏ tới thư mục mới (hoặc thay nội dung thư mục cũ rồi Reload). Chrome không cài trực tiếp file ZIP.
-- Trang điện thoại đã phát hành riêng; đóng trang cũ và quét QR mới để dùng bản mobile 2.2.0.
+- Trang điện thoại đã phát hành riêng; đóng trang cũ và quét QR mới để dùng bản mobile 2.2.1.
 
 ## Kiến trúc
 
