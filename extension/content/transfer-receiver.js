@@ -56,7 +56,7 @@
       this.transferStates.set(transferId, existing);
 
       // CHỈ đánh dấu vào processedTransferIds khi phiên đã ráp hoặc kết thúc (VERIFIED, COMMITTED, REJECTED, UNKNOWN)
-      if (state === 'VERIFIED' || state === 'COMMITTED' || state === 'REJECTED' || state === 'UNKNOWN') {
+      if (state === 'VERIFIED' || (state === 'COMMITTED' || state === 'DELIVERED') || state === 'REJECTED' || state === 'UNKNOWN') {
         if (!this.processedTransferIds.has(transferId) && this.processedTransferIds.size >= 100) {
           const oldestId = this.processedTransferIds.values().next().value;
           if (oldestId) this.processedTransferIds.delete(oldestId);
@@ -134,11 +134,11 @@
       // 5. Kiểm tra tính bất biến và chống trùng transferId (Idempotency - P1-04)
       const existingRecord = this.transferStates.get(transferId);
       if (existingRecord) {
-        if (existingRecord.state === 'COMMITTED' || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN') {
+        if ((existingRecord.state === 'COMMITTED' || existingRecord.state === 'DELIVERED') || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN') {
           console.warn(`[CamSync Idempotency] Gói tin TransferStart lặp lại cho ${transferId} (trạng thái: ${existingRecord.state}). Trả về kết quả trước đó, không nạp lần hai.`);
           if (sendAck && existingRecord.ackPayload) {
             try {
-              sendAck(existingRecord.state === 'COMMITTED', existingRecord.ackPayload.error || null, existingRecord.ackPayload);
+              sendAck((existingRecord.state === 'COMMITTED' || existingRecord.state === 'DELIVERED'), existingRecord.ackPayload.error || null, existingRecord.ackPayload);
             } catch (e) {}
           }
           return false;
@@ -225,7 +225,7 @@
      */
     acceptChunk(transferId, chunkIndex, data, iv = null, encrypted = undefined) {
       const existingRecord = this.transferStates.get(transferId);
-      if (existingRecord && (existingRecord.state === 'COMMITTED' || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN')) {
+      if (existingRecord && ((existingRecord.state === 'COMMITTED' || existingRecord.state === 'DELIVERED') || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN')) {
         console.warn(`[CamSync Idempotency] Bỏ qua chunk lặp cho ${transferId} vì phiên đã ở trạng thái ${existingRecord.state}`);
         return true;
       }
@@ -316,13 +316,13 @@
      */
     complete(transferId) {
       const existingRecord = this.transferStates.get(transferId);
-      if (existingRecord && (existingRecord.state === 'COMMITTED' || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN')) {
+      if (existingRecord && ((existingRecord.state === 'COMMITTED' || existingRecord.state === 'DELIVERED') || existingRecord.state === 'REJECTED' || existingRecord.state === 'UNKNOWN')) {
         console.warn(`[CamSync Idempotency] Bỏ qua complete lặp cho ${transferId} (trạng thái: ${existingRecord.state})`);
         const tx = this.transfers[transferId];
         const ackFn = tx?.sendAck;
         if (ackFn && existingRecord.ackPayload) {
           try {
-            ackFn(existingRecord.state === 'COMMITTED', existingRecord.ackPayload.error || null, existingRecord.ackPayload);
+            ackFn((existingRecord.state === 'COMMITTED' || existingRecord.state === 'DELIVERED'), existingRecord.ackPayload.error || null, existingRecord.ackPayload);
           } catch (e) {}
         }
         return true;

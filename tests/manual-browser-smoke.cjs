@@ -1,0 +1,56 @@
+const {chromium} = require(process.env.CAMSYNC_PLAYWRIGHT_MODULE || 'playwright');
+const fs=require('fs');const http=require('http');const path=require('path');
+const root=path.resolve(__dirname,'..');
+(async()=>{
+ const server=http.createServer((req,res)=>{const filename=path.join(root,decodeURIComponent(req.url.split('?')[0]));try{res.setHeader('Content-Type',filename.endsWith('.js')?'text/javascript; charset=utf-8':filename.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8');res.end(fs.readFileSync(filename));}catch{res.end('<html lang="vi"><body><input id="fileUpload" type="file" multiple><button id="btnUpload">Upload</button><span id="lblTENBENHNHAN">NGUYỄN VĂN MẪU</span></body></html>')}});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r)); const base=`http://127.0.0.1:${server.address().port}`;
+ let browser;try { browser=await chromium.launch({headless:true,...(process.env.CAMSYNC_CHROME ? {executablePath:process.env.CAMSYNC_CHROME} : {})}); } catch(e) { server.close();throw e; } const page=await browser.newPage();let errors=[];page.on('pageerror',e=>errors.push(e.message));
+ try{
+ await page.goto(base+'/synthetic');
+ await page.evaluate(()=>{window.clicks=0;window.changes=0;document.querySelector('#btnUpload').onclick=()=>window.clicks++;document.querySelector('#fileUpload').onchange=()=>window.changes++;window.Peer=class {on(){} destroy(){}};window.chrome={runtime:{getURL:p=>p,sendMessage:async()=>({config:{}})}};});
+ for(const p of ['vendor/qrcode.min.js','content/crypto-utils.js','content/audit-logger.js','content/clinical-guard.js','content/his-adapter.js','content/transfer-receiver.js','content/manual-attachment.js']) await page.addScriptTag({path:root+'/extension/'+p});
+ let source=fs.readFileSync(root+'/extension/content/camsync-content.js','utf8');
+ source=source.replace(/\}\)\(\);\s*$/, 'window.__test = {openQrModal,closeQrModal,handleAssembledTransfer,handleIncomingImageData,session:()=>activeAttachmentSession,receiver:unifiedTransferReceiver};})();');
+ await page.addScriptTag({content:source});
+ const result=await page.evaluate(async()=>{
+ const t=window.__test;const input=document.querySelector('#fileUpload');
+ t.openQrModal({targetDoc:document});const session=t.session();
+ if(!session||!document.querySelector('#camsyncQrCode canvas, #camsyncQrCode img'))throw Error('QR without clinical IDs failed');
+ const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);const raw=canvas.toDataURL('image/jpeg').split(',')[1];
+ const key=await window.__CamSyncCrypto.importAesGcmKey(session.encryptionKeyHex);
+ const encrypt=async id=>window.__CamSyncCrypto.encryptAesGcmPayload(key,JSON.stringify({image:raw,mimeType:'image/jpeg'}),{v:2,sid:session.sessionId,transferId:id,contentType:'image/jpeg'});
+ const send=async(id,overrides={})=>{const enc=await encrypt(id);let ack;const ok=await t.handleAssembledTransfer({v:2,sid:session.sessionId,generation:session.generation,transferId:id,fullBase64:enc.data,mimeType:'image/jpeg',encrypted:true,iv:enc.iv,transport:'webrtc',sendAck:(success,code,payload)=>{ack={success,code,payload}},...overrides});return {ok,ack};};
+ const first=await send('synthetic_transfer_01');if(!first.ok||first.ack.payload.status!=='FILE_READY'||input.files.length!==1)throw Error('attachment failed '+JSON.stringify(first));
+ const firstName=input.files[0].name;if(!firstName.startsWith('NGUYEN_VAN_MAU_'))throw Error('filename failed '+firstName);
+ await send('synthetic_transfer_01');if(input.files.length!==1)throw Error('duplicate file');
+ const wrong=await send('synthetic_transfer_02',{sid:'wrong'});if(wrong.ok||input.files.length!==1)throw Error('wrong sid accepted');
+ const stale=await send('synthetic_transfer_02',{generation:session.generation+1});if(stale.ok)throw Error('stale gen accepted');
+ const clear=await send('synthetic_transfer_02',{encrypted:undefined});if(clear.ok)throw Error('missing encryption accepted');
+ const tamper=await send('synthetic_transfer_02',{iv:'wrong'});if(tamper.ok)throw Error('tamper accepted');
+ const start=performance.now();await send('synthetic_transfer_02');const attachmentMs=performance.now()-start;if(input.files.length!==2)throw Error('append failed');
+ if(window.clicks||window.changes)throw Error('HIS handler invoked');
+ const {P2PClient}=await import('/mobile-web/js/p2p-client.js');
+ const client=new P2PClient({sessionId:session.sessionId,generation:session.generation,encryptionKeyHex:session.encryptionKeyHex});
+ const route=packet=>{
+   if(packet.type==='CHUNK_START')t.receiver.begin({...packet,transport:'webrtc',sendAck:(success,error,extra={})=>client.onTransferAck?.({...extra,success,error,sid:session.sessionId,generation:session.generation,transferId:packet.transferId})});
+   if(packet.type==='CHUNK_DATA')t.receiver.acceptChunk(packet.transferId,packet.index,packet.data,packet.iv,packet.encrypted);
+   if(packet.type==='CHUNK_COMPLETE')t.receiver.complete(packet.transferId);
+ };
+ client.conn={open:true,send:route};
+ const image=await (await fetch(canvas.toDataURL('image/jpeg'))).blob();
+ const roundTrip=await client.sendImage(image,{transferId:'synthetic_browser_jpeg'});
+ if(!roundTrip.success||roundTrip.status!=='FILE_READY'||input.files.length!==3)throw Error('Production JPEG roundtrip failed '+JSON.stringify(roundTrip));
+ const pdf=new Blob(['%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF'],{type:'application/pdf'});
+ const pdfTrip=await client.sendImage(pdf,{transferId:'synthetic_browser_pdf'});
+ if(!pdfTrip.success||!input.files[3].name.endsWith('.pdf'))throw Error('PDF roundtrip failed '+JSON.stringify(pdfTrip));
+ if(window.clicks||window.changes)throw Error('Roundtrip activated HIS');
+ input.remove();const detached=await send('synthetic_transfer_03');if(detached.ok)throw Error('detached accepted');
+ t.closeQrModal();
+ return {checks:13,attachmentMs,filename:firstName,clicks:window.clicks,changes:window.changes};
+ });
+ console.log('Synthetic Chrome manual workflow PASS',result);if(errors.length)throw Error('Browser errors: '+errors.join(';'));
+ await page.goto(base+'/mobile-web/index.html');await page.waitForTimeout(700);if(errors.length)throw Error('Mobile errors: '+errors.join(';'));
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:root+'/output/playwright/manual-mobile.png',fullPage:true});
+ console.log('Mobile initial page PASS');
+ }finally{await browser.close();server.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});

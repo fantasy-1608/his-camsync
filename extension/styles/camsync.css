@@ -901,3 +901,41 @@
     transform: translateY(-24px);
   }
 }
+
+/* CamSync Clinical Pairing — DESIGN.md */
+.camsync-modal-backdrop { backdrop-filter: none; background: rgba(16,35,67,.48); }
+.camsync-modal-card { width: 480px; color: #102343; border-radius: 12px; }
+.camsync-modal-header { background: #fff; padding: 18px 20px; }
+.camsync-modal-title { color: #102343; font-size: 17px; gap: 12px; }
+.camsync-brand { font-size: 15px; color: #087f8c; padding-right: 12px; border-right: 1px solid #d6dee8; }
+.camsync-modal-close { min-width: 32px; min-height: 32px; }
+.camsync-patient-banner { margin: 16px 20px 0; padding: 12px; border: 0; border-radius: 6px; font-size: 14px; color: #173e77; }
+.camsync-patient-name { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.camsync-modal-body { padding: 20px; gap: 16px; }
+.camsync-viewport-frame { width: 298px; height: 298px; }
+.camsync-qr-container { width: 298px; height: 298px; padding: 20px; box-sizing: border-box; background: #fff; border: 1px solid #d6dee8; border-radius: 6px; box-shadow: none; flex-shrink: 0; }
+.camsync-qr-container canvas, .camsync-qr-container img { width: 256px; height: 256px; border-radius: 0; }
+.camsync-qr-container.connected-qr { border-color: #087443 !important; box-shadow: none !important; }
+.camsync-status-pill { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #102343; text-align: center; }
+.camsync-status-dot { width: 8px; height: 8px; background: #b45309; border-radius: 50%; flex-shrink: 0; }
+.camsync-status-pill.connected .camsync-status-dot { background: #087443; }
+.camsync-modal-card .camsync-instruction { margin: 0; color: #102343; font-size: 14px; line-height: 1.7; }
+.camsync-network-hint { color: #52647a; font-size: 13px; }
+.camsync-pairing-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border-top: 1px solid #d6dee8; padding-top: 16px; }
+.camsync-session-countdown { color: #52647a; font-size: 13px; font-variant-numeric: tabular-nums; }
+.camsync-refresh-qr { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #087f8c; border-radius: 6px; color: #087f8c; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.camsync-refresh-qr:hover { background: #edf8f8; }
+.camsync-refresh-qr:disabled { color: #52647a; border-color: #d6dee8; background: #f1f5f9; cursor: not-allowed; }
+.camsync-done-btn { color: #52647a; background: transparent; border: 0; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.camsync-done-btn:hover { color: #102343; text-decoration: underline; }
+.camsync-modal-card button:focus-visible { outline: 2px solid #087f8c; outline-offset: 3px; }
+.camsync-modal-card ::selection { background: #d7eeee; color: #102343; }
+@media (max-width: 420px) {
+  .camsync-modal-title { font-size: 15px; gap: 8px; }
+  .camsync-brand { display: none; }
+  .camsync-modal-body { padding: 16px 12px; }
+  .camsync-patient-banner { margin-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camsync-modal-card, .camsync-modal-card * { animation: none !important; transition: none !important; }
+}

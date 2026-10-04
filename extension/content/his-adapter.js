@@ -215,6 +215,7 @@
       this._verifyServerRecord = typeof options.verifyServerRecord === 'function'
         ? options.verifyServerRecord : null;
       this._persistedEvidence = new Map();
+      this._persistGeneration = 0;
       this._pendingPersistResolvers = new Set();
       this._activeObservers = new Set();
       this._activeTimers = new Set();
@@ -494,14 +495,30 @@
           !evidence.expectedContext?.patientId || !evidence.expectedContext?.encounterId ||
           !Number.isFinite(timeoutMs) || timeoutMs <= 0) return 'UNKNOWN';
 
-      const expected = evidence.expectedContext;
-      if (!(await this.compareContext(expected))) return 'UNKNOWN';
+      const generation = this._persistGeneration;
+      const expected = Object.freeze({ ...evidence.expectedContext });
+      if (!(await this.compareContext(expected)) || generation !== this._persistGeneration) return 'UNKNOWN';
       if (this._simulatedFailure === 'REJECTED') return 'REJECTED';
       if (this._simulatedFailure) return 'UNKNOWN';
+
+      const cached = this._persistedEvidence.get(evidence.transferId);
+      if (cached?.source === 'HIS_SERVER' && cached.fileToken === evidence.fileToken &&
+          cached.patientId === expected.patientId && cached.encounterId === expected.encounterId &&
+          cached.orderId === expected.orderId) return 'COMMITTED';
 
       if (this._verifyServerRecord) {
         const controller = new AbortController();
         let timer;
+        let cancelled = false;
+        let cancel;
+        const cancellation = new Promise((resolve) => {
+          cancel = () => {
+            cancelled = true;
+            controller.abort();
+            resolve(null);
+          };
+        });
+        this._pendingPersistResolvers.add(cancel);
         try {
           const timeout = new Promise((resolve) => {
             timer = setTimeout(() => {
@@ -510,39 +527,40 @@
             }, timeoutMs);
           });
           const record = await Promise.race([
-            Promise.resolve().then(() => this._verifyServerRecord({
+            Promise.resolve().then(() => cancelled ? null : this._verifyServerRecord({
               transferId: evidence.transferId,
               fileToken: evidence.fileToken,
               expectedContext: Object.freeze({ ...expected }),
               signal: controller.signal
             })).catch(() => null),
-            timeout
+            timeout, cancellation
           ]);
-          if (!(await this.compareContext(expected))) return 'UNKNOWN';
+          if (cancelled || generation !== this._persistGeneration ||
+              !(await this.compareContext(expected)) || generation !== this._persistGeneration) return 'UNKNOWN';
           if (!record || record.source !== 'HIS_SERVER' ||
               record.transferId !== evidence.transferId ||
               record.patientId !== expected.patientId ||
               record.encounterId !== expected.encounterId ||
-              (expected.orderId && record.orderId !== expected.orderId) ||
-              typeof record.fileId !== 'string' || !record.fileId.trim() ||
-              record.fileToken !== evidence.fileToken) return 'UNKNOWN';
+              (expected.orderId && record.orderId !== expected.orderId)) return 'UNKNOWN';
           if (record.status === 'REJECTED') return 'REJECTED';
-          if (record.status !== 'COMMITTED') return 'UNKNOWN';
+          if (record.status !== 'COMMITTED' ||
+              typeof record.fileId !== 'string' || !record.fileId.trim() ||
+              typeof evidence.fileToken !== 'string' || !evidence.fileToken.trim() ||
+              record.fileToken !== evidence.fileToken) return 'UNKNOWN';
           this._persistedEvidence.set(evidence.transferId, {
+            source: record.source, fileToken: record.fileToken,
             fileId: record.fileId, patientId: record.patientId,
             encounterId: record.encounterId, orderId: record.orderId
           });
           return 'COMMITTED';
         } finally {
+          this._pendingPersistResolvers.delete(cancel);
           clearTimeout(timer);
           controller.abort();
         }
       }
 
-      // Production VNPT HIS verification: monitor persistence containers (#list, #gridUploadResults)
-      if (this._persistedEvidence.has(evidence.transferId)) {
-        return 'COMMITTED';
-      }
+      // Monitor persistence containers when no server verifier is configured.
 
       const doc = this._getDoc();
       if (!doc) return 'UNKNOWN';
@@ -803,6 +821,7 @@
     // Memory & Observer Hygiene
     // -----------------------------------------------------------------------
     cleanup(reason = 'UNKNOWN') {
+      this._persistGeneration++;
       if (this._pendingPersistResolvers) {
         for (const resolver of Array.from(this._pendingPersistResolvers)) {
           try { resolver(reason); } catch (e) {}

@@ -38,6 +38,24 @@
     return 'ctx_' + Math.abs(hash).toString(16).padStart(8, '0');
   }
 
+  // HIS keeps previously opened module/dialog iframes in the DOM. Only explicit
+  // hidden states exclude a frame; unknown visibility remains a candidate so a
+  // real visible conflict cannot silently disappear from the clinical gate.
+  function isExplicitlyHiddenFrame(frame) {
+    for (let element = frame; element; element = element.parentElement) {
+      if (element.hidden === true || element.getAttribute?.('aria-hidden') === 'true') return true;
+      if (String(element.tagName || '').toLowerCase() === 'dialog' && element.open === false) return true;
+      const inline = element.style;
+      if (inline?.display === 'none' || inline?.visibility === 'hidden' || inline?.visibility === 'collapse') return true;
+      try {
+        const view = element.ownerDocument?.defaultView;
+        const style = view?.getComputedStyle?.(element);
+        if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse') return true;
+      } catch (_) { /* Unknown visibility stays fail-closed in the context comparison. */ }
+    }
+    return false;
+  }
+
   /**
    * Bóc tách ngữ cảnh lâm sàng toàn diện từ DOM VNPT HIS (Fail-Closed)
    * @param {Function} [getRootDocFn] - Hàm lấy root document (mặc định: getRootDocument)
@@ -65,6 +83,7 @@
         try {
           const iframes = d.querySelectorAll ? d.querySelectorAll('iframe') : [];
           for (const f of iframes) {
+            if (isExplicitlyHiddenFrame(f)) continue;
             try {
               const fd = f.contentDocument || f.contentWindow?.document;
               if (fd && !scannedDocs.has(fd)) {

@@ -1,10 +1,11 @@
+> Bản 1.6.0 chuyển file vào ô đính kèm; người dùng tự bấm Upload/Lưu. Các mô tả quy trình tự lưu phía dưới là tài liệu cũ cần cập nhật trước khi gửi Store. Chưa gửi Store.
+
 # Chrome Web Store Listing & Submission Guide — HIS CamSync
 
-> Ngày cập nhật: 27/09/2026  
-> Phiên bản phát hành: **v1.5.0**  
-> Tệp đóng gói (Release Package): `camsync-extension-v1.5.0.zip`  
-> Kích thước: 431 KB  
-> Mã kiểm tra SHA-256: `bf42ae62a005f9b7155a1951df7eec0919f1df977e27c3278fcebad7744112ce`  
+> Ngày cập nhật: 01/10/2026
+> Phiên bản chuẩn bị gửi duyệt: **v1.6.0**
+> Tệp đóng gói: `camsync-extension-v1.6.0.zip`
+> Trạng thái: bản local, chưa gửi duyệt hoặc phát hành.
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
 Tài liệu này tổng hợp toàn bộ các mục thông tin, văn bản giải trình và trường dữ liệu sẵn sàng để sao chép (copy-paste) trực tiếp vào **Chrome Developer Dashboard** khi cập nhật hoặc phát hành tiện ích lên Google Chrome Web Store.
@@ -91,6 +92,8 @@ HƯỚNG DẪN SỬ DỤNG:
 | `storage` | permissions | `Used to store user UI preferences (such as preferred specialty mode and camera filter settings) locally on the workstation without syncing off-device.` |
 | `https://*.vncare.vn/*` | host_permissions | `Required to inject the clinical scanner action button and pairing modal into authorized VNPT HIS hospital management portals.` |
 | `http://*.vncare.vn/*` | host_permissions | `Required to support local intranet hospital deployments of VNPT HIS operating over HTTP protocols.` |
+| `https://fantasy-1608.github.io/*` | host_permissions | `The service worker fetches only the fixed CamSync connection-config.json URL to read TURN server configuration. The request contains no patient data, images, session IDs or encryption keys and omits cookies. Remote executable code is not loaded.` |
+| `https://rmbbqtuzkyxovmskhfgj.supabase.co/*` | host_permissions | `Required only for the dedicated CamSync project: request short-lived, session-scoped relay tokens from its Edge Function. No patient data, images or image encryption keys are sent to that endpoint. This permission does not grant access to the roster project.` |
 
 ---
 
@@ -164,3 +167,22 @@ https://fantasy-1608.github.io/his-camsync/privacy.html
 4. Kiểm tra số phiên bản hiển thị là `1.5.0`.
 5. Điền/cập nhật thông tin Store Listing, Privacy, Permissions theo các mục ở trên.
 6. Bấm **Submit for Review** (Gửi để xem xét). Thời gian Google duyệt thông thường từ 24 - 48 giờ. Trong suốt thời gian này, bản v1.4.2 vẫn tiếp tục hoạt động phục vụ khoa phòng bình thường.
+
+
+## v1.5.2 — Supabase private relay
+
+Bổ sung private channel với JWT ngắn hạn, khóa ghép đôi tách khỏi khóa E2EE, join ACK và ngân sách ứng dụng 250 MB/tháng mặc định. WebRTC trực tiếp vẫn được ưu tiên. CamSync và lịch trực tách project nhưng người dùng đã chấp nhận dùng chung hạn mức tổ chức; không tuyên bố cách ly hoàn toàn quota. Cloud riêng cần QR mới và extension mới.
+
+Backend lưu metadata quyền phiên và reservation, không lưu ảnh hoặc E2EE key; Supabase có thể xử lý metadata mạng/dịch vụ. Trước gửi Store phải cập nhật chính sách bảo mật công khai theo mô tả này và kiểm chứng JWT/Realtime production; không tuyên bố đã phát hành hoặc đã được bệnh viện phê duyệt. Xem SUPABASE_SETUP.md.
+
+## v1.6.0 — Clinical pairing dialog
+
+Static QR on white replaces animated particles. Clear patient context, connection status, session countdown and manual QR renewal. Renewal is blocked during transfer/persistence and unresolved outcomes. Refresh the desktop screenshots before submission; no new permissions. Local release only, not submitted to Chrome Web Store.
+
+### Local patch 04/10/2026 — private relay recovery (unpacked 1.5.3)
+
+Broker v7 phân loại lỗi an toàn; extension giữ mã lỗi retryable qua service worker. Retry gia hạn có giới hạn và nằm trong TTL; hủy timer/kết quả cũ khi đóng phiên. Tắt server broadcast ACK, giới hạn năm reconnect cho mỗi QR; application transfer ACK và HIS_UNKNOWN manual review được giữ nguyên. Không thêm quyền hoặc thay đổi giao diện. Mobile 2.1.1 đã phát hành riêng. Gói local camsync-extension-supabase-fix-2026-10-04.zip cần reload unpacked; chưa submit Chrome Web Store. Local tests và live synthetic relay không chứng minh HIS persistence hay pilot bệnh viện.
+
+### Local patch 04/10/2026 — hidden HIS iframe context
+
+Clinical Guard không lấy ngữ cảnh từ iframe được xác định rõ là ẩn (hoặc nằm trong container ẩn/closed dialog). Khác biệt patient/encounter/order giữa các biểu mẫu visible hoặc visibility chưa xác minh vẫn chặn QR. Không đổi UI, quyền, Supabase hay writeback gates. Local regression coverage kiểm tra hidden/reopened/CSS-hidden/unknown-visibility frames; chưa xác minh lại trên HIS đang đăng nhập. Gói local camsync-extension-qr-context-fix-2026-10-04.zip.

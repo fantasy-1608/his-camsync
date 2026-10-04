@@ -32,7 +32,8 @@ function fixture() {
     }
   }
   const sandbox = {
-    WebSocket: Socket, URLSearchParams, TextEncoder, TextDecoder,
+    WebSocket: Socket, URLSearchParams, TextEncoder, TextDecoder, atob, btoa,
+    crypto: { getRandomValues: bytes => bytes.fill(7), subtle: { encrypt: async () => new Uint8Array([1, 2, 3]).buffer } },
     navigator: { userAgent: 'Quota regression test' },
     console: { log() {}, warn() {} },
     setTimeout: (fn, delay) => timer(fn, delay),
@@ -57,15 +58,17 @@ function fixture() {
     }
     now = end;
   };
+  const setGrant = () => { client.relayAuth = { grant: { topic: 'camsync:private:v1:qr-session:1', accessToken: 'synthetic', tokenExpiresAt: Date.now() + 300000, sessionExpiresAt: Date.now() + 300000 }, close() {}, reserve: async () => ({ reserved: true }) }; };
   const authorize = () => {
     // Synthetic authorization only. Production connect() must never do this.
     client.channelStatus = 'PRIVATE_CHANNEL_READY';
+    setGrant();
     client.initRealtimeBroadcast();
     const ws = sockets.at(-1);
     ws.open();
     return ws;
   };
-  return { client, sockets, timers, advance, authorize, sandbox };
+  return { client, sockets, timers, advance, authorize, setGrant, sandbox };
 }
 
 test('QR/E2EE keys do not authorize public Cloud Relay; WebRTC still starts', async () => {
@@ -128,6 +131,7 @@ test('broadcast server ACK cannot be mistaken for successful join', async () => 
 test('repeated init calls reuse one connecting/open socket', async () => {
   const f = fixture();
   f.client.channelStatus = 'PRIVATE_CHANNEL_READY';
+  f.setGrant();
   for (let i = 0; i < 30; i++) f.client.initRealtimeBroadcast();
   assert.equal(f.sockets.length, 1);
   f.sockets[0].open();
@@ -239,7 +243,7 @@ test('Cloud upload fails immediately when channel is pending; no socket or chunk
   const f = fixture();
   const result = await f.client.sendImageViaCloud({ size: 10, type: 'image/jpeg' });
   assert.equal(result.success, false);
-  assert.equal(result.status, 'HIS_UNKNOWN');
+  assert.equal(result.status, 'HIS_REJECTED');
   assert.equal(result.retry, false);
   assert.equal(f.sockets.length, 0);
 });
@@ -258,7 +262,7 @@ test('disconnect after chunk_start stops upload immediately without chunk or com
   const f = fixture();
   const ws = f.authorize();
   await ws.join();
-  f.client.cryptoKey = null; // Synthetic payload; encryption is covered by Tier 9.
+  f.client.cryptoKey = {}; // Keep production E2EE requirement; sandbox crypto uses synthetic encoding.
   f.sandbox.FileReader = class {
     readAsDataURL() { this.result = 'data:image/jpeg;base64,dGVzdA=='; this.onloadend(); }
   };
@@ -280,10 +284,12 @@ test('a QR change during file reading never sends old image chunks on the new ch
   const f = fixture();
   const old = f.authorize();
   await old.join();
-  f.client.cryptoKey = null;
+  f.client.cryptoKey = {};
+  f.client.encryptionKeyHex = '00'.repeat(32);
   let reader;
   f.sandbox.FileReader = class { readAsDataURL() { reader = this; } };
   const upload = f.client.sendImageViaCloud({ size: 4, type: 'image/jpeg' }, { transferId: 'old-session-transfer' });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
   f.client.closeRealtime();
   f.client.sessionId = 'different-qr';
   const current = f.authorize();
@@ -305,7 +311,7 @@ test('new QR closes the old topic and resets budgets without enabling Cloud Rela
   f.client.initWebRTC = () => {};
   await f.client.updateSession('new-session', '00'.repeat(32), 2);
   assert.equal(ws.sent.at(-1).event, 'phx_leave');
-  assert.equal(ws.sent.at(-1).topic, 'realtime:camsync:qr-session');
+  assert.equal(ws.sent.at(-1).topic, 'realtime:camsync:private:v1:qr-session:1');
   assert.equal(f.client.channelStatus, 'PRIVATE_CHANNEL_PENDING');
   assert.equal(f.client.reconnectAttempts, 0);
   assert.equal(f.client.patientReqRetryCount, 0);
