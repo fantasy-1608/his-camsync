@@ -1,0 +1,25 @@
+HIS CamSync hỗ trợ bác sĩ, kỹ thuật viên và điều dưỡng chuyển ảnh ECG, hình ảnh cận lâm sàng và tài liệu PDF từ điện thoại vào giao diện đính kèm VNPT HIS. Điện thoại sử dụng trình duyệt, không cần cài ứng dụng riêng hoặc kết nối cáp với máy tính.
+
+CÁC TÍNH NĂNG
+• Kết nối bằng mã QR: Mở biểu mẫu trên HIS, bấm Quét từ ĐT và quét mã bằng điện thoại để bắt đầu phiên chuyển file.
+• Chụp và chọn ảnh: Chụp ảnh trực tiếp hoặc chọn ảnh có sẵn; hỗ trợ chuyển đổi HEIC/HEIF sang JPEG khi định dạng có thể được giải mã.
+• Chỉnh sửa ảnh: Xoay, cắt và căn chỉnh góc chụp 4 điểm. Có bộ lọc giúp tăng độ tương phản khi xem ảnh ECG; người dùng cần kiểm tra ảnh sau xử lý trước khi gửi.
+• Quét tài liệu: Chụp nhiều trang, sắp xếp và gộp thành PDF để đính kèm vào Phiếu Scan.
+• Tự Upload ảnh CDHA: Với ảnh JPG/PNG, CamSync tự kích hoạt nút Upload của HIS khi mã bệnh nhân và định danh mẫu bệnh phẩm, kết quả, dịch vụ của biểu mẫu vẫn khớp với phiên QR. Khi không đủ điều kiện, người dùng kiểm tra và Upload thủ công.
+• Đặt tên file: Tên file có thể gồm tên bệnh nhân trên biểu mẫu, thời gian và mã phân biệt lần gửi để thuận tiện quản lý.
+• Phản hồi chuyển file: Hiển thị trạng thái kết nối và kết quả chuyển file tới máy tính. Có cơ chế xử lý lần gửi trùng và từ chối dữ liệu không đầy đủ.
+
+KẾT NỐI VÀ BẢO MẬT
+• Dữ liệu chuyển giữa điện thoại và máy tính được mã hóa AES-GCM. WebRTC được ưu tiên khi thiết lập được kết nối; cloud relay qua Supabase có thể chuyển tiếp dữ liệu đã mã hóa khi sử dụng chế độ Cloud.
+• Phiên QR gắn với ô đính kèm đã chọn và có thời hạn. Giữ kín mã QR và mở phiên mới khi thay biểu mẫu.
+• Ảnh, PDF và dữ liệu phiên được xử lý tạm thời trong trình duyệt. Một số dữ liệu phục hồi phiên và nhật ký vận hành được lưu tại thiết bị; dịch vụ kết nối có thể xử lý metadata mạng. Xem Chính sách bảo mật để biết chi tiết.
+• Thông báo đã chuyển file hoặc đã bắt đầu Upload không thay thế việc kiểm tra file đã lưu trên HIS. CamSync không tự ký số.
+
+HƯỚNG DẪN SỬ DỤNG
+1. Mở đúng hồ sơ và biểu mẫu Hình ảnh hoặc Phiếu Scan trên VNPT HIS.
+2. Bấm Quét từ ĐT và dùng camera điện thoại quét mã QR.
+3. Chụp hoặc chọn ảnh, chỉnh sửa và kiểm tra nội dung; với tài liệu, chuẩn bị PDF nhiều trang nếu cần.
+4. Bấm nút gửi trên điện thoại. Ảnh CDHA sẽ tự kích hoạt Upload khi đáp ứng điều kiện đối chiếu; nếu chưa tự Upload, kiểm tra và bấm Upload trên HIS.
+5. Với PDF Phiếu Scan, chọn tên phiếu và bấm Lưu thủ công. Kiểm tra file đã được lưu đúng hồ sơ trước khi hoàn tất.
+
+Tiện ích cần tài khoản và quyền VNPT HIS do cơ sở y tế cấp. Chỉ sử dụng với dữ liệu y tế trong phạm vi được cơ sở y tế cho phép.
