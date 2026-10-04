@@ -1277,8 +1277,9 @@ export class P2PClient {
     const connection = this.conn, sid = this.sessionId, generation = this.generation, epoch = this.lifecycleEpoch;
     const current = () => this.conn === connection && connection?.open && this.sessionId === sid && this.generation === generation && this.lifecycleEpoch === epoch && !this.isSessionIntentionallyClosed;
     if (!current()) return {success:false,status:'HIS_REJECTED',retry:false};
-    if (!this.cryptoKey && this.encryptionKeyHex) this.cryptoKey = await importAesGcmKey(this.encryptionKeyHex);
-    if (!this.cryptoKey) return {success:false,status:'HIS_REJECTED',code:'E2EE_KEY_REQUIRED',retry:false};
+    const transferKey = this.cryptoKey || (this.encryptionKeyHex ? await importAesGcmKey(this.encryptionKeyHex) : null);
+    if (!current()) return {success:false,status:'HIS_UNKNOWN',retry:false};
+    if (!transferKey) return {success:false,status:'HIS_REJECTED',code:'E2EE_KEY_REQUIRED',retry:false};
     const reader = new FileReader();
     const base64Data = await new Promise((resolve, reject) => {
       reader.onloadend = () => resolve(reader.result);
@@ -1295,7 +1296,7 @@ export class P2PClient {
     let isEncrypted = false;
     let encryptionIv = null;
 
-    if (this.cryptoKey) {
+    if (transferKey) {
       // Pack clinical metadata INSIDE the encrypted container - ZERO PHI in outer headers (F12, R3)
       const container = JSON.stringify({
         image: rawBase64,
@@ -1315,7 +1316,7 @@ export class P2PClient {
       };
 
       try {
-        const encResult = await encryptAesGcmPayload(this.cryptoKey, container, aadHeader);
+        const encResult = await encryptAesGcmPayload(transferKey, container, aadHeader);
         if (encResult.encrypted) {
           payloadToSend = encResult.data;
           isEncrypted = true;
