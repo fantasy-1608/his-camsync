@@ -83,7 +83,7 @@ test('session close promptly cancels a pending ACK waiter',async()=>{
 test('new QR during asynchronous preparation sends no bytes into the replacement connection',async()=>{
  const client=clientFixture();const old={open:true,send:()=>assert.fail('Old transfer must not send')};client.conn=old;
  const promise=client.sendImageViaWebRTC(new Blob(['synthetic'],{type:'image/jpeg'}));client.sessionId='new-session';client.conn={open:true,send:()=>assert.fail('Old image must not enter new QR')};
- assert.equal((await promise).success,false);
+ assert.equal((await promise).success,false);assert.equal(client.cryptoKey,null,'Old key import must not overwrite the current QR key');
 });
 test('DELIVERED receiver replays FILE_READY without assembling a duplicate',()=>{
  const context={window:{},console:{warn(){}},setTimeout,clearTimeout,Date};vm.createContext(context);

@@ -956,7 +956,7 @@ function validateAttachmentTarget() {
     startTargetWatcher();
 
     const specialtyParam = specialty ? `&specialty=${encodeURIComponent(specialty)}` : '';
-    const mobileUrl = `${MOBILE_APP_URL}/#session=${activeSessionId}&key=${encryptionKeyHex}&gen=${activeAttachmentSession.generation}&relay=${activeAttachmentSession.relayMobileCapability}${specialtyParam}`;
+    const mobileUrl = `${MOBILE_APP_URL}/?v=2.2.1#session=${activeSessionId}&key=${encryptionKeyHex}&gen=${activeAttachmentSession.generation}&relay=${activeAttachmentSession.relayMobileCapability}${specialtyParam}`;
     const patient = activeAttachmentSession.patient;
     const modalTitle = 'Kết nối điện thoại';
 
