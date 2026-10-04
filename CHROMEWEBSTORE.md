@@ -1,10 +1,14 @@
-> Bản 1.6.0 chuyển file vào ô đính kèm; người dùng tự bấm Upload/Lưu. Các mô tả quy trình tự lưu phía dưới là tài liệu cũ cần cập nhật trước khi gửi Store. Chưa gửi Store.
+## Gói ZIP tải lên Store — 04/10/2026
+
+Tệp: `camsync-chrome-store-v1.6.1.zip`. Manifest V3 1.6.1 nằm ngay ở gốc ZIP; đã kiểm tra integrity, file runtime, icon 16/48/128 và độ dài description. Gói chỉ chứa extension, không chứa mobile web, Supabase, tests hoặc file phát triển. Chưa upload lên Dashboard hay gửi duyệt.
+
+> Bản 1.6.1 chuyển file vào ô đính kèm; người dùng tự bấm Upload/Lưu. Các mô tả quy trình tự lưu phía dưới là tài liệu cũ cần cập nhật trước khi gửi Store. Chưa gửi Store.
 
 # Chrome Web Store Listing & Submission Guide — HIS CamSync
 
 > Ngày cập nhật: 01/10/2026
-> Phiên bản chuẩn bị gửi duyệt: **v1.6.0**
-> Tệp đóng gói: `camsync-extension-v1.6.0.zip`
+> Phiên bản chuẩn bị gửi duyệt: **v1.6.1**
+> Tệp đóng gói: `camsync-extension-v1.6.1.zip`
 > Trạng thái: bản local, chưa gửi duyệt hoặc phát hành.
 > Trang chính sách bảo mật (Live URL): `https://fantasy-1608.github.io/his-camsync/privacy.html`
 
@@ -175,7 +179,7 @@ Bổ sung private channel với JWT ngắn hạn, khóa ghép đôi tách khỏi
 
 Backend lưu metadata quyền phiên và reservation, không lưu ảnh hoặc E2EE key; Supabase có thể xử lý metadata mạng/dịch vụ. Trước gửi Store phải cập nhật chính sách bảo mật công khai theo mô tả này và kiểm chứng JWT/Realtime production; không tuyên bố đã phát hành hoặc đã được bệnh viện phê duyệt. Xem SUPABASE_SETUP.md.
 
-## v1.6.0 — Clinical pairing dialog
+## v1.6.1 — Clinical pairing dialog
 
 Static QR on white replaces animated particles. Clear patient context, connection status, session countdown and manual QR renewal. Renewal is blocked during transfer/persistence and unresolved outcomes. Refresh the desktop screenshots before submission; no new permissions. Local release only, not submitted to Chrome Web Store.
 

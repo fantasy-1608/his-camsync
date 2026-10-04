@@ -939,3 +939,10 @@
 @media (prefers-reduced-motion: reduce) {
   .camsync-modal-card, .camsync-modal-card * { animation: none !important; transition: none !important; }
 }
+
+/* Native local PDF preview; the host's save action remains manual. */
+.camsync-pdf-frame { width: 100%; height: 100%; border: 0; background: #fff; }
+.camsync-pdf-full { width: min(80vw, 960px); height: 72vh; }
+.camsync-lightbox-body:has(.camsync-pdf-full[style*="block"]) { flex-direction: column; gap: 8px; }
+.camsync-pdf-download { color: #fff; text-decoration: underline; font-size: 14px; }
+.camsync-pdf-download:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }

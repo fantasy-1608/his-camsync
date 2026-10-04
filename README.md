@@ -1,4 +1,4 @@
-# HIS CamSync 1.6.0 — chuyển file, Upload thủ công
+# HIS CamSync 1.6.1 — chuyển file, Upload thủ công
 
 CamSync thay các bước chụp ảnh → gửi Zalo → tải về máy tính bằng luồng chụp/chỉnh ảnh trên điện thoại → chuyển file vào ô đính kèm CLS hoặc Phiếu Scan. Nhân viên kiểm tra file và tự bấm **Upload/Lưu** trên HIS.
 
@@ -15,14 +15,14 @@ QR gắn với một ô đính kèm cụ thể, có hạn 5 phút. Khi đóng/th
 ## Cập nhật extension
 
 - Nếu extension được Load unpacked từ thư mục `extension` của dự án này: bấm Reload trong `chrome://extensions`, rồi tải lại tab HIS.
-- Nếu đang dùng thư mục giải nén ZIP cũ: giải nén `camsync-extension-v1.6.0.zip`, chọn **Load unpacked** trỏ tới thư mục mới (hoặc thay nội dung thư mục cũ rồi Reload). Chrome không cài trực tiếp file ZIP.
+- Nếu đang dùng thư mục giải nén ZIP cũ: giải nén `camsync-extension-v1.6.1.zip`, chọn **Load unpacked** trỏ tới thư mục mới (hoặc thay nội dung thư mục cũ rồi Reload). Chrome không cài trực tiếp file ZIP.
 - Trang điện thoại đã phát hành riêng; đóng trang cũ và quét QR mới để dùng bản mobile 2.2.1.
 
 ## Kiến trúc
 
 `mobile editor → AES-GCM → WebRTC (ưu tiên) / private Supabase relay → receiver → manual-attachment → FileList`.
 
-CamSync không bấm Upload, không phát sự kiện `change` của HIS và không gọi API ghi HIS. `FILE_READY` xác nhận file đã đặt vào ô đính kèm; không khẳng định đã lưu trên máy chủ HIS. Mất xác nhận: kiểm tra ô đính kèm trước khi gửi lại, không tự gửi lại ảnh. Khóa và tên file không nằm trong nhật ký/URL máy chủ; QR giữ khóa trong fragment.
+CamSync không bấm Upload, chỉ phát sự kiện `change` cho PDF trong form Phiếu Scan QLBA để HIS chuẩn bị dữ liệu xem trước/lưu và không gọi API ghi HIS. `FILE_READY` xác nhận file đã đặt vào ô đính kèm; không khẳng định đã lưu trên máy chủ HIS. Mất xác nhận: kiểm tra ô đính kèm trước khi gửi lại, không tự gửi lại ảnh. Khóa và tên file không nằm trong nhật ký/URL máy chủ; QR giữ khóa trong fragment.
 
 Kênh Supabase dùng quyền theo phiên, JWT ngắn hạn, ngân sách và giới hạn kết nối lại. Không lưu ảnh vào Supabase Storage. Xem [cấu hình relay](SUPABASE_SETUP.md). Máy chủ PeerJS tùy chọn trong `server/` không cần cho GitHub Pages + relay hiện tại.
 
@@ -35,6 +35,6 @@ pnpm run test:all
 pnpm run pack:extension
 ```
 
-Bộ kiểm tra hiện hành bao gồm manual attachment/ACK, E2EE, relay, quota, vòng đời kết nối và các module độc lập. `test:legacy` là bộ thử luồng tự Upload cũ, được giữ làm tài liệu lịch sử; không phải tiêu chí phát hành 1.6.0 và có giả định không còn áp dụng.
+Bộ kiểm tra hiện hành bao gồm manual attachment/ACK, E2EE, relay, quota, vòng đời kết nối và các module độc lập. `test:legacy` là bộ thử luồng tự Upload cũ, được giữ làm tài liệu lịch sử; không phải tiêu chí phát hành 1.6.1 và có giả định không còn áp dụng.
 
-[Chi tiết bản phát hành và bằng chứng kiểm tra](RELEASE_1.6.0.md). Kiểm tra giả lập không thay thế thử thao tác Upload thực tế trên HIS và mạng bệnh viện.
+[Chi tiết bản phát hành và bằng chứng kiểm tra](RELEASE_1.6.1.md). Kiểm tra giả lập không thay thế thử thao tác Upload thực tế trên HIS và mạng bệnh viện.

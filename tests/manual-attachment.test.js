@@ -93,3 +93,19 @@ test('DELIVERED receiver replays FILE_READY without assembling a duplicate',()=>
  receiver.begin({transferId:'transfer01',v:2,totalChunks:1,totalSize:5,mimeType:'image/jpeg',sendAck:(success,_error,payload)=>ack={success,payload}});
  assert.equal(ack.success,true);assert.equal(ack.payload.status,'FILE_READY');receiver.purgeAll();
 });
+
+test('QLBA PDF scan selection prepares native form state once without clicking Save or Sign',()=>{
+ const input=inputFixture(false);input.ownerDocument.location={href:'https://synthetic.invalid/vnpthis/NTU01H102_ThemPhieuKySo.jsp'};
+ input.ownerDocument.defaultView.Event=Event;let selections=0;let ready;
+ input.dispatchEvent=event=>{assert.equal(event.type,'change');assert.equal(event.bubbles,true);ready=input.files[0];selections++;return true;};
+ input.click=()=>assert.fail('Save/Sign must remain manual');
+ const file={name:'synthetic.pdf',type:'application/pdf'};const result=manual.attach(input,[file]);
+ assert.equal(result.status,'FILE_READY');assert.equal(result.selectionNotified,true);assert.equal(selections,1);assert.equal(ready,file);
+});
+test('PDF in ordinary CLS and image files in QLBA do not trigger host change handlers',()=>{
+ for(const [scan,type] of [[false,'application/pdf'],[true,'image/jpeg']]){
+ const input=inputFixture();input.ownerDocument.location={href:scan?'https://synthetic.invalid/NTU01H102_ThemPhieuKySo.jsp':'https://synthetic.invalid/CLS'};
+ input.dispatchEvent=()=>assert.fail('Only scan-form PDF selection is authorized');
+ assert.equal(manual.attach(input,[{name:'synthetic',type}]).selectionNotified,false);
+ }
+});

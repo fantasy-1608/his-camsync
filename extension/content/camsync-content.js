@@ -539,7 +539,7 @@ function validateAttachmentTarget() {
   function injectFilesAndUpload(fileList, targetInput) {
     const input = targetInput || activeAttachmentSession?.targetInput;
     const result = window.__CamSyncManual.attach(input, fileList);
-    if (result.success) showToast('Đã chuyển file tới máy tính. Kiểm tra và bấm Upload.');
+    if (result.success) showToast('Đã chuyển file tới máy tính. Kiểm tra và bấm Upload/Lưu.');
     else showToast(result.reason || 'Không thể gắn file.');
     return result;
   }
@@ -1338,6 +1338,7 @@ function validateAttachmentTarget() {
     }
 
     for (let i = 0; i < receivedPhotos.length; i++) {
+      releasePhotoPreview(receivedPhotos[i]);
       receivedPhotos[i].base64 = null;
     }
     receivedPhotos = [];
@@ -2177,7 +2178,7 @@ function validateAttachmentTarget() {
     if (existing) return existing.result;
     if (recentUploadedTokens.size >= 100) return {success:false,status:'HIS_REJECTED',code:'TRANSFER_LIMIT',reason:'Mở QR mới để gửi tiếp.',retry:false};
     try {
-      const mime = (base64Image.match(/^data:([^;]+);base64,/) || [])[1];
+      const mime = (base64Image.match(/^data:([^;,]+);(?:[^,]*;)?base64,/) || [])[1];
       const filename = window.__CamSyncManual.filename(activeAttachmentSession.patient.name, mime, transferId);
       const file = dataURLtoFile(base64Image, filename);
       if (file.size > MAX_IMAGE_BYTES) return {success:false,status:'HIS_REJECTED',code:'FILE_TOO_LARGE',retry:false};
@@ -2188,14 +2189,14 @@ function validateAttachmentTarget() {
       recentUploadedTokens.set(transferId, {state:'DELIVERED',result});
       unifiedTransferReceiver.setTransferState(transferId, 'DELIVERED', result);
       const approxKB = Math.round(file.size / 1024);
-      receivedPhotos.push({id:photoCount,base64:base64Image,filename,sizeKB:approxKB,timestamp:Date.now(),rotation:0});
-      while (receivedPhotos.length > 1 && (receivedPhotos.length > 5 || receivedPhotos.reduce((bytes, photo) => bytes + photo.base64.length, 0) > 16 * 1024 * 1024)) receivedPhotos.shift();
+      receivedPhotos.push({id:photoCount,base64:base64Image,filename,sizeKB:approxKB,timestamp:Date.now(),rotation:0,pdfFile:mime === 'application/pdf' ? file : null});
+      while (receivedPhotos.length > 1 && (receivedPhotos.length > 5 || receivedPhotos.reduce((bytes, photo) => bytes + photo.base64.length, 0) > 16 * 1024 * 1024)) releasePhotoPreview(receivedPhotos.shift());
       currentPhotoIndex = receivedPhotos.length - 1;
       updateProgressUI(100, `${approxKB} KB`, 'Đã chuyển file tới máy tính');
       const status = getModalElement('camsyncStatusText');
       if (status) status.textContent = 'Đã chuyển file tới máy tính';
       const instruction = getModalElement('camsyncInstruction');
-      if (instruction) instruction.textContent = 'Đóng cửa sổ này, kiểm tra file và bấm Upload trên HIS.';
+      if (instruction) instruction.textContent = result.selectionNotified ? 'Đóng cửa sổ này, chọn Tên phiếu, kiểm tra PDF và bấm Lưu trên HIS.' : 'Đóng cửa sổ này, kiểm tra file và bấm Upload trên HIS.';
       for (const [id, display] of [['camsyncQrCode','none'],['camsyncLivePreview','flex'],['camsyncQrToggleBar','flex'],['camsyncNextShotBar','flex']]) {
         const el = getModalElement(id); if (el) el.style.display = display;
       }
@@ -2215,6 +2216,44 @@ function validateAttachmentTarget() {
     if (photo.filename && photo.filename.toLowerCase().endsWith('.pdf')) return true;
     if (typeof photo.base64 === 'string' && photo.base64.startsWith('data:application/pdf')) return true;
     return false;
+  }
+
+  function releasePhotoPreview(photo) {
+    if (photo?.pdfUrl) URL.revokeObjectURL(photo.pdfUrl);
+    if (photo) { photo.pdfUrl = null; photo.pdfFile = null; }
+  }
+
+  function renderPdfPreview(photo, image, id, fullSize) {
+    if (!image?.parentNode) return;
+    const doc = image.ownerDocument;
+    let frame = doc.getElementById(id);
+    let download = doc.getElementById(`${id}Download`);
+    if (!isPdfPayload(photo)) {
+      if (frame) { frame.removeAttribute('src'); frame.style.display = 'none'; }
+      if (download) { download.removeAttribute('href'); download.style.display = 'none'; }
+      image.style.display = '';
+      return;
+    }
+    if (!photo.pdfUrl) {
+      photo.pdfUrl = URL.createObjectURL(photo.pdfFile || dataURLtoFile(photo.base64, photo.filename));
+    }
+    if (!frame) {
+      frame = doc.createElement('iframe'); frame.id = id;
+      frame.title = 'Xem trước tài liệu PDF';
+      frame.className = fullSize ? 'camsync-pdf-frame camsync-pdf-full' : 'camsync-pdf-frame';
+      image.parentNode.insertBefore(frame, image);
+    }
+    const src = `${photo.pdfUrl}#toolbar=${fullSize ? 1 : 0}&navpanes=0&view=FitH`;
+    if (frame.getAttribute('src') !== src) frame.src = src;
+    frame.style.display = 'block'; image.style.display = 'none';
+    if (fullSize) {
+      if (!download) {
+        download = doc.createElement('a'); download.id = `${id}Download`;
+        download.className = 'camsync-pdf-download'; download.textContent = 'Tải PDF về máy';
+        image.parentNode.appendChild(download);
+      }
+      download.href = photo.pdfUrl; download.download = photo.filename; download.style.display = 'inline-block';
+    }
   }
 
   function renderCurrentPhoto() {
@@ -2240,6 +2279,7 @@ function validateAttachmentTarget() {
         applyRotation(liveImg, photo.rotation || 0);
       }
     }
+    renderPdfPreview(photo, liveImg, 'camsyncPdfPreview', false);
     if (liveMeta) {
       liveMeta.textContent = isPdf ? `Tài liệu PDF: ${photo.filename} (${photo.sizeKB} KB)` : `${photo.filename} (${photo.sizeKB} KB)`;
     }
@@ -2256,6 +2296,10 @@ function validateAttachmentTarget() {
         lightboxImg.style.padding = '0';
         applyRotation(lightboxImg, photo.rotation || 0);
       }
+    }
+    renderPdfPreview(photo, lightboxImg, 'camsyncPdfLightbox', true);
+    for (const id of ['camsyncRotateBtn','camsyncLightboxRotate']) {
+      const button = getModalElement(id); if (button) button.disabled = isPdf;
     }
     if (lightboxTitle) {
       lightboxTitle.textContent = isPdf ? `Tài liệu PDF - ${photo.filename}` : `Ảnh ${photo.id}/${photoCount} - ${photo.filename}`;

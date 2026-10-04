@@ -1,6 +1,6 @@
 {
   "name": "his-camsync",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Zero-install mobile document scanner & instant WebRTC sync tool for hospital HIS (ECG, Endoscopy, Ultrasound)",
   "main": "server/server.js",
   "type": "module",
@@ -13,7 +13,7 @@
     "test:safety": "node tests/hospital-safety.test.js",
     "check:syntax": "node --check extension/content/clinical-guard.js && node --check extension/content/his-adapter.js && node --check extension/content/camsync-content.js && node --check extension/content/audit-logger.js && node --check mobile-web/js/p2p-client.js && node --check server/server.js && node --check extension/connection-worker.js && node --check extension/content/connection-config.js && node --check extension/content/private-relay.js && node --check mobile-web/js/private-relay.js && node --check supabase/functions/camsync-relay-auth/index.js && node --check supabase/functions/camsync-relay-auth/relay-core.js && node --check extension/content/manual-attachment.js && node --check extension/content/transfer-receiver.js",
     "test:all": "node tests/manual-attachment.test.js && node tests/private-relay.test.js && node tests/relay-resilience.test.js && node tests/realtime-quota.test.js && node tests/connection-resilience.test.js && node tests/hospital-safety.test.js && node tests/e2e/run_all_tests.js",
-    "pack:extension": "cd extension && zip -r -X ../camsync-extension-v1.6.0.zip . -x '*.DS_Store'",
+    "pack:extension": "cd extension && zip -r -X ../camsync-extension-v1.6.1.zip . -x '*.DS_Store'",
     "test:connection": "node tests/connection-resilience.test.js",
     "test:relay": "node tests/private-relay.test.js && node tests/relay-resilience.test.js",
     "test:legacy": "node tests/run_all_hardening_tiers.js"

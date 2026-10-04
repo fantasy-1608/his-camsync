@@ -1,4 +1,4 @@
-/** Manual attachment workflow: no HIS requests, click, submit or change handlers. */
+/** Manual attachment workflow: no save/upload clicks or direct HIS requests. PDF scan forms receive their native selection event. */
 (function () {
   'use strict';
   function findInput(doc) {
@@ -59,6 +59,9 @@
       return true;
     } catch (_) { return false; }
   }
+  function isPdfScanForm(doc) {
+    return /NTU01H102_ThemPhieuKySo/i.test(doc?.location?.href || '') || Boolean(doc?.getElementById?.('btnCamSyncPhieuScan'));
+  }
   function attach(input, files) {
     if (!available(input)) return {success:false, status:'HIS_REJECTED', code:'TARGET_UNAVAILABLE', reason:'Ô đính kèm đã đóng. Mở lại cửa sổ và quét QR mới.', retry:false};
     const existing = Array.from(input.files || []);
@@ -71,9 +74,15 @@
       input.files = dt.files;
       const assigned = Array.from(input.files || []);
       if (assigned.length !== existing.length + files.length || files.some((file, index) => assigned[existing.length + index] !== file)) throw new Error('FILE_ASSIGNMENT_FAILED');
-      // No synthetic change event: host onchange may itself submit/upload.
-      return {success:true, initiated:true, status:'FILE_READY', manualUpload:true};
+      // QLBA uses its selection handler to prepare PDF preview and save-form data.
+      // Restore native file selection only in the known PDF scan form; never click Lưu/Ký số.
+      const selectionNotified = files.every(file => file.type === 'application/pdf') && isPdfScanForm(input.ownerDocument);
+      if (selectionNotified) {
+        const ViewEvent = input.ownerDocument.defaultView.Event;
+        input.dispatchEvent(new ViewEvent('change', {bubbles:true}));
+      }
+      return {success:true, initiated:true, status:'FILE_READY', manualUpload:true, selectionNotified};
     } catch (_) { return {success:false, status:'HIS_REJECTED', code:'FILE_ASSIGNMENT_FAILED', reason:'Không thể đặt file vào ô đính kèm.', retry:false}; }
   }
-  window.__CamSyncManual = {findInput, readName, filename, available, attach};
+  window.__CamSyncManual = {findInput, readName, filename, available, isPdfScanForm, attach};
 })();
