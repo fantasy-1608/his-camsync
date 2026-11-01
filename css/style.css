@@ -1,13 +1,16 @@
+/* Lucian UX/UI Prompt #039 #047 #070 #071 #072 #081 #090 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/ */
 /**
- * HIS-CamSync: Mobile Web Styling (Quiet Clinical Utility)
+ * HIS-CamSync: Mobile Web Styling (Quiet Clinical Utility + Lucian Clinical Motion)
  * Hỗ trợ tự động Dark / Light Mode theo cài đặt hệ thống của điện thoại (prefers-color-scheme)
- * Tối ưu hóa công thái học một tay (Thumb-Zone) cho y bác sĩ, điều dưỡng
+ * Tối ưu hóa công thái học một tay (Thumb-Zone), 0% backdrop-blur, WCAG AA contrast
  */
 
 /* ==========================================================================
-   CSS Custom Properties & Design Tokens
+   CSS Custom Properties & Clinical Lucian Tokens
    ========================================================================== */
 :root {
+  color-scheme: light;
+
   /* Default: Clinical Light Mode (Phòng khám / Ban ngày) */
   --bg-app: #f8fafc;
   --bg-surface: #ffffff;
@@ -21,91 +24,157 @@
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-muted: #64748b;
   --text-inverse: #ffffff;
 
   --accent-blue: #0284c7;
   --accent-blue-hover: #0369a1;
-  --accent-blue-subtle: rgba(2, 132, 199, 0.08);
+  --accent-blue-subtle: rgba(2, 132, 199, 0.1);
 
   --accent-green: #059669;
-  --accent-green-subtle: rgba(5, 150, 105, 0.1);
+  --accent-green-subtle: rgba(5, 150, 105, 0.11);
+  --accent-green-border: rgba(5, 150, 105, 0.28);
 
-  --accent-amber: #d97706;
-  --accent-amber-subtle: rgba(217, 119, 6, 0.1);
+  --accent-amber: #b45309;
+  --accent-amber-subtle: #fffbeb;
+  --accent-amber-border: rgba(217, 119, 6, 0.35);
 
   --accent-red: #dc2626;
-  --accent-red-subtle: rgba(220, 38, 38, 0.08);
+  --accent-red-subtle: #fef2f2;
+  --accent-red-border: rgba(220, 38, 38, 0.32);
 
-  --canvas-bg: #e2e8f0;
+  --canvas-bg: #cbd5e1;
   --ruler-bg: #f1f5f9;
   --ruler-tick: #94a3b8;
   --ruler-tick-major: #475569;
   --ruler-pointer: #d97706;
 
-  --crop-overlay: rgba(15, 23, 42, 0.5);
+  --crop-overlay: rgba(15, 23, 42, 0.54);
   --crop-border: #0284c7;
   --crop-handle: #0284c7;
 
+  --overlay-scrim: rgba(15, 23, 42, 0.72);
+  --snackbar-bg: #0f172a;
+  --snackbar-fg: #f8fafc;
+  --snackbar-accent: #38bdf8;
+
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 10px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -6px rgba(15, 23, 42, 0.16), 0 4px 8px -4px rgba(15, 23, 42, 0.08);
 
   --radius-xs: 6px;
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Courier New', monospace;
+
+  /* Lucian Clinical Token Mapping (Quiet Clinical Utility) */
+  --ux-page: var(--bg-app);
+  --ux-surface: var(--bg-surface);
+  --ux-surface-2: var(--bg-elevated);
+  --ux-surface-3: var(--border-subtle);
+  --ux-ink: var(--text-primary);
+  --ux-ink-2: var(--text-secondary);
+  --ux-ink-3: var(--text-muted);
+  --ux-line: var(--border-subtle);
+  --ux-line-2: var(--border-strong);
+  --ux-accent: var(--accent-blue);
+  --ux-accent-2: var(--accent-blue-hover);
+  --ux-accent-soft: var(--accent-blue-subtle);
+  --ux-accent-ink: #ffffff;
+  --ux-mint: var(--accent-green);
+  --ux-warn: var(--accent-amber);
+  --ux-danger: var(--accent-red);
+  --ux-glass: var(--bg-surface);
+  --ux-glass-line: var(--border-subtle);
+  --ux-shadow: rgba(15, 23, 42, 0.08);
+  --ux-shadow-strong: rgba(15, 23, 42, 0.16);
+  --ux-grad: none;
+  --ux-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ux-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
 }
 
 /* Tự động chuyển đổi sang Clinical Dark Mode theo cài đặt của điện thoại */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-app: #0c111a;
-    --bg-surface: #141c2a;
-    --bg-elevated: #1b263b;
-    --bg-card: #162030;
-    --bg-card-subtle: #111827;
+    color-scheme: dark;
 
-    --border-subtle: #233044;
-    --border-strong: #33445d;
+    --bg-app: #0b111b;
+    --bg-surface: #131c2b;
+    --bg-elevated: #1c283d;
+    --bg-card: #152032;
+    --bg-card-subtle: #101826;
+
+    --border-subtle: #243248;
+    --border-strong: #354764;
     --border-accent: #38bdf8;
 
     --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --text-inverse: #0c111a;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-inverse: #0b111b;
 
     --accent-blue: #0284c7;
-    --accent-blue-hover: #38bdf8;
-    --accent-blue-subtle: rgba(56, 189, 248, 0.12);
+    --accent-blue-hover: #0ea5e9;
+    --accent-blue-subtle: rgba(56, 189, 248, 0.15);
 
     --accent-green: #10b981;
-    --accent-green-subtle: rgba(16, 185, 129, 0.12);
+    --accent-green-subtle: rgba(16, 185, 129, 0.15);
+    --accent-green-border: rgba(16, 185, 129, 0.35);
 
-    --accent-amber: #f59e0b;
+    --accent-amber: #fbbf24;
     --accent-amber-subtle: rgba(245, 158, 11, 0.15);
+    --accent-amber-border: rgba(245, 158, 11, 0.35);
 
-    --accent-red: #ef4444;
-    --accent-red-subtle: rgba(239, 68, 68, 0.12);
+    --accent-red: #f87171;
+    --accent-red-subtle: rgba(239, 68, 68, 0.16);
+    --accent-red-border: rgba(248, 113, 113, 0.36);
 
-    --canvas-bg: #070a0f;
-    --ruler-bg: #111827;
+    --canvas-bg: #070b12;
+    --ruler-bg: #101826;
     --ruler-tick: #475569;
     --ruler-tick-major: #94a3b8;
     --ruler-pointer: #f59e0b;
 
-    --crop-overlay: rgba(0, 0, 0, 0.65);
+    --crop-overlay: rgba(0, 0, 0, 0.66);
     --crop-border: #38bdf8;
     --crop-handle: #38bdf8;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.6);
+    --overlay-scrim: rgba(4, 8, 15, 0.82);
+    --snackbar-bg: #f8fafc;
+    --snackbar-fg: #0f172a;
+    --snackbar-accent: #0284c7;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 26px -4px rgba(0, 0, 0, 0.65);
+
+    --ux-shadow: rgba(0, 0, 0, 0.4);
+    --ux-shadow-strong: rgba(0, 0, 0, 0.68);
+  }
+}
+
+.ux, .ux *, .ux *::before, .ux *::after {
+  box-sizing: border-box;
+}
+
+.ux :focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after,
+  .ux, .ux *, .ux *::before, .ux *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -145,19 +214,21 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s var(--ux-ease), color 0.25s var(--ux-ease);
 }
 
 /* ==========================================================================
-   Header (Cố định ở trên)
+   Header & Lucian #090 Status Pill (Cố định ở trên, dễ chạm ngón cái)
    ========================================================================== */
 .app-header {
-  padding: 10px 14px;
+  padding: 8px 12px;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   flex-shrink: 0;
   z-index: 20;
 }
@@ -165,69 +236,147 @@ body {
 .header-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  flex-shrink: 0;
 }
 
 .brand-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent-blue-subtle);
   color: var(--accent-blue);
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .brand-title {
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
+/* Lucian #090 Status Pill: 34px touch height, distinct ok / connecting / disconnected states */
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  min-height: 34px;
+  min-width: 0;
+  flex-shrink: 1;
+  font-size: 12px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: var(--radius-full);
-  background: var(--accent-green-subtle);
+  background-color: var(--accent-green-subtle);
   color: var(--accent-green);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid var(--accent-green-border);
   cursor: pointer;
-  transition: all 0.2s ease;
+  white-space: nowrap;
+  max-width: calc(100% - 146px);
+  transition:
+    background-color 0.26s var(--ux-ease),
+    color 0.26s var(--ux-ease),
+    border-color 0.26s var(--ux-ease),
+    transform 0.25s var(--ux-spring);
+}
+
+.status-badge:active {
+  transform: scale(0.95);
+}
+
+#statusText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  position: relative;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background-color: var(--accent-green);
-  box-shadow: 0 0 5px var(--accent-green);
+  flex-shrink: 0;
+  transition: background-color 0.25s var(--ux-ease);
 }
 
-.status-badge.disconnected {
-  background: var(--accent-red-subtle);
+.status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  transform: scale(0.75);
+}
+
+/* Đang kết nối / thử lại: nhịp thở dịu Lucian #090 */
+.status-badge.connecting {
+  background-color: var(--accent-amber-subtle);
+  color: var(--accent-amber);
+  border-color: var(--accent-amber-border);
+}
+
+.status-badge.connecting .status-dot {
+  background-color: var(--accent-amber);
+}
+
+.status-badge.connecting .status-dot::after {
+  animation: u090-pulse 1.3s var(--ux-ease) infinite;
+}
+
+/* Mất kết nối / chờ quét QR */
+.status-badge.disconnected:not(.connecting) {
+  background-color: var(--accent-red-subtle);
   color: var(--accent-red);
-  border-color: rgba(239, 68, 68, 0.25);
+  border-color: var(--accent-red-border);
 }
 
-.status-badge.disconnected .status-dot {
+.status-badge.disconnected:not(.connecting) .status-dot {
   background-color: var(--accent-red);
-  box-shadow: 0 0 5px var(--accent-red);
+}
+
+.status-retry-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  display: none;
+  transition: transform 0.35s var(--ux-spring);
+}
+
+.status-badge.disconnected .status-retry-icon,
+.status-badge.connecting .status-retry-icon {
+  display: block;
+}
+
+.status-badge.connecting .status-retry-icon {
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes u090-pulse {
+  0% { opacity: 0.65; transform: scale(0.75); }
+  100% { opacity: 0; transform: scale(1.75); }
 }
 
 /* ==========================================================================
-   Patient Context Card (Trọng tâm lâm sàng - Chống nhầm lẫn bệnh nhân)
+   Patient Context Card (Chốt chặn lâm sàng - Luôn ghim rõ ở đầu màn hình)
    ========================================================================== */
 .patient-context-card {
-  margin: 8px 12px 0 12px;
-  padding: 10px 14px;
+  margin: 6px 12px 0 12px;
+  padding: 9px 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-blue);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
   z-index: 15;
-  transition: all 0.2s ease;
+  transition: border-color 0.25s var(--ux-ease), background-color 0.25s var(--ux-ease);
 }
 
 .patient-top-row {
@@ -250,7 +399,7 @@ body {
 }
 
 .patient-name {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.01em;
@@ -261,19 +410,19 @@ body {
 
 .patient-id-badge {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--accent-blue);
   background: var(--accent-blue-subtle);
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: var(--radius-xs);
-  border: 1px solid rgba(2, 132, 199, 0.2);
+  border: 1px solid rgba(2, 132, 199, 0.22);
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .patient-meta-row {
-  margin-top: 4px;
+  margin-top: 3px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -285,65 +434,116 @@ body {
   text-overflow: ellipsis;
 }
 
-.patient-meta-bullet {
-  color: var(--border-strong);
-  font-size: 10px;
-}
-
 /* ==========================================================================
-   Alert Banners (Fail-Closed Alerts)
+   Lucian #072 Collapsing Inline Alerts (Error & Warning Banners)
    ========================================================================== */
 .error-banner,
 .warning-banner {
+  position: relative;
   margin: 6px 12px 0 12px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  padding: 9px 10px 9px 13px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.4;
   flex-shrink: 0;
   z-index: 16;
-  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  transform-origin: 50% 0%;
+  animation: u072-unfold 0.28s var(--ux-spring);
+  transition: transform 0.24s var(--ux-ease), opacity 0.2s var(--ux-ease);
+}
+
+.error-banner::before,
+.warning-banner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
 }
 
 .error-banner {
-  background: var(--accent-red-subtle);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  background-color: var(--accent-red-subtle);
+  border: 1px solid var(--accent-red-border);
   color: var(--accent-red);
 }
 
+.error-banner::before {
+  background-color: var(--accent-red);
+}
+
 .warning-banner {
-  background: var(--accent-amber-subtle);
-  border: 1px solid rgba(217, 119, 6, 0.25);
+  background-color: var(--accent-amber-subtle);
+  border: 1px solid var(--accent-amber-border);
   color: var(--accent-amber);
+}
+
+.warning-banner::before {
+  background-color: var(--accent-amber);
+}
+
+.error-banner.is-collapsing,
+.warning-banner.is-collapsing {
+  transform: translateX(28px) scale(0.98);
+  opacity: 0;
 }
 
 .banner-content {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   flex: 1;
+  min-width: 0;
+}
+
+.banner-content svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .btn-dismiss-banner {
-  background: none;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: transparent;
   border: none;
   color: inherit;
   font-size: 18px;
-  padding: 0 4px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0.8;
+  transition: background-color 0.18s var(--ux-ease), transform 0.25s var(--ux-spring);
 }
 
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+.btn-dismiss-banner:active {
+  transform: scale(0.86);
+  background-color: rgba(15, 23, 42, 0.08);
+}
+
+@keyframes u072-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* ==========================================================================
-   Main View & Screen Management
+   Main View & Lucian #039 Directional Screen Transitions
    ========================================================================== */
 .main-view {
   flex: 1;
@@ -351,6 +551,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  min-height: 0;
 }
 
 .screen {
@@ -361,63 +562,116 @@ body {
   overflow: hidden;
 }
 
-#docScreen.screen {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+.screen.u039-enter-right {
+  animation: u039-slide-from-right 0.34s var(--ux-spring);
+}
+
+.screen.u039-enter-left {
+  animation: u039-slide-from-left 0.34s var(--ux-spring);
+}
+
+@keyframes u039-slide-from-right {
+  from { opacity: 0.45; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes u039-slide-from-left {
+  from { opacity: 0.45; transform: translateX(-14px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* ==========================================================================
-   Screen 1: Standby / Capture Screen (Màn hình Chụp)
+   Lucian #047 Stretching Segmented Control (3 Chế độ thẳng hàng 1 dòng)
    ========================================================================== */
-.capture-screen {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-/* Specialty Mode Segmented Selector */
 .specialty-segmented-bar {
-  background-color: var(--bg-surface);
+  position: relative;
+  background-color: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 4px;
-  display: flex;
-  gap: 4px;
-  box-shadow: var(--shadow-sm);
+  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
   margin: 6px 12px 2px 12px;
   flex-shrink: 0;
+  isolation: isolate;
 }
 
 body.doc-editing .specialty-segmented-bar {
   display: none !important;
 }
 
+/* Viên thuốc trượt co giãn vật lý chuẩn Lucian #047 */
+.u047-knob {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: var(--l, 3px);
+  right: var(--r, 66.66%);
+  border-radius: calc(var(--radius-md) - 2px);
+  background-color: var(--accent-blue);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.28);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.u047-seg.go-r .u047-knob {
+  transition: right 0.24s var(--ux-ease), left 0.44s var(--ux-spring) 0.05s;
+}
+
+.u047-seg.go-l .u047-knob {
+  transition: left 0.24s var(--ux-ease), right 0.44s var(--ux-spring) 0.05s;
+}
+
 .spec-tab-btn {
-  flex: 1;
-  display: flex;
+  position: relative;
+  z-index: 1;
+  min-height: 36px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 9px 12px;
+  gap: 6px;
+  padding: 6px 8px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-md) - 2px);
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.22s var(--ux-ease), transform 0.25s var(--ux-spring);
+}
+
+.spec-tab-btn svg {
+  flex-shrink: 0;
+}
+
+.spec-tab-btn:active {
+  transform: scale(0.95);
 }
 
 .spec-tab-btn.active {
-  background-color: var(--accent-blue);
   color: #ffffff;
+}
+
+/* Fallback khi JS chưa đo xong tọa độ u047-knob */
+.specialty-segmented-bar:not(.knob-ready) .spec-tab-btn.active {
+  background-color: var(--accent-blue);
   box-shadow: var(--shadow-sm);
 }
 
-/* Capture Central Hero Card */
+/* ==========================================================================
+   Screen 1: Standby / Capture Screen (Màn hình Chụp)
+   ========================================================================== */
+.capture-screen {
+  padding: 10px 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .capture-guide-card {
   margin: auto 0;
   background-color: var(--bg-surface);
@@ -436,11 +690,17 @@ body.doc-editing .specialty-segmented-bar {
   height: 64px;
   border-radius: 50%;
   background: var(--accent-blue-subtle);
+  border: 1px solid rgba(2, 132, 199, 0.16);
   color: var(--accent-blue);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  transition: transform 0.35s var(--ux-spring);
+}
+
+.guide-icon-circle.pop {
+  transform: scale(1.08);
 }
 
 .guide-title {
@@ -448,14 +708,14 @@ body.doc-editing .specialty-segmented-bar {
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 6px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .guide-desc {
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.48;
   color: var(--text-secondary);
-  max-width: 280px;
+  max-width: 290px;
 }
 
 .guide-desc:empty {
@@ -468,27 +728,27 @@ body.doc-editing .specialty-segmented-bar {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding-bottom: calc(14px + env(safe-area-inset-bottom, 12px));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 8px));
 }
 
-/* Shutter Button (Nút bấm chụp lớn kiểu Camera cao cấp) */
+/* Shutter Button (Đàn hồi lò xo chuẩn Lucian) */
 .btn-shutter-main {
-  width: 72px;
-  height: 72px;
+  width: 74px;
+  height: 74px;
   border-radius: 50%;
   background: var(--bg-surface);
-  border: 4px solid var(--accent-blue);
+  border: 3.5px solid var(--accent-blue);
   padding: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-md);
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.3s var(--ux-spring), border-color 0.2s var(--ux-ease), box-shadow 0.2s var(--ux-ease);
 }
 
 .btn-shutter-main:active {
-  transform: scale(0.92);
+  transform: scale(0.91);
 }
 
 .shutter-inner-circle {
@@ -500,27 +760,34 @@ body.doc-editing .specialty-segmented-bar {
   align-items: center;
   justify-content: center;
   color: #ffffff;
+  transition: background-color 0.2s var(--ux-ease);
+}
+
+.btn-shutter-main:active .shutter-inner-circle {
+  background-color: var(--accent-blue-hover);
 }
 
 .btn-gallery-subtle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: 1px solid var(--border-subtle);
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 1px solid var(--border-strong);
   background-color: var(--bg-surface);
-  color: var(--text-secondary);
-  padding: 9px 18px;
+  color: var(--text-primary);
+  padding: 8px 20px;
   border-radius: var(--radius-full);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s var(--ux-spring), background-color 0.18s var(--ux-ease);
 }
 
 .btn-gallery-subtle:active {
   background-color: var(--bg-elevated);
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* ==========================================================================
@@ -534,10 +801,9 @@ body.doc-editing .specialty-segmented-bar {
   overflow: hidden;
 }
 
-/* Canvas Viewport */
 .canvas-viewport {
   flex: 1;
-  min-height: 180px;
+  min-height: 165px;
   background-color: var(--canvas-bg);
   position: relative;
   display: flex;
@@ -582,7 +848,6 @@ body.doc-editing .specialty-segmented-bar {
   cursor: move;
 }
 
-/* Rule of Thirds Grid */
 .crop-grid {
   position: absolute;
   inset: 0;
@@ -596,11 +861,10 @@ body.doc-editing .specialty-segmented-bar {
   border: 0.5px dashed rgba(255, 255, 255, 0.35);
 }
 
-/* Corner Bracket Handles */
 .crop-handle {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 3px solid #ffffff;
   pointer-events: auto;
 }
@@ -610,17 +874,16 @@ body.doc-editing .specialty-segmented-bar {
 .handle-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
 .handle-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
 
-/* Edge Midpoint Handles */
 .crop-edge-handle {
   position: absolute;
   background-color: #ffffff;
   pointer-events: auto;
 }
 
-.handle-t { top: -3px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; border-radius: 2px; }
-.handle-b { bottom: -3px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; border-radius: 2px; }
-.handle-l { left: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; border-radius: 2px; }
-.handle-r { right: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; border-radius: 2px; }
+.handle-t { top: -3px; left: 50%; transform: translateX(-50%); width: 26px; height: 4px; border-radius: 2px; }
+.handle-b { bottom: -3px; left: 50%; transform: translateX(-50%); width: 26px; height: 4px; border-radius: 2px; }
+.handle-l { left: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 26px; border-radius: 2px; }
+.handle-r { right: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 26px; border-radius: 2px; }
 
 /* ==========================================================================
    Editor Controls (Thumb-Zone Panel ở nửa dưới)
@@ -630,12 +893,12 @@ body.doc-editing .specialty-segmented-bar {
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 12px)) 12px;
-  gap: 8px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 8px)) 12px;
+  gap: 7px;
   flex-shrink: 0;
 }
 
-/* 1. Presets Row (Khung cắt tỉ lệ) */
+/* 1. Presets Row */
 .presets-scroll-row {
   display: flex;
   align-items: center;
@@ -643,7 +906,6 @@ body.doc-editing .specialty-segmented-bar {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 2px;
 }
 
 .presets-scroll-row::-webkit-scrollbar {
@@ -658,13 +920,21 @@ body.doc-editing .specialty-segmented-bar {
   background-color: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 6px 13px;
   border-radius: var(--radius-full);
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-height: 32px;
+  min-height: 34px;
+  transition:
+    background-color 0.2s var(--ux-ease),
+    border-color 0.2s var(--ux-ease),
+    color 0.2s var(--ux-ease),
+    transform 0.28s var(--ux-spring);
+}
+
+.preset-pill:active {
+  transform: scale(0.95);
 }
 
 .preset-pill.active {
@@ -673,65 +943,79 @@ body.doc-editing .specialty-segmented-bar {
   color: var(--accent-blue);
 }
 
-/* 2. Thước Xoay Tiểu Ly (Straighten Angle Dial - Chuẩn Apple iOS Photos) */
+/* 2. Thước Xoay Tiểu Ly (Straighten Angle Dial) */
 .straighten-dial-module {
   background-color: var(--bg-card-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 6px 8px;
+  padding: 5px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .straighten-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 2px;
 }
 
 .btn-subtle-tool {
-  background: none;
-  border: none;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 36px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.18s var(--ux-ease),
+    color 0.18s var(--ux-ease),
+    border-color 0.18s var(--ux-ease),
+    transform 0.25s var(--ux-spring);
 }
 
 .btn-subtle-tool:active {
   background-color: var(--bg-elevated);
   color: var(--text-primary);
+  transform: scale(0.92);
 }
 
 .btn-subtle-tool.active {
   background-color: var(--accent-blue-subtle);
+  border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
 
-/* Huy hiệu hiển thị góc xoay (Apple style degree badge) */
 .angle-degree-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 28px;
-  padding: 0 8px;
+  min-width: 50px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: var(--radius-full);
   background: var(--bg-elevated);
   border: 1.5px solid var(--border-strong);
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ux-ease),
+    border-color 0.2s var(--ux-ease),
+    color 0.2s var(--ux-ease),
+    transform 0.25s var(--ux-spring);
+}
+
+.angle-degree-badge:active {
+  transform: scale(0.93);
 }
 
 .angle-degree-badge.has-angle {
@@ -740,11 +1024,10 @@ body.doc-editing .specialty-segmented-bar {
   color: var(--accent-amber);
 }
 
-/* Vùng thước trượt ngang */
 .ruler-track-container {
   position: relative;
   width: 100%;
-  height: 34px;
+  height: 32px;
   overflow: hidden;
   touch-action: none;
   cursor: ew-resize;
@@ -760,7 +1043,6 @@ body.doc-editing .specialty-segmented-bar {
   height: 100%;
 }
 
-/* Kim chỉ mốc trung tâm màu vàng */
 .ruler-center-pointer {
   position: absolute;
   top: 0;
@@ -770,7 +1052,6 @@ body.doc-editing .specialty-segmented-bar {
   transform: translateX(-50%);
   background-color: var(--ruler-pointer);
   pointer-events: none;
-  box-shadow: 0 0 4px var(--ruler-pointer);
 }
 
 .ruler-center-pointer::after {
@@ -785,7 +1066,7 @@ body.doc-editing .specialty-segmented-bar {
   background-color: var(--ruler-pointer);
 }
 
-/* 3. Specialty Enhancers Bar (Nét sóng, khử nền nhiệt, tương phản...) */
+/* 3. Specialty Enhancers Bar */
 .enhancers-row {
   display: flex;
   align-items: center;
@@ -807,14 +1088,22 @@ body.doc-editing .specialty-segmented-bar {
   background-color: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  min-height: 34px;
+  min-height: 36px;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s var(--ux-ease),
+    border-color 0.2s var(--ux-ease),
+    color 0.2s var(--ux-ease),
+    transform 0.28s var(--ux-spring);
+}
+
+.enhancer-btn:active {
+  transform: scale(0.96);
 }
 
 .enhancer-btn.active {
@@ -823,12 +1112,12 @@ body.doc-editing .specialty-segmented-bar {
   color: var(--accent-blue);
 }
 
-/* 4. Action Buttons Bar (Chụp lại & Gửi Lên HIS) */
+/* 4. Action Buttons Bar */
 .action-buttons-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .btn-action-secondary {
@@ -845,16 +1134,16 @@ body.doc-editing .specialty-segmented-bar {
   font-weight: 600;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.28s var(--ux-spring), background-color 0.18s var(--ux-ease);
 }
 
 .btn-action-secondary:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
   background-color: var(--border-subtle);
 }
 
 .btn-action-primary {
-  flex: 1.6;
+  flex: 1.65;
   height: 46px;
   display: flex;
   align-items: center;
@@ -868,29 +1157,28 @@ body.doc-editing .specialty-segmented-bar {
   border-radius: var(--radius-md);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.28s var(--ux-spring), background-color 0.18s var(--ux-ease), opacity 0.2s var(--ux-ease);
 }
 
-.btn-action-primary:active {
-  transform: scale(0.98);
+.btn-action-primary:active:not(:disabled) {
+  transform: scale(0.97);
   background-color: var(--accent-blue-hover);
 }
 
 .btn-action-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.48;
   cursor: not-allowed;
   transform: none;
 }
 
 /* ==========================================================================
-   Modals & Overlays (Tiến độ & Thông báo)
+   Lucian #081 Upload Progress Ring, Checkmark & Step Pipeline (Zero Blur)
    ========================================================================== */
 .upload-progress-modal,
 .loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(4px);
+  background: var(--overlay-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -902,81 +1190,165 @@ body.doc-editing .specialty-segmented-bar {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 24px 20px;
+  padding: 24px 20px 20px;
   width: 100%;
-  max-width: 300px;
+  max-width: 318px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   box-shadow: var(--shadow-lg);
+  animation: u081-card-pop 0.28s var(--ux-spring);
+}
+
+@keyframes u081-card-pop {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .upload-spinner-box {
   position: relative;
-  width: 58px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   margin-bottom: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.upload-spinner {
-  width: 100%;
-  height: 100%;
-  border: 3.5px solid var(--border-subtle);
-  border-top-color: var(--accent-blue);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.u081-ring-svg {
+  width: 72px;
+  height: 72px;
+  transform: rotate(-90deg);
+}
+
+.u081-ring-svg circle {
+  fill: none;
+  stroke-width: 5.5;
+  stroke-linecap: round;
+}
+
+.u081-ring-svg .u081-track {
+  stroke: var(--border-subtle);
+}
+
+.u081-ring-svg .u081-prog {
+  stroke: var(--accent-blue);
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--p, 0.08) * 100);
+  transition: stroke-dashoffset 0.28s var(--ux-ease), stroke 0.3s var(--ux-ease);
+}
+
+.upload-progress-card.is-ok .u081-ring-svg .u081-prog {
+  stroke: var(--accent-green);
+  stroke-dashoffset: 0;
 }
 
 .upload-pct-badge {
   position: absolute;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--accent-blue);
+  transition: opacity 0.18s var(--ux-ease), transform 0.25s var(--ux-spring);
+}
+
+.upload-progress-card.is-ok .upload-pct-badge {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+/* Nét vẽ tích xanh chuẩn Lucian #081 (CHỈ bật khi FILE_READY thực tế) */
+.u081-check-svg {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--accent-green);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.u081-check-svg path {
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  transition: stroke-dashoffset 0.38s var(--ux-ease) 0.08s;
+}
+
+.upload-progress-card.is-ok .u081-check-svg path {
+  stroke-dashoffset: 0;
 }
 
 .upload-title {
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
+  letter-spacing: -0.01em;
 }
 
 .upload-meta {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-secondary);
+  line-height: 1.4;
 }
 
-/* Toast */
-.notification-toast {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 10px) + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-30px);
-  background-color: var(--bg-surface);
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-  padding: 8px 16px;
-  border-radius: var(--radius-full);
+/* 3 bước tiến trình trực quan */
+.u081-steps {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  width: 100%;
+  font-size: 11.5px;
   font-weight: 600;
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 60;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  color: var(--text-muted);
 }
 
-.notification-toast.visible {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
+.u081-steps span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: color 0.25s var(--ux-ease);
+}
+
+.u081-steps span::before {
+  content: '';
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background-color 0.25s var(--ux-ease), transform 0.35s var(--ux-spring);
+}
+
+.u081-steps span.on {
+  color: var(--text-primary);
+}
+
+.u081-steps span.on::before {
+  background: var(--accent-blue);
+  transform: scale(1.25);
+}
+
+.upload-progress-card.is-ok .u081-steps span.on::before {
+  background: var(--accent-green);
+}
+
+/* Spinner cho HEIC / Thumbnail loading overlay */
+.upload-spinner {
+  width: 100%;
+  height: 100%;
+  border: 3.5px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -984,283 +1356,424 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 /* ==========================================================================
-   Document Scan Mode — Chụp giấy tờ, xuất PDF gửi vào Phiếu Scan HIS
+   Lucian #070 Swipeable Toast Notification with Countdown Progress Bar
    ========================================================================== */
+.notification-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 8px) + 10px);
+  left: 14px;
+  right: 14px;
+  max-width: 380px;
+  margin: 0 auto;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--accent-green-border);
+  color: var(--text-primary);
+  padding: 10px 12px 12px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+  overflow: hidden;
+  touch-action: pan-y;
+  transform: translate(var(--dx, 0px), -28px) scale(0.95);
+  transition: transform 0.38s var(--ux-spring), opacity 0.25s var(--ux-ease);
+}
 
-/* Thumbnail strip for multi-page document capture */
+.notification-toast.visible {
+  transform: translate(var(--dx, 0px), 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.notification-toast.dragging {
+  transition: none;
+}
+
+.toast-icon-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-green-subtle);
+  color: var(--accent-green);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#toastText {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.toast-close-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toast-close-btn:active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.u070-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent-green);
+  opacity: 0.75;
+  transform-origin: 0 50%;
+  transform: scaleX(var(--toast-left, 1));
+}
+
+/* ==========================================================================
+   Document Scan Mode — Gọn khít 1 màn hình (375x667+) & Nút xóa không bị cắt
+   ========================================================================== */
+#docScreen.screen {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 .doc-thumbnail-strip {
   display: flex;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 9px 14px 7px;
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   background: var(--bg-elevated);
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
-  min-height: 88px;
+  min-height: 78px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .doc-thumbnail-strip::-webkit-scrollbar {
   display: none;
 }
 
+/* overflow: visible để nút xóa góc trên phải KHÔNG bị xén mất viền */
 .doc-thumb-item {
   position: relative;
   flex-shrink: 0;
-  width: 60px;
-  height: 78px;
-  border-radius: 6px;
-  border: 2px solid var(--border-subtle);
-  overflow: hidden;
+  width: 54px;
+  height: 68px;
+  border-radius: 7px;
   background: var(--bg-surface);
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  overflow: visible;
+  transition: transform 0.28s var(--ux-spring);
 }
 
-.doc-thumb-item.active {
+.doc-thumb-media {
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  border: 2px solid var(--border-strong);
+  overflow: hidden;
+  background: var(--bg-surface);
+  position: relative;
+  transition: border-color 0.2s var(--ux-ease), box-shadow 0.2s var(--ux-ease);
+}
+
+.doc-thumb-item.active .doc-thumb-media {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px var(--accent-blue-subtle);
 }
 
-.doc-thumb-item img {
+.doc-thumb-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .doc-thumb-page-num {
   position: absolute;
   bottom: 2px;
   right: 2px;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(15, 23, 42, 0.78);
   color: #fff;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   padding: 1px 4px;
   border-radius: 3px;
   line-height: 1.3;
+  pointer-events: none;
 }
 
+/* Nút xóa trang to rõ (24x24 hiển thị + vùng chạm mở rộng 34x34), không bị cắt góc */
 .doc-thumb-remove {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 18px;
-  height: 18px;
+  top: -7px;
+  right: -7px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--accent-red);
-  color: #fff;
-  border: none;
-  font-size: 11px;
+  color: #ffffff;
+  border: 2px solid var(--bg-surface);
+  font-size: 14px;
   font-weight: 700;
-  line-height: 18px;
-  text-align: center;
-  cursor: pointer;
+  line-height: 1;
   display: none;
-  z-index: 2;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  z-index: 4;
+  transition: transform 0.25s var(--ux-spring);
+}
+
+.doc-thumb-remove::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.doc-thumb-remove:active {
+  transform: scale(0.88);
 }
 
 .doc-thumb-item.active .doc-thumb-remove {
-  display: block;
+  display: inline-flex;
 }
 
-/* Add-page button in thumbnail strip */
 .doc-thumb-add {
   flex-shrink: 0;
-  width: 60px;
-  height: 78px;
-  border-radius: 6px;
-  border: 2px dashed var(--border-strong);
-  background: var(--bg-card-subtle);
+  width: 54px;
+  height: 68px;
+  border-radius: 7px;
+  border: 1.5px dashed var(--border-strong);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   cursor: pointer;
-  color: var(--text-muted);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
   font-weight: 600;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.2s var(--ux-ease), color 0.2s var(--ux-ease), transform 0.25s var(--ux-spring);
 }
 
 .doc-thumb-add:active {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
+  transform: scale(0.95);
 }
 
-.doc-thumb-add svg {
-  opacity: 0.6;
-}
-
-/* Document page counter badge */
-.doc-page-counter {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.doc-page-counter .count-num {
-  color: var(--accent-blue);
-  font-variant-numeric: tabular-nums;
-}
-
-/* PDF preset selector */
-.doc-preset-selector {
-  display: flex;
-  gap: 6px;
-  padding: 8px 16px;
-  justify-content: center;
-}
-
-.doc-preset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.doc-preset-btn.active {
-  background: var(--accent-blue-subtle);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
-}
-
-.doc-preset-btn:active {
-  transform: scale(0.97);
-}
-
-/* Document mode action buttons */
-.doc-actions-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 16px;
-  padding-bottom: calc(28px + env(safe-area-inset-bottom, 20px));
-  flex-shrink: 0;
-}
-
-.doc-actions-row {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-doc-capture,
-.btn-doc-gallery,
-.btn-doc-preview {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 11px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.btn-doc-capture:active,
-.btn-doc-gallery:active,
-.btn-doc-preview:active:not(:disabled) {
-  transform: scale(0.98);
-  background: var(--bg-elevated);
-}
-
-.btn-doc-preview:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn-doc-send-pdf {
-  flex: 1.3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 11px 16px;
-  border-radius: var(--radius-md);
-  border: none;
-  background: var(--accent-blue);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.btn-doc-send-pdf:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn-doc-send-pdf:active:not(:disabled) {
-  transform: scale(0.98);
-  background: var(--accent-blue-hover);
-}
-
-/* Document capture guide card adjustments */
+/* Khung xem trang co giãn linh hoạt để không đẩy nút Gửi khỏi màn hình 375x667 */
 .doc-capture-guide {
+  flex: 1;
+  min-height: 112px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  padding: 6px 12px;
   text-align: center;
 }
 
 .doc-preview-img-wrap {
   width: 100%;
-  max-height: clamp(160px, 32vh, 300px);
+  height: 100%;
+  min-height: 104px;
+  max-height: clamp(115px, 28vh, 275px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
+  padding: 2px 6px;
   position: relative;
-  flex-shrink: 0;
 }
 
 .doc-preview-img {
   max-width: 100%;
-  max-height: clamp(150px, 30vh, 280px);
-  border-radius: 8px;
+  max-height: 100%;
+  border-radius: 6px;
   box-shadow: var(--shadow-md);
   display: none;
-  transition: transform 0.2s ease;
+  transition: transform 0.22s var(--ux-ease);
   object-fit: contain;
 }
 
-/* Size estimate badge */
+/* Page Edit Toolbar */
+.doc-edit-toolbar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 12px 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.doc-edit-btn {
+  flex: 1;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s var(--ux-ease),
+    color 0.18s var(--ux-ease),
+    border-color 0.18s var(--ux-ease),
+    transform 0.25s var(--ux-spring);
+}
+
+.doc-edit-btn:active:not(:disabled) {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: var(--accent-blue);
+  transform: scale(0.95);
+}
+
+.doc-edit-btn:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+/* Hàng gộp: Chế độ xuất PDF (Lucian #047 Sliding Pill) + Số trang & Dung lượng */
+.doc-meta-preset-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 12px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.doc-preset-selector {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  isolation: isolate;
+}
+
+.doc-preset-selector .u047-knob {
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--accent-blue);
+}
+
+.doc-preset-btn {
+  position: relative;
+  z-index: 1;
+  min-height: 30px;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 4px;
+  border-radius: calc(var(--radius-md) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s var(--ux-ease), transform 0.25s var(--ux-spring);
+}
+
+.doc-preset-btn svg {
+  flex-shrink: 0;
+}
+
+.doc-preset-btn.active {
+  color: var(--accent-blue);
+}
+
+.doc-preset-selector:not(.knob-ready) .doc-preset-btn.active {
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 1px var(--accent-blue);
+}
+
+.doc-preset-btn:active {
+  transform: scale(0.95);
+}
+
+.doc-counter-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.doc-page-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.doc-page-counter .count-num {
+  color: var(--accent-blue);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .doc-size-estimate {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  font-family: var(--font-mono);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-  padding: 4px 0;
+  white-space: nowrap;
+}
+
+.doc-size-estimate:empty {
+  display: none;
 }
 
 .doc-size-estimate.warning {
@@ -1271,52 +1784,175 @@ body.doc-editing .specialty-segmented-bar {
   color: var(--accent-red);
 }
 
-/* Page Edit Toolbar */
-.doc-edit-toolbar {
+/* Document mode action buttons (2 hàng quen thuộc, luôn nằm trọn trong màn hình) */
+.doc-actions-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  flex-wrap: nowrap;
+  flex-direction: column;
+  gap: 7px;
+  padding: 6px 12px calc(10px + env(safe-area-inset-bottom, 8px)) 12px;
+  flex-shrink: 0;
 }
 
-.doc-edit-btn {
-  display: inline-flex;
+.doc-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-doc-capture,
+.btn-doc-gallery,
+.btn-doc-preview {
+  flex: 1;
+  min-height: 42px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
   background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.28s var(--ux-spring), background-color 0.18s var(--ux-ease), opacity 0.2s var(--ux-ease);
 }
 
-.doc-edit-btn:active:not(:disabled) {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
-  transform: scale(0.95);
+.btn-doc-capture:active,
+.btn-doc-gallery:active,
+.btn-doc-preview:active:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--bg-elevated);
 }
 
-.doc-edit-btn:disabled {
-  opacity: 0.35;
+.btn-doc-preview:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-/* Crop Confirm Bar */
+.btn-doc-send-pdf {
+  flex: 1.35;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent-blue);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s var(--ux-spring), background-color 0.18s var(--ux-ease), opacity 0.2s var(--ux-ease);
+}
+
+.btn-doc-send-pdf:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-doc-send-pdf:active:not(:disabled) {
+  transform: scale(0.97);
+  background: var(--accent-blue-hover);
+}
+
+/* ==========================================================================
+   Lucian #071 Undo Snackbar (Hoàn tác xóa trang tài liệu kèm vòng đếm ngược 4s)
+   ========================================================================== */
+.u071-snack {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(108px + env(safe-area-inset-bottom, 8px));
+  max-width: 396px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--radius-md);
+  background: var(--snackbar-bg);
+  color: var(--snackbar-fg);
+  box-shadow: var(--shadow-lg);
+  z-index: 45;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(24px) scale(0.96);
+  transition: transform 0.42s var(--ux-spring), opacity 0.22s var(--ux-ease);
+}
+
+.u071-snack.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.u071-snack-msg {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.u071-undo-btn {
+  height: 36px;
+  padding: 0 11px 0 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--snackbar-accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.25s var(--ux-spring), background-color 0.18s var(--ux-ease);
+}
+
+.u071-undo-btn:active {
+  transform: scale(0.94);
+}
+
+.u071-undo-ring {
+  width: 19px;
+  height: 19px;
+  transform: rotate(-90deg);
+  flex-shrink: 0;
+}
+
+.u071-undo-ring circle {
+  fill: none;
+  stroke-width: 2.6;
+}
+
+.u071-undo-ring .t {
+  stroke: rgba(148, 163, 184, 0.3);
+}
+
+.u071-undo-ring .p {
+  stroke: currentColor;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--undo-left, 1) * 100);
+  stroke-linecap: round;
+}
+
+/* ==========================================================================
+   Crop Confirm Bar & Document Mode Immersion
+   ========================================================================== */
 .doc-crop-confirm {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 16px;
+  padding: 8px 14px;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
@@ -1324,68 +1960,64 @@ body.doc-editing .specialty-segmented-bar {
 
 .doc-crop-hint {
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .doc-crop-cancel,
 .doc-crop-apply {
+  min-height: 36px;
   padding: 7px 16px;
   border-radius: var(--radius-sm);
   border: none;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: all 0.15s ease;
+  transition: transform 0.25s var(--ux-spring), background-color 0.18s var(--ux-ease);
 }
 
 .doc-crop-cancel {
   background: var(--bg-elevated);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
 }
 
 .doc-crop-cancel:active {
-  background: var(--border-subtle);
+  transform: scale(0.95);
 }
 
 .doc-crop-apply {
   background: var(--accent-blue);
-  color: #fff;
+  color: #ffffff;
 }
 
 .doc-crop-apply:active {
   background: var(--accent-blue-hover);
+  transform: scale(0.95);
 }
 
-/* Document Mode Edit / Warp Mode Immersion */
 #docScreen.is-editing {
   overflow: hidden;
 }
 
 #docScreen.is-editing .doc-thumbnail-strip,
-#docScreen.is-editing .doc-preset-selector,
-#docScreen.is-editing .doc-page-counter,
+#docScreen.is-editing .doc-meta-preset-bar,
 #docScreen.is-editing .doc-actions-container {
   display: none !important;
 }
 
-#docScreen.is-editing .doc-preview-container {
+#docScreen.is-editing .doc-capture-guide {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   padding: 4px;
 }
 
 #docScreen.is-editing .doc-preview-img-wrap {
-  max-height: clamp(340px, 64vh, 600px);
+  max-height: clamp(340px, 66vh, 620px);
   flex: 1;
 }
 
 #docScreen.is-editing .doc-preview-img {
-  max-height: clamp(330px, 62vh, 580px);
+  max-height: clamp(330px, 64vh, 600px);
 }
 
 #docScreen.is-editing .doc-crop-confirm {
@@ -1394,44 +2026,42 @@ body.doc-editing .specialty-segmented-bar {
   z-index: 30;
   padding-top: 10px;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.25);
   background: var(--bg-surface);
 }
 
-/* Thumbnail drag & rotation badge */
+/* Thumbnail drag & rotation badge (0% backdrop-blur) */
 .doc-thumb-item.dragging {
-  opacity: 0.35;
+  opacity: 0.38;
   transform: scale(0.92);
 }
 
-.doc-thumb-item.drag-over {
+.doc-thumb-item.drag-over .doc-thumb-media {
   border-color: var(--accent-blue) !important;
   box-shadow: 0 0 0 2px var(--accent-blue);
 }
 
 .doc-thumb-rotation {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  background: rgba(15, 23, 42, 0.75);
-  color: #fff;
-  font-size: 9.5px;
-  font-weight: 600;
+  top: 2px;
+  left: 2px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
   padding: 1px 4px;
-  border-radius: var(--radius-xs);
+  border-radius: 3px;
   pointer-events: none;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 
-/* PDF Preview Modal */
+/* ==========================================================================
+   PDF Preview Modal (Zero Blur, Smooth Spring Sheet)
+   ========================================================================== */
 .doc-preview-modal {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: var(--overlay-scrim);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1454,7 +2084,7 @@ body.doc-editing .specialty-segmented-bar {
   flex-direction: column;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  animation: slideUpModal 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideUpModal 0.3s var(--ux-spring);
 }
 
 @media (min-width: 640px) {
@@ -1472,7 +2102,7 @@ body.doc-editing .specialty-segmented-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
 }
@@ -1482,7 +2112,7 @@ body.doc-editing .specialty-segmented-bar {
   align-items: center;
   gap: 8px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
@@ -1492,12 +2122,17 @@ body.doc-editing .specialty-segmented-bar {
   color: var(--text-muted);
   font-size: 24px;
   line-height: 1;
-  padding: 4px 8px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   border-radius: var(--radius-sm);
 }
 
 .doc-preview-modal-close:active {
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -1508,7 +2143,7 @@ body.doc-editing .specialty-segmented-bar {
   background: var(--bg-app);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   align-items: center;
   -webkit-overflow-scrolling: touch;
 }
@@ -1537,13 +2172,12 @@ body.doc-editing .specialty-segmented-bar {
 .doc-preview-page-label {
   margin-top: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
 .doc-preview-modal-footer {
-  padding: 12px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   display: flex;
@@ -1553,39 +2187,48 @@ body.doc-editing .specialty-segmented-bar {
 
 .doc-preview-meta-line {
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
   text-align: center;
 }
 
 .btn-doc-modal-cancel {
   flex: 1;
-  padding: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-strong);
   background: var(--bg-elevated);
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.25s var(--ux-spring);
+}
+
+.btn-doc-modal-cancel:active {
+  transform: scale(0.96);
 }
 
 .btn-doc-modal-send {
   flex: 1.5;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 12px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   border: none;
   background: var(--accent-blue);
-  color: #fff;
+  color: #ffffff;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition: transform 0.25s var(--ux-spring), background-color 0.18s var(--ux-ease);
 }
 
 .btn-doc-modal-send:active {
   background: var(--accent-blue-hover);
+  transform: scale(0.97);
 }
-

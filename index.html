@@ -6,22 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>HIS CamSync - Đồng Bộ Cận Lâm Sàng</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/><circle cx='12' cy='13' r='4'/></svg>">
-  <link rel="stylesheet" href="css/style.css?v=2.0.5">
+  <link rel="stylesheet" href="css/style.css?v=2.3.0">
 </head>
-<body>
+<body class="ux">
+  <!-- Lucian UX/UI Prompt #039 #047 #070 #071 #072 #081 #090 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/ -->
   <!-- Header -->
   <header class="app-header">
     <div class="header-brand">
       <span class="brand-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v20M2 12h20"/>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 4v16M4 12h16"/>
         </svg>
       </span>
       <span class="brand-title">HIS CamSync</span>
     </div>
-    <div id="statusBadge" class="status-badge disconnected" role="button" title="Chạm để kết nối lại">
+    <div id="statusBadge" class="status-badge disconnected connecting" role="button" tabindex="0" title="Chạm để kết nối lại">
       <span class="status-dot"></span>
       <span id="statusText">Đang tìm kết nối...</span>
+      <svg class="status-retry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+      </svg>
     </div>
   </header>
 
@@ -66,24 +70,25 @@
   <!-- Main View -->
   <main class="main-view">
     <!-- Specialty Segmented Bar (Luôn hiển thị ở chế độ Chụp ECG, Siêu Âm và Scan Tài Liệu) -->
-    <div class="specialty-segmented-bar" id="globalSpecialtyBar">
-      <button type="button" class="spec-tab-btn active" id="tabEcg" data-specialty="ecg">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <div class="specialty-segmented-bar u047-seg" id="globalSpecialtyBar" role="tablist" aria-label="Chế độ chụp">
+      <span class="u047-knob" id="specialtyKnob" aria-hidden="true"></span>
+      <button type="button" class="spec-tab-btn active" id="tabEcg" data-specialty="ecg" role="tab" aria-selected="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
-        <span>Điện Tâm Đồ (ECG)</span>
+        <span>Điện tim</span>
       </button>
-      <button type="button" class="spec-tab-btn" id="tabUltrasound" data-specialty="ultrasound">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="spec-tab-btn" id="tabUltrasound" data-specialty="ultrasound" role="tab" aria-selected="false">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
         </svg>
-        <span>Siêu Âm</span>
+        <span>Siêu âm</span>
       </button>
-      <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="spec-tab-btn" id="tabDocument" data-specialty="document" role="tab" aria-selected="false">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
-        <span>Tài Liệu</span>
+        <span>Tài liệu</span>
       </button>
     </div>
 
@@ -103,7 +108,7 @@
           </svg>
         </div>
         <h2 class="guide-title" id="captureTitle">Chụp điện tim</h2>
-        <p class="guide-desc" id="captureSubtitle"></p>
+        <p class="guide-desc" id="captureSubtitle">Đặt phẳng băng giấy điện tim, đủ ánh sáng để nét sóng rõ ràng.</p>
       </div>
 
       <input type="file" id="cameraInput" accept="image/jpeg,image/png,image/*" capture="environment" style="display: none;">
@@ -348,23 +353,24 @@
         <button type="button" class="doc-crop-apply" id="btnCropApply">Áp dụng</button>
       </div>
 
-      <!-- Controls: Preset + Size Estimate + Page Counter -->
-      <div style="padding: 0 16px;">
-        <div class="doc-preset-selector">
-          <button type="button" class="doc-preset-btn active" data-doc-preset="enhance">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            Sắc nét
+      <!-- Controls: Preset (Lucian #047 Sliding Pill) + Page Counter + Size Estimate -->
+      <div class="doc-meta-preset-bar">
+        <div class="doc-preset-selector u047-seg" id="docPresetSelector" role="radiogroup" aria-label="Chế độ xuất PDF">
+          <span class="u047-knob" id="docPresetKnob" aria-hidden="true"></span>
+          <button type="button" class="doc-preset-btn active" data-doc-preset="enhance" role="radio" aria-checked="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            <span>Sắc nét</span>
           </button>
-          <button type="button" class="doc-preset-btn" data-doc-preset="document">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Tài liệu
+          <button type="button" class="doc-preset-btn" data-doc-preset="document" role="radio" aria-checked="false">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>Tài liệu</span>
           </button>
-          <button type="button" class="doc-preset-btn" data-doc-preset="color">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            Ảnh màu
+          <button type="button" class="doc-preset-btn" data-doc-preset="color" role="radio" aria-checked="false">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>Ảnh màu</span>
           </button>
         </div>
-        <div style="text-align: center;">
+        <div class="doc-counter-wrap">
           <span class="doc-page-counter" id="docPageCounter">
             <span class="count-num" id="docPageNum">0</span> trang
           </span>
@@ -410,6 +416,18 @@
     </section>
   </main>
 
+  <!-- Lucian #071 Undo Snackbar khi xóa trang tài liệu -->
+  <div id="docUndoSnack" class="u071-snack" role="status" aria-live="polite">
+    <span id="docUndoMsg" class="u071-snack-msg">Đã xóa trang</span>
+    <button type="button" id="btnDocUndo" class="u071-undo-btn" tabindex="-1">
+      <svg class="u071-undo-ring" viewBox="0 0 22 22" aria-hidden="true">
+        <circle class="t" cx="11" cy="11" r="8.5"/>
+        <circle class="p" cx="11" cy="11" r="8.5" pathLength="100"/>
+      </svg>
+      <span>Hoàn tác</span>
+    </button>
+  </div>
+
   <!-- Modal Xem trước toàn bộ PDF -->
   <div id="docPreviewModal" class="doc-preview-modal" style="display: none;">
     <div class="doc-preview-modal-card">
@@ -438,24 +456,39 @@
     </div>
   </div>
 
-  <!-- Upload Progress Modal / Overlay -->
+  <!-- Lucian #081 Upload Progress Modal / Ring + Step Check -->
   <div id="uploadProgressModal" class="upload-progress-modal" style="display: none;">
-    <div class="upload-progress-card">
-      <div class="upload-spinner-box">
-        <div class="upload-spinner" id="uploadSpinner"></div>
+    <div id="uploadProgressCard" class="upload-progress-card">
+      <div class="upload-spinner-box" id="uploadSpinner">
+        <svg class="u081-ring-svg" viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="u081-track" cx="36" cy="36" r="31"/>
+          <circle class="u081-prog" id="uploadRingProg" cx="36" cy="36" r="31" pathLength="100"/>
+        </svg>
         <span class="upload-pct-badge" id="uploadPctBadge">0%</span>
+        <svg class="u081-check-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12.5l4.5 4.5L19 7.5"/>
+        </svg>
       </div>
       <h3 class="upload-title" id="uploadTitle">Đang chuyển ảnh tới máy tính...</h3>
       <p class="upload-meta" id="uploadMeta">Chuẩn bị truyền dữ liệu...</p>
+      <div class="u081-steps" aria-hidden="true">
+        <span id="uploadStep1" class="on">Chuẩn bị</span>
+        <span id="uploadStep2">Truyền mã hóa</span>
+        <span id="uploadStep3">Đã gắn file</span>
+      </div>
     </div>
   </div>
 
-  <!-- Toast Notification -->
-  <div id="toast" class="notification-toast">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12"></polyline>
-    </svg>
+  <!-- Lucian #070 Swipeable Toast Notification -->
+  <div id="toast" class="notification-toast" role="status" aria-live="polite">
+    <span class="toast-icon-box" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </span>
     <span id="toastText">Đã chuyển file tới máy tính</span>
+    <button type="button" id="btnDismissToast" class="toast-close-btn" aria-label="Đóng thông báo">&times;</button>
+    <span class="u070-bar" aria-hidden="true"></span>
   </div>
 
   <!-- Loading Overlay (Chuyển đổi HEIC sang JPEG) -->
@@ -647,9 +680,194 @@
     const patientDemographicsEl = document.getElementById('patientDemographics');
 
     const uploadProgressModal = document.getElementById('uploadProgressModal');
+    const uploadProgressCard = document.getElementById('uploadProgressCard');
+    const uploadRingProg = document.getElementById('uploadRingProg');
+    const uploadStep1 = document.getElementById('uploadStep1');
+    const uploadStep2 = document.getElementById('uploadStep2');
+    const uploadStep3 = document.getElementById('uploadStep3');
     const uploadPctBadge = document.getElementById('uploadPctBadge');
     const uploadTitle = document.getElementById('uploadTitle');
     const uploadMeta = document.getElementById('uploadMeta');
+
+    const guideIcon = document.getElementById('guideIcon');
+    const docPresetSelector = document.getElementById('docPresetSelector');
+    const docUndoSnack = document.getElementById('docUndoSnack');
+    const docUndoMsg = document.getElementById('docUndoMsg');
+    const btnDocUndo = document.getElementById('btnDocUndo');
+    const btnDismissToast = document.getElementById('btnDismissToast');
+
+    function prefersReducedMotion() {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    // Lucian #047: Đồng bộ viên thuốc trượt co giãn (Stretching Segmented Control)
+    function syncSegmentedKnob(segEl, activeBtn, dir = null) {
+      if (!segEl || !activeBtn) return;
+      const segW = segEl.clientWidth;
+      const btnW = activeBtn.offsetWidth;
+      if (!segW || !btnW) return;
+      const leftPx = activeBtn.offsetLeft;
+      const rightPx = Math.max(0, segW - leftPx - btnW);
+      if (dir !== null) {
+        segEl.classList.remove('go-r', 'go-l');
+        if (dir > 0) segEl.classList.add('go-r');
+        else if (dir < 0) segEl.classList.add('go-l');
+      }
+      segEl.style.setProperty('--l', `${leftPx}px`);
+      segEl.style.setProperty('--r', `${rightPx}px`);
+      segEl.classList.add('knob-ready');
+    }
+
+    function syncSpecialtyKnob(dir = null) {
+      const activeTab = globalSpecialtyBar?.querySelector('.spec-tab-btn.active');
+      syncSegmentedKnob(globalSpecialtyBar, activeTab, dir);
+    }
+
+    function syncDocPresetKnob(dir = null) {
+      const activePresetBtn = docPresetSelector?.querySelector('.doc-preset-btn.active');
+      syncSegmentedKnob(docPresetSelector, activePresetBtn, dir);
+    }
+
+    let _segmentedResizeObserver = null;
+    if (typeof ResizeObserver === 'function') {
+      _segmentedResizeObserver = new ResizeObserver(() => {
+        syncSpecialtyKnob(null);
+        syncDocPresetKnob(null);
+      });
+      if (globalSpecialtyBar) _segmentedResizeObserver.observe(globalSpecialtyBar);
+      if (docPresetSelector) _segmentedResizeObserver.observe(docPresetSelector);
+    }
+
+    // Lucian #090: Đồng bộ trạng thái viên thuốc kết nối (Connected / Connecting / Disconnected)
+    function applyStatusBadgeState(connected, text) {
+      if (statusText && text !== undefined) statusText.textContent = text;
+      if (!statusBadge) return;
+      if (connected) {
+        statusBadge.classList.remove('disconnected', 'connecting');
+        return;
+      }
+      statusBadge.classList.add('disconnected');
+      const normalized = String(text || '').toLowerCase();
+      const isActivelyConnecting = (
+        normalized.includes('đang kết nối') ||
+        normalized.includes('đang tìm') ||
+        normalized.includes('đang thử') ||
+        normalized.includes('tự động kết nối') ||
+        normalized.includes('chuyển mạch')
+      );
+      statusBadge.classList.toggle('connecting', isActivelyConnecting);
+    }
+
+    // Lucian #081: Đồng bộ vòng tiến trình SVG + 3 bước + dấu tích xanh Fail-Closed
+    function updateUploadModal(pct, title, meta, isSuccess = false) {
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (uploadProgressCard) {
+        uploadProgressCard.classList.toggle('is-ok', Boolean(isSuccess));
+      }
+      if (uploadRingProg) {
+        const ringRatio = isSuccess ? 1 : Math.max(0.06, clamped / 100);
+        uploadRingProg.style.setProperty('--p', ringRatio.toFixed(3));
+      }
+      if (uploadPctBadge) uploadPctBadge.textContent = `${clamped}%`;
+      if (uploadTitle && title !== undefined) uploadTitle.textContent = title;
+      if (uploadMeta && meta !== undefined) uploadMeta.textContent = meta;
+      if (uploadStep1) uploadStep1.classList.toggle('on', true);
+      if (uploadStep2) uploadStep2.classList.toggle('on', Boolean(isSuccess) || clamped >= 30);
+      if (uploadStep3) uploadStep3.classList.toggle('on', Boolean(isSuccess));
+    }
+
+    // Lucian #070: Toast có thanh đếm ngược + vuốt ngang để đóng
+    let _toastRafId = null;
+    let _toastDragState = null;
+
+    function dismissToast() {
+      if (_toastRafId) {
+        cancelAnimationFrame(_toastRafId);
+        _toastRafId = null;
+      }
+      _toastDragState = null;
+      if (!toast) return;
+      toast.classList.remove('visible', 'dragging');
+      toast.style.removeProperty('--dx');
+      toast.style.setProperty('--toast-left', '0');
+    }
+
+    function showToast(message, durationMs = 3200) {
+      if (!toast) return;
+      if (_toastRafId) {
+        cancelAnimationFrame(_toastRafId);
+        _toastRafId = null;
+      }
+      _toastDragState = null;
+      if (toastText && message) toastText.textContent = message;
+      toast.classList.remove('dragging');
+      toast.style.setProperty('--dx', '0px');
+      toast.style.setProperty('--toast-left', '1');
+      toast.classList.add('visible');
+
+      let pausedAccumMs = 0;
+      let pauseStartedAt = null;
+      const startTs = performance.now();
+
+      const tick = (now) => {
+        if (!toast.classList.contains('visible')) {
+          _toastRafId = null;
+          return;
+        }
+        if (_toastDragState) {
+          if (pauseStartedAt === null) pauseStartedAt = now;
+          _toastRafId = requestAnimationFrame(tick);
+          return;
+        }
+        if (pauseStartedAt !== null) {
+          pausedAccumMs += (now - pauseStartedAt);
+          pauseStartedAt = null;
+        }
+        const elapsed = Math.max(0, now - startTs - pausedAccumMs);
+        const left = Math.max(0, 1 - elapsed / durationMs);
+        toast.style.setProperty('--toast-left', left.toFixed(3));
+        if (left > 0) {
+          _toastRafId = requestAnimationFrame(tick);
+        } else {
+          _toastRafId = null;
+          dismissToast();
+        }
+      };
+      _toastRafId = requestAnimationFrame(tick);
+    }
+
+    btnDismissToast?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissToast();
+    });
+
+    toast?.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('#btnDismissToast')) return;
+      _toastDragState = { id: e.pointerId, startX: e.clientX, dx: 0 };
+      toast.classList.add('dragging');
+      try { toast.setPointerCapture?.(e.pointerId); } catch (_) {}
+    });
+
+    toast?.addEventListener('pointermove', (e) => {
+      if (!_toastDragState || e.pointerId !== _toastDragState.id) return;
+      _toastDragState.dx = e.clientX - _toastDragState.startX;
+      toast.style.setProperty('--dx', `${_toastDragState.dx}px`);
+    });
+
+    const finishToastSwipe = (e) => {
+      if (!_toastDragState || (e && e.pointerId !== undefined && e.pointerId !== _toastDragState.id)) return;
+      const dx = _toastDragState.dx;
+      _toastDragState = null;
+      toast.classList.remove('dragging');
+      if (Math.abs(dx) > 68) {
+        toast.style.setProperty('--dx', `${dx > 0 ? 260 : -260}px`);
+        dismissToast();
+      } else {
+        toast.style.setProperty('--dx', '0px');
+      }
+    };
+    toast?.addEventListener('pointerup', finishToastSwipe);
+    toast?.addEventListener('pointercancel', finishToastSwipe);
 
     function showLoading(text) {
       if (loadingText && text) loadingText.textContent = text;
@@ -903,6 +1121,10 @@
       editor.setFineAngle(deg, isInteracting);
     });
 
+    // Trạng thái hoàn tác xóa trang tài liệu (Hoisted tránh TDZ khi khởi tạo chuyên khoa)
+    let _pendingDocUndo = null;
+    const DOC_UNDO_DURATION_MS = 4000;
+
     const p2p = new P2PClient({
       sessionId: initialSessionId || undefined,
       relayCapability: initialRelayCapability || undefined,
@@ -910,9 +1132,8 @@
       encryptionKeyHex: initialCryptoKey || undefined,
       generation: initialGeneration !== null ? initialGeneration : undefined,
       onStatusChange: (connected, text) => {
-        statusText.textContent = text;
+        applyStatusBadgeState(connected, text);
         if (connected) {
-          statusBadge.classList.remove('disconnected');
           btnSendToHis.disabled = false;
           btnSendText.textContent = 'Gửi tới máy tính';
           if (btnDocSendPdf) {
@@ -920,7 +1141,6 @@
             btnDocSendText.textContent = 'Gửi tới máy tính';
           }
         } else {
-          statusBadge.classList.add('disconnected');
           btnSendToHis.disabled = true;
           const isClosedMsg = text && (text.includes('Phiên') || text.includes('hết hạn') || text.includes('thay đổi'));
           btnSendText.textContent = isClosedMsg ? 'Phiên đã đóng' : 'Chờ kết nối...';
@@ -953,30 +1173,53 @@
     });
 
     if (initialSessionId && initialCryptoKey) {
+      applyStatusBadgeState(false, 'Đang kết nối...');
       p2p.connect();
     } else {
-      statusBadge.classList.add('disconnected');
-      statusText.textContent = 'Chờ quét mã QR trên máy tính';
+      applyStatusBadgeState(false, 'Chờ quét mã QR');
       patientNameEl.textContent = 'Chưa quét mã QR';
       patientIdBadgeEl.textContent = 'Tên file';
       patientDemographicsEl.textContent = 'Vui lòng quét mã QR từ màn hình HIS để kết nối';
     }
 
-    // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ)
-    function switchSpecialty(spec) {
+    const SPECIALTY_ORDER = { ecg: 0, ultrasound: 1, document: 2 };
+
+    function animateScreenDirection(targetScreen, dir) {
+      if (!targetScreen || !dir || prefersReducedMotion()) return;
+      targetScreen.classList.remove('u039-enter-right', 'u039-enter-left');
+      void targetScreen.offsetWidth;
+      targetScreen.classList.add(dir > 0 ? 'u039-enter-right' : 'u039-enter-left');
+    }
+
+    // Chuyển đổi chuyên khoa (Specialty Switcher — 3 chế độ + Lucian #047 & #039)
+    function switchSpecialty(spec, opts = {}) {
+      const silent = Boolean(opts.silent);
+      const prevSpec = currentSpecialty;
+      const dir = (SPECIALTY_ORDER[spec] ?? 0) - (SPECIALTY_ORDER[prevSpec] ?? 0);
+
       exitCropMode();
+      if (spec !== 'document') {
+        commitPendingDocUndo();
+      }
       currentSpecialty = spec;
-      triggerHaptic('tap');
+      if (!silent) {
+        triggerHaptic('tap');
+      }
 
       document.body.classList.remove('doc-editing');
       if (globalSpecialtyBar) {
-        globalSpecialtyBar.style.display = 'flex';
+        globalSpecialtyBar.style.display = '';
       }
 
-      // Deactivate all tabs
-      tabEcg.classList.remove('active');
-      tabUltrasound.classList.remove('active');
-      tabDocument.classList.remove('active');
+      // Deactivate all tabs & update ARIA
+      [tabEcg, tabUltrasound, tabDocument].forEach(tab => {
+        if (!tab) return;
+        const isCurrent = tab.dataset.specialty === spec;
+        tab.classList.toggle('active', isCurrent);
+        tab.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+      });
+
+      syncSpecialtyKnob(silent ? 0 : dir);
 
       // Hide all mode-specific icons
       iconEcgMode.style.display = 'none';
@@ -985,7 +1228,6 @@
 
       if (spec === 'document') {
         // Document mode — Hiển thị Screen 3 (docScreen)
-        tabDocument.classList.add('active');
         iconDocMode.style.display = 'block';
         captureTitle.textContent = 'Chụp Giấy Tờ & Tài Liệu';
         captureSubtitle.textContent = 'Chụp từng trang (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.';
@@ -996,6 +1238,10 @@
         docScreen.style.display = 'flex';
         document.body.classList.remove('in-editor');
 
+        if (!silent) {
+          animateScreenDirection(docScreen, dir);
+        }
+
         // Hide image-mode-specific presets & tools
         groupEcgPresets.style.display = 'none';
         groupUsPresets.style.display = 'none';
@@ -1003,6 +1249,7 @@
         usTools.forEach(el => el.style.display = 'none');
 
         renderDocThumbnails();
+        requestAnimationFrame(() => syncDocPresetKnob(0));
         return;
       }
 
@@ -1010,14 +1257,20 @@
       docScreen.style.display = 'none';
       if (!document.body.classList.contains('in-editor')) {
         captureScreen.style.display = 'flex';
+        if (!silent) {
+          animateScreenDirection(captureScreen, dir);
+          if (guideIcon && !prefersReducedMotion()) {
+            guideIcon.classList.add('pop');
+            setTimeout(() => guideIcon.classList.remove('pop'), 240);
+          }
+        }
       }
       editor.setSpecialty(spec);
 
       if (spec === 'ecg') {
-        tabEcg.classList.add('active');
         iconEcgMode.style.display = 'block';
         captureTitle.textContent = 'Chụp điện tim';
-        captureSubtitle.textContent = '';
+        captureSubtitle.textContent = 'Đặt phẳng băng giấy điện tim, đủ ánh sáng để nét sóng rõ ràng.';
 
         groupEcgPresets.style.display = 'flex';
         groupUsPresets.style.display = 'none';
@@ -1025,10 +1278,9 @@
         ecgTools.forEach(el => el.style.display = 'inline-flex');
         usTools.forEach(el => el.style.display = 'none');
       } else {
-        tabUltrasound.classList.add('active');
         iconUsMode.style.display = 'block';
         captureTitle.textContent = 'Chụp siêu âm';
-        captureSubtitle.textContent = '';
+        captureSubtitle.textContent = 'Chụp thẳng màn hình hoặc bản in siêu âm, tránh lóa đèn.';
 
         groupEcgPresets.style.display = 'none';
         groupUsPresets.style.display = 'flex';
@@ -1061,13 +1313,34 @@
       loadJsPdf().catch(() => {});
     });
 
+    // Điều hướng phím mũi tên cho thanh 3 chế độ (Lucian #047 A11y)
+    globalSpecialtyBar?.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const order = ['ecg', 'ultrasound', 'document'];
+      const curIdx = Math.max(0, order.indexOf(currentSpecialty));
+      const nextIdx = (curIdx + (e.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length;
+      const nextSpec = order[nextIdx];
+      e.preventDefault();
+      switchSpecialty(nextSpec);
+      if (nextSpec === 'document') loadJsPdf().catch(() => {});
+      const targetBtn = globalSpecialtyBar.querySelector(`[data-specialty="${nextSpec}"]`);
+      targetBtn?.focus();
+    });
+
     // Tự động kích hoạt chế độ phù hợp nếu quét từ QR chuyên biệt (Ví dụ: nút Nhập từ ĐT trên Phiếu Scan)
     if (initialSpecialty === 'document') {
-      switchSpecialty('document');
+      switchSpecialty('document', { silent: true });
       loadJsPdf().catch(() => {});
     } else if (initialSpecialty === 'ultrasound') {
-      switchSpecialty('ultrasound');
+      switchSpecialty('ultrasound', { silent: true });
+    } else {
+      requestAnimationFrame(() => syncSpecialtyKnob(0));
     }
+
+    window.addEventListener('resize', () => {
+      syncSpecialtyKnob(0);
+      syncDocPresetKnob(0);
+    });
 
     // Lắng nghe sự kiện hashchange khi người dùng quét mã mới từ Camera trong lúc trang web đang mở sẵn
     window.addEventListener('hashchange', async () => {
@@ -1102,16 +1375,15 @@
         patientNameEl.textContent = 'Chờ tên file từ máy tính...';
         patientIdBadgeEl.textContent = 'Tên file';
         patientDemographicsEl.textContent = 'Đang nhận tên file từ máy tính...';
-        statusBadge.classList.add('disconnected');
-        statusText.textContent = 'Đang kết nối...';
+        applyStatusBadgeState(false, 'Đang kết nối...');
 
         if (newSpecialty === 'document') {
-          switchSpecialty('document');
+          switchSpecialty('document', { silent: true });
           loadJsPdf().catch(() => {});
         } else if (newSpecialty === 'ultrasound') {
-          switchSpecialty('ultrasound');
+          switchSpecialty('ultrasound', { silent: true });
         } else if (newSpecialty === 'ecg') {
-          switchSpecialty('ecg');
+          switchSpecialty('ecg', { silent: true });
         }
 
         if (p2p && typeof p2p.updateSession === 'function') {
@@ -1335,21 +1607,33 @@
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
       document.body.classList.remove('in-editor');
-      if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'flex';
-      hideErrorBanner();
-      hideWarningBanner();
+      if (globalSpecialtyBar) {
+        globalSpecialtyBar.style.display = '';
+        requestAnimationFrame(() => syncSpecialtyKnob(0));
+      }
+      hideErrorBanner(true);
+      hideWarningBanner(true);
       btnSendToHis.disabled = false;
       btnSendText.textContent = 'Gửi tới máy tính';
     });
 
-    statusBadge.addEventListener('click', () => {
+    function triggerManualReconnect() {
       if (!p2p.isConnected) {
-        statusText.textContent = 'Đang thử lại...';
+        triggerHaptic('tap');
+        applyStatusBadgeState(false, 'Đang thử lại...');
         p2p.connect();
+      }
+    }
+
+    statusBadge.addEventListener('click', triggerManualReconnect);
+    statusBadge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        triggerManualReconnect();
       }
     });
 
-    // Gửi ảnh lên HIS
+    // Gửi ảnh lên HIS (Lucian #081 Ring + Fail-Closed Checkmark + #070 Toast)
     btnSendToHis.addEventListener('click', async () => {
       if (p2p.isSessionIntentionallyClosed) {
         showErrorBanner('Phiên chụp đã đóng hoặc ô đính kèm trên máy tính đã đóng. Vui lòng quét lại mã QR trên HIS.');
@@ -1357,6 +1641,7 @@
       }
       if (!p2p.isConnected) {
         btnSendText.textContent = 'Đang kết nối lại...';
+        applyStatusBadgeState(false, 'Đang kết nối lại...');
         p2p.connect();
         return;
       }
@@ -1364,9 +1649,7 @@
       try {
         btnSendToHis.disabled = true;
         uploadProgressModal.style.display = 'flex';
-        uploadPctBadge.textContent = '10%';
-        uploadTitle.textContent = 'Đang xuất ảnh...';
-        uploadMeta.textContent = 'Chuẩn bị ảnh JPEG...';
+        updateUploadModal(10, 'Đang xuất ảnh...', 'Chuẩn bị ảnh JPEG...', false);
 
         const blob = await editor.exportBlob(0.90, {
           watermark: false,
@@ -1374,33 +1657,40 @@
         });
         const approxKB = Math.round(blob.size / 1024);
 
-        uploadTitle.textContent = 'Đang chuyển ảnh tới máy tính...';
-        uploadMeta.textContent = `Dung lượng: ${approxKB} KB`;
+        updateUploadModal(22, 'Đang chuyển ảnh tới máy tính...', `Dung lượng: ${approxKB} KB`, false);
 
         const patient = p2p.patientInfo;
         const prefix = (patient?.name || 'Tai_lieu').replace(/[\/\\:*?"<>|\x00-\x1f]/g, '_');
         const filename = `${prefix}_${Date.now()}.jpg`;
 
-        hideErrorBanner();
-        hideWarningBanner();
+        hideErrorBanner(true);
+        hideWarningBanner(true);
 
         const res = await p2p.sendImage(blob, {
           name: filename,
           type: 'image/jpeg',
           specialty: currentSpecialty
         }, (pct, statusMsg) => {
-          uploadPctBadge.textContent = `${pct}%`;
           if (pct >= 90) {
-            uploadTitle.textContent = 'Đang gắn file trên máy tính...';
-            uploadMeta.textContent = statusMsg || 'Chờ máy tính xác nhận file đã sẵn sàng...';
+            updateUploadModal(
+              Math.min(96, pct),
+              'Đang gắn file trên máy tính...',
+              statusMsg || 'Chờ máy tính xác nhận file đã sẵn sàng...',
+              false
+            );
           } else {
-            uploadTitle.textContent = 'Đang chuyển ảnh tới máy tính...';
-            uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`;
+            updateUploadModal(
+              Math.max(24, pct),
+              'Đang chuyển ảnh tới máy tính...',
+              statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * approxKB)} / ${approxKB} KB...`,
+              false
+            );
           }
         });
 
-        // Xử lý các trạng thái xác thực HIS:
+        // Xử lý các trạng thái xác thực HIS (Fail-Closed 100%):
         if (res && res.status === 'HIS_UNKNOWN') {
+          uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
           showWarningBanner(res.reason || res.error || 'Chưa xác nhận chuyển file; kiểm tra ô đính kèm trên máy tính trước khi gửi lại');
           btnSendToHis.disabled = true;
@@ -1408,7 +1698,8 @@
           return;
         }
 
-        if (!res || !res.success || res.status !== 'FILE_READY') {
+        if (!res || !res.success) {
+          uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'Không thể gắn file vào ô đính kèm trên máy tính.');
           btnSendToHis.disabled = false;
@@ -1416,43 +1707,41 @@
           return;
         }
 
-        const isCommitted = res?.status === 'FILE_READY' && res?.success === true;
-        if (!isCommitted) {
+        if (res.status !== 'FILE_READY') {
+          uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showWarningBanner(res?.reason || res?.error || 'Chưa nhận được xác nhận file đã sẵn sàng trên máy tính');
+          showErrorBanner(res?.reason || res?.error || 'Không thể gắn file vào ô đính kèm trên máy tính.');
+          btnSendToHis.disabled = false;
+          btnSendText.textContent = 'Gửi tới máy tính';
           return;
         }
 
-        // Rung haptic khi gửi thành công
-        if (navigator.vibrate) {
-          try { navigator.vibrate([40, 60, 40]); } catch (e) {}
-        }
+        // Rung haptic & vẽ dấu tích xanh CHỈ KHI FILE_READY được xác nhận thực tế
+        triggerHaptic('success');
+        updateUploadModal(100, 'Đã chuyển file tới máy tính', 'Kiểm tra file trên máy tính và bấm Upload trên HIS', true);
 
-        uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = 'Đã chuyển file tới máy tính';
-        uploadMeta.textContent = 'Kiểm tra file trên máy tính và bấm Upload trên HIS';
-        if (toastText) toastText.textContent = 'Đã chuyển file tới máy tính';
-
+        const holdMs = prefersReducedMotion() ? 120 : 620;
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
-          toast.classList.add('visible');
-          
+          uploadProgressCard?.classList.remove('is-ok');
+          showToast('Đã chuyển file tới máy tính');
+
           // Trở lại màn hình chụp để sẵn sàng chụp ảnh tiếp theo
           cameraInput.value = '';
           galleryInput.value = '';
           editorScreen.style.display = 'none';
           captureScreen.style.display = 'flex';
           document.body.classList.remove('in-editor');
-          if (globalSpecialtyBar) globalSpecialtyBar.style.display = 'flex';
+          if (globalSpecialtyBar) {
+            globalSpecialtyBar.style.display = '';
+            requestAnimationFrame(() => syncSpecialtyKnob(0));
+          }
           btnSendToHis.disabled = false;
           btnSendText.textContent = 'Gửi tới máy tính';
-
-          setTimeout(() => {
-            toast.classList.remove('visible');
-          }, 1500);
-        }, 500);
+        }, holdMs);
 
       } catch (err) {
+        uploadProgressCard?.classList.remove('is-ok');
         uploadProgressModal.style.display = 'none';
         showErrorBanner(err.message || 'Lỗi gửi ảnh lên máy HIS');
         btnSendToHis.disabled = false;
@@ -1460,42 +1749,72 @@
       }
     });
 
-    function showWarningBanner(message) {
-      const banner = document.getElementById('warningBanner');
-      const text = document.getElementById('warningBannerText');
-      if (banner && text) {
-        text.textContent = message;
-        banner.style.display = 'flex';
+    // Lucian #072: Hiển thị & thu gọn mềm mượt cho cảnh báo lâm sàng / lỗi mạng
+    const _bannerTimers = new WeakMap();
+
+    function presentInlineBanner(banner, textEl, message) {
+      if (!banner || !textEl) return;
+      const prevTimer = _bannerTimers.get(banner);
+      if (prevTimer) {
+        clearTimeout(prevTimer);
+        _bannerTimers.delete(banner);
       }
+      textEl.textContent = message;
+      banner.classList.remove('is-collapsing');
+      banner.style.display = 'flex';
     }
 
-    function hideWarningBanner() {
-      const banner = document.getElementById('warningBanner');
-      if (banner) banner.style.display = 'none';
+    function collapseInlineBanner(banner, immediate = false) {
+      if (!banner || banner.style.display === 'none') return;
+      const prevTimer = _bannerTimers.get(banner);
+      if (prevTimer) {
+        clearTimeout(prevTimer);
+        _bannerTimers.delete(banner);
+      }
+      if (immediate || prefersReducedMotion()) {
+        banner.classList.remove('is-collapsing');
+        banner.style.display = 'none';
+        return;
+      }
+      banner.classList.add('is-collapsing');
+      const timerId = setTimeout(() => {
+        banner.classList.remove('is-collapsing');
+        banner.style.display = 'none';
+        _bannerTimers.delete(banner);
+      }, 200);
+      _bannerTimers.set(banner, timerId);
+    }
+
+    function showWarningBanner(message) {
+      presentInlineBanner(
+        document.getElementById('warningBanner'),
+        document.getElementById('warningBannerText'),
+        message
+      );
+    }
+
+    function hideWarningBanner(immediate = false) {
+      collapseInlineBanner(document.getElementById('warningBanner'), Boolean(immediate));
     }
 
     function showErrorBanner(message) {
-      const banner = document.getElementById('errorBanner');
-      const text = document.getElementById('errorBannerText');
-      if (banner && text) {
-        text.textContent = message;
-        banner.style.display = 'flex';
-      }
+      presentInlineBanner(
+        document.getElementById('errorBanner'),
+        document.getElementById('errorBannerText'),
+        message
+      );
     }
 
-    function hideErrorBanner() {
-      const banner = document.getElementById('errorBanner');
-      if (banner) banner.style.display = 'none';
+    function hideErrorBanner(immediate = false) {
+      collapseInlineBanner(document.getElementById('errorBanner'), Boolean(immediate));
     }
 
-    document.getElementById('btnDismissError')?.addEventListener('click', hideErrorBanner);
-    document.getElementById('btnDismissWarning')?.addEventListener('click', hideWarningBanner);
+    document.getElementById('btnDismissError')?.addEventListener('click', () => hideErrorBanner(false));
+    document.getElementById('btnDismissWarning')?.addEventListener('click', () => hideWarningBanner(false));
 
     // =========================================================================
     // Document Scan Mode — Chụp giấy tờ nhiều trang, xuất PDF gửi Phiếu Scan
     // =========================================================================
-
-
 
     // Helper: load HTMLImageElement from File or Blob
     function loadImageFromFile(file) {
@@ -1525,10 +1844,12 @@
         item.dataset.idx = idx;
         const rotStyle = page.rotation ? `transform: rotate(${page.rotation}deg);` : '';
         item.innerHTML = `
-          <img src="${page.thumbnail}" alt="Trang ${idx + 1}" style="${rotStyle}">
-          <span class="doc-thumb-page-num">${idx + 1}</span>
-          ${page.rotation ? `<span class="doc-thumb-rotation">${page.rotation}°</span>` : ''}
-          <button type="button" class="doc-thumb-remove" data-idx="${idx}" aria-label="Xóa trang">&times;</button>
+          <div class="doc-thumb-media">
+            <img src="${page.thumbnail}" alt="Trang ${idx + 1}" style="${rotStyle}">
+            <span class="doc-thumb-page-num">${idx + 1}</span>
+            ${page.rotation ? `<span class="doc-thumb-rotation">${page.rotation}°</span>` : ''}
+          </div>
+          <button type="button" class="doc-thumb-remove" data-idx="${idx}" aria-label="Xóa trang ${idx + 1}">&times;</button>
         `;
 
         item.addEventListener('click', (e) => {
@@ -1670,16 +1991,78 @@
       });
     }
 
-    function removeDocPage(idx) {
-      exitCropMode();
-      triggerHaptic('warning');
-      const removed = docPages.splice(idx, 1)[0];
-      if (removed?.previewUrl) {
-        try { URL.revokeObjectURL(removed.previewUrl); } catch (e) {}
+    // Lucian #071: Hoàn tác xóa trang trong 4 giây với vòng đếm ngược SVG (0% Memory Leak)
+    function hideDocUndoSnack() {
+      if (!docUndoSnack) return;
+      docUndoSnack.classList.remove('is-visible');
+      if (btnDocUndo) btnDocUndo.tabIndex = -1;
+    }
+
+    function commitPendingDocUndo() {
+      if (!_pendingDocUndo) return;
+      if (_pendingDocUndo.rafId) {
+        cancelAnimationFrame(_pendingDocUndo.rafId);
       }
+      const expiredPage = _pendingDocUndo.page;
+      _pendingDocUndo = null;
+      if (expiredPage?.previewUrl) {
+        try { URL.revokeObjectURL(expiredPage.previewUrl); } catch (e) {}
+      }
+      hideDocUndoSnack();
+    }
+
+    function removeDocPage(idx) {
+      if (idx < 0 || idx >= docPages.length) return;
+      exitCropMode();
+      commitPendingDocUndo();
+      triggerHaptic('warning');
+
+      const prevSelected = docSelectedIndex;
+      const removed = docPages.splice(idx, 1)[0];
       if (docSelectedIndex >= docPages.length) docSelectedIndex = docPages.length - 1;
       renderDocThumbnails();
+
+      if (!removed) return;
+
+      if (docUndoMsg) docUndoMsg.textContent = `Đã xóa trang ${idx + 1}`;
+      if (btnDocUndo) {
+        btnDocUndo.style.setProperty('--undo-left', '1');
+        btnDocUndo.tabIndex = 0;
+      }
+      if (docUndoSnack) docUndoSnack.classList.add('is-visible');
+
+      const startTs = performance.now();
+      const undoState = { page: removed, index: idx, prevSelected, rafId: null };
+      _pendingDocUndo = undoState;
+
+      const tick = (now) => {
+        if (_pendingDocUndo !== undoState) return;
+        const left = Math.max(0, 1 - (now - startTs) / DOC_UNDO_DURATION_MS);
+        if (btnDocUndo) btnDocUndo.style.setProperty('--undo-left', left.toFixed(3));
+        if (left > 0) {
+          undoState.rafId = requestAnimationFrame(tick);
+        } else {
+          commitPendingDocUndo();
+        }
+      };
+      undoState.rafId = requestAnimationFrame(tick);
     }
+
+    function restoreDeletedDocPage() {
+      if (!_pendingDocUndo) return;
+      const { page, index, rafId } = _pendingDocUndo;
+      if (rafId) cancelAnimationFrame(rafId);
+      _pendingDocUndo = null;
+      hideDocUndoSnack();
+
+      const insertIdx = Math.max(0, Math.min(index, docPages.length));
+      docPages.splice(insertIdx, 0, page);
+      docSelectedIndex = insertIdx;
+      triggerHaptic('snap');
+      renderDocThumbnails();
+    }
+
+    btnDocUndo?.addEventListener('click', restoreDeletedDocPage);
 
     function updateDocSizeEstimate() {
       const estimate = estimatePdfSize(docPages.length, docPreset);
@@ -1832,6 +2215,9 @@
     }
 
     function exitEditOverlay() {
+      const wasEditing = Boolean(activeEditMode) ||
+        docScreen.classList.contains('is-editing') ||
+        document.body.classList.contains('doc-editing');
       if (editCanvasRaf) {
         cancelAnimationFrame(editCanvasRaf);
         editCanvasRaf = null;
@@ -1839,10 +2225,16 @@
       activeEditMode = null;
       activeDragHandle = null;
       activeDragCorner = -1;
+      if (!wasEditing) return;
+
       docScreen.classList.remove('is-editing');
       document.body.classList.remove('doc-editing');
       if (globalSpecialtyBar) {
-        globalSpecialtyBar.style.display = 'flex';
+        globalSpecialtyBar.style.display = '';
+        requestAnimationFrame(() => {
+          syncSpecialtyKnob(0);
+          syncDocPresetKnob(0);
+        });
       }
       docCropOverlay.style.display = 'none';
       docCropConfirm.style.display = 'none';
@@ -2406,18 +2798,43 @@
       btnDocSendPdf.click();
     });
 
-    // Preset selection
+    // Preset selection (Lucian #047 Stretching Segmented Pill)
+    const DOC_PRESET_ORDER = ['enhance', 'document', 'color'];
+
+    function selectDocPreset(presetKey, focusTarget = false) {
+      const prevIdx = Math.max(0, DOC_PRESET_ORDER.indexOf(docPreset));
+      const nextIdx = Math.max(0, DOC_PRESET_ORDER.indexOf(presetKey));
+      const dir = nextIdx - prevIdx;
+      docPreset = presetKey;
+      let activeBtn = null;
+      document.querySelectorAll('.doc-preset-btn').forEach(b => {
+        const isCurrent = b.dataset.docPreset === presetKey;
+        b.classList.toggle('active', isCurrent);
+        b.setAttribute('aria-checked', isCurrent ? 'true' : 'false');
+        if (isCurrent) activeBtn = b;
+      });
+      syncSegmentedKnob(docPresetSelector, activeBtn, dir);
+      updateDocSizeEstimate();
+      if (focusTarget && activeBtn) activeBtn.focus();
+    }
+
     document.querySelectorAll('.doc-preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         triggerHaptic('tap');
-        document.querySelectorAll('.doc-preset-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        docPreset = btn.dataset.docPreset;
-        updateDocSizeEstimate();
+        selectDocPreset(btn.dataset.docPreset, false);
       });
     });
 
-    // ---- Xuất PDF & Gửi tới máy tính ----
+    docPresetSelector?.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const curIdx = Math.max(0, DOC_PRESET_ORDER.indexOf(docPreset));
+      const nextIdx = (curIdx + (e.key === 'ArrowRight' ? 1 : -1) + DOC_PRESET_ORDER.length) % DOC_PRESET_ORDER.length;
+      e.preventDefault();
+      triggerHaptic('tap');
+      selectDocPreset(DOC_PRESET_ORDER[nextIdx], true);
+    });
+
+    // ---- Xuất PDF & Gửi tới máy tính (Lucian #081 Ring + Fail-Closed Checkmark + #070 Toast) ----
     btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
       if (p2p.isSessionIntentionallyClosed) {
@@ -2429,16 +2846,17 @@
         return;
       }
 
+      commitPendingDocUndo();
+
       try {
         btnDocSendPdf.disabled = true;
         uploadProgressModal.style.display = 'flex';
-        uploadPctBadge.textContent = '5%';
         const modeLabel = docPreset === 'enhance' ? 'Sắc nét' : (docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu');
-        uploadMeta.textContent = 'Đang chuẩn bị mô-đun PDF...';
+        updateUploadModal(5, 'Đang tạo tài liệu PDF...', 'Đang chuẩn bị mô-đun PDF...', false);
 
         await loadJsPdf();
 
-        uploadMeta.textContent = `Gộp ${docPages.length} trang thành PDF (${modeLabel})...`;
+        updateUploadModal(10, 'Đang tạo tài liệu PDF...', `Gộp ${docPages.length} trang thành PDF (${modeLabel})...`, false);
 
         const pdfResult = await buildPdf(
           docPages.map(p => ({ file: p.file, rotation: p.rotation || 0 })),
@@ -2447,17 +2865,19 @@
             filename: `Tai_lieu_${Date.now()}.pdf`,
             onProgress: (pageIdx, total) => {
               const pct = Math.round(10 + (pageIdx / total) * 40);
-              uploadPctBadge.textContent = `${pct}%`;
-              uploadMeta.textContent = `Đang xử lý trang ${pageIdx + 1}/${total}...`;
+              updateUploadModal(pct, 'Đang tạo tài liệu PDF...', `Đang xử lý trang ${pageIdx + 1}/${total}...`, false);
             }
           }
         );
 
-        uploadPctBadge.textContent = '55%';
-        uploadTitle.textContent = 'Đang chuyển PDF tới máy tính...';
-        uploadMeta.textContent = `Dung lượng: ${pdfResult.sizeKB} KB (${pdfResult.pageCount} trang)`;
-        hideErrorBanner();
-        hideWarningBanner();
+        updateUploadModal(
+          55,
+          'Đang chuyển PDF tới máy tính...',
+          `Dung lượng: ${pdfResult.sizeKB} KB (${pdfResult.pageCount} trang)`,
+          false
+        );
+        hideErrorBanner(true);
+        hideWarningBanner(true);
 
         const res = await p2p.sendImage(pdfResult.blob, {
           name: pdfResult.filename,
@@ -2466,17 +2886,25 @@
           pageCount: pdfResult.pageCount,
         }, (pct, statusMsg) => {
           const adjustedPct = Math.round(55 + (pct / 100) * 40);
-          uploadPctBadge.textContent = `${adjustedPct}%`;
           if (pct >= 90) {
-            uploadTitle.textContent = 'Đang gửi vào Phiếu Scan HIS...';
-            uploadMeta.textContent = statusMsg || 'Chờ xác nhận đính kèm file...';
+            updateUploadModal(
+              Math.min(96, adjustedPct),
+              'Đang gửi vào Phiếu Scan HIS...',
+              statusMsg || 'Chờ xác nhận đính kèm file...',
+              false
+            );
           } else {
-            uploadTitle.textContent = 'Đang chuyển PDF tới máy tính...';
-            uploadMeta.textContent = statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * pdfResult.sizeKB)} / ${pdfResult.sizeKB} KB...`;
+            updateUploadModal(
+              adjustedPct,
+              'Đang chuyển PDF tới máy tính...',
+              statusMsg || `Đang đồng bộ ${Math.round((pct / 100) * pdfResult.sizeKB)} / ${pdfResult.sizeKB} KB...`,
+              false
+            );
           }
         });
 
         if (res && res.status === 'HIS_UNKNOWN') {
+          uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
           showWarningBanner('Chưa xác nhận chuyển PDF. Kiểm tra ô đính kèm trên máy tính trước khi gửi lại.');
           btnDocSendPdf.disabled = false;
@@ -2484,7 +2912,17 @@
           return;
         }
 
-        if (!res || !res.success || res.status !== 'FILE_READY') {
+        if (!res || !res.success) {
+          uploadProgressCard?.classList.remove('is-ok');
+          uploadProgressModal.style.display = 'none';
+          showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
+          btnDocSendPdf.disabled = false;
+          triggerHaptic('warning');
+          return;
+        }
+
+        if (res.status !== 'FILE_READY') {
+          uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
           showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
           btnDocSendPdf.disabled = false;
@@ -2493,14 +2931,18 @@
         }
 
         triggerHaptic('success');
-        uploadPctBadge.textContent = '100%';
-        uploadTitle.textContent = 'Đã chuyển PDF tới máy tính';
-        uploadMeta.textContent = `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`;
-        if (toastText) toastText.textContent = 'Đã chuyển PDF tới máy tính. Kiểm tra và bấm Lưu.';
+        updateUploadModal(
+          100,
+          'Đã chuyển PDF tới máy tính',
+          `${pdfResult.pageCount} trang PDF đã được đính kèm vào Phiếu Scan`,
+          true
+        );
 
+        const holdMs = prefersReducedMotion() ? 120 : 620;
         setTimeout(() => {
           uploadProgressModal.style.display = 'none';
-          toast.classList.add('visible');
+          uploadProgressCard?.classList.remove('is-ok');
+          showToast('Đã chuyển PDF tới máy tính. Kiểm tra và bấm Lưu.');
           // Revoke preview URLs
           docPages.forEach(p => {
             if (p.previewUrl) {
@@ -2511,10 +2953,10 @@
           docSelectedIndex = -1;
           renderDocThumbnails();
           btnDocSendPdf.disabled = false;
-          setTimeout(() => { toast.classList.remove('visible'); }, 1500);
-        }, 500);
+        }, holdMs);
 
       } catch (err) {
+        uploadProgressCard?.classList.remove('is-ok');
         uploadProgressModal.style.display = 'none';
         showErrorBanner(err.message || 'Lỗi tạo hoặc gửi PDF');
         btnDocSendPdf.disabled = false;
@@ -2523,6 +2965,14 @@
 
 
     window.addEventListener('beforeunload', () => {
+      dismissToast();
+      commitPendingDocUndo();
+      try { _segmentedResizeObserver?.disconnect(); } catch (e) {}
+      docPages.forEach(p => {
+        if (p?.previewUrl) {
+          try { URL.revokeObjectURL(p.previewUrl); } catch (e) {}
+        }
+      });
       try { p2p.destroy(); } catch (e) {}
     });
   </script>
