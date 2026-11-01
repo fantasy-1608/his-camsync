@@ -82,8 +82,20 @@ const root=path.resolve(__dirname,'..');
  await page.screenshot({path:root+'/output/playwright/qlba-pdf-preview.png',fullPage:true});
  await page.evaluate(()=>{document.querySelector('#camsyncCloseBtn').click();document.querySelector('#btnLuu').click();if(window.clicks!==1)throw Error('Manual Save did not receive prepared file');});
  console.log('QLBA PDF preparation and manual Save PASS',scan);
- await page.goto(base+'/mobile-web/index.html');await page.waitForTimeout(700);if(errors.length)throw Error('Mobile errors: '+errors.join(';'));
- await page.setViewportSize({width:390,height:844});await page.screenshot({path:root+'/output/playwright/manual-mobile.png',fullPage:true});
- console.log('Mobile initial page PASS');
+ await page.setViewportSize({width:375,height:667});
+ await page.goto(base+'/mobile-web/index.html');await page.waitForTimeout(350);if(errors.length)throw Error('Mobile errors: '+errors.join(';'));
+ await page.click('#tabDocument');await page.waitForTimeout(200);
+ const mobileCheck=await page.evaluate(()=>{
+   const bar=document.getElementById('globalSpecialtyBar');
+   const hs=[...document.querySelectorAll('.spec-tab-btn')].map(b=>Math.round(b.getBoundingClientRect().height));
+   const ds=document.getElementById('docScreen');
+   const sendRect=document.getElementById('btnDocSendPdf').getBoundingClientRect();
+   return {knobReady:bar.classList.contains('knob-ready'),maxTabH:Math.max(...hs),minTabH:Math.min(...hs),docOverflow:ds.scrollHeight-ds.clientHeight,sendVisible:sendRect.bottom<=window.innerHeight};
+ });
+ if(!mobileCheck.knobReady||mobileCheck.maxTabH>42||mobileCheck.maxTabH-mobileCheck.minTabH>1||mobileCheck.docOverflow>2||!mobileCheck.sendVisible)throw Error('Mobile UX regression: '+JSON.stringify(mobileCheck));
+ await page.click('#tabEcg');await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
+ fs.mkdirSync(root+'/output/playwright',{recursive:true});
+ await page.screenshot({path:root+'/output/playwright/manual-mobile.png',fullPage:true});
+ console.log('Mobile initial page PASS',mobileCheck);
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
