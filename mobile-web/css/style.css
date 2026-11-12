@@ -2232,3 +2232,19 @@ body.doc-editing .specialty-segmented-bar {
   background: var(--accent-blue-hover);
   transform: scale(0.97);
 }
+
+.qr-guide {
+  display: none;
+  margin: auto;
+  max-width: 22rem;
+  padding: 24px;
+}
+.qr-guide h1 { font-size: 1.25rem; margin-bottom: 8px; }
+.qr-guide p { line-height: 1.5; color: var(--text-secondary); }
+.awaiting-qr .qr-guide { display: block; }
+.awaiting-qr .main-view,
+.awaiting-qr .patient-context-card,
+.awaiting-qr .status-retry-icon,
+#docScreen:not(.has-pages) .doc-thumbnail-strip,
+#docScreen:not(.has-pages) .doc-meta-preset-bar,
+#docScreen:not(.has-pages) .doc-actions-row:last-child { display: none; }

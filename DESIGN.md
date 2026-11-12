@@ -31,7 +31,7 @@ components:
     textColor: "{colors.text}"
 ---
 ## Overview
-A compact clinical pairing dialog following the approved white, navy and teal demo. Preserve the existing capture/editor/preview layout. This release transfers files for manual HIS Upload.
+A compact clinical pairing dialog following the approved white, navy and teal demo. Preserve the existing capture/editor/preview layout. Each transfer targets the file input selected during pairing.
 ## Colors
 Teal identifies pairing actions. Amber means waiting; green means connected. Every state has readable text.
 ## Typography
@@ -45,4 +45,4 @@ Moderate corner radii. QR modules remain square with a generous white quiet zone
 ## Components
 QR has no decorative overlay or animation. Countdown uses actual session expiry. Refresh tears down the old session and keeps the exact selected file input; disable refresh while a transfer is running.
 ## Do's and Don'ts
-Keep PHI out of screenshots and design examples. FILE_READY means file attached; show “Đã chuyển file tới máy tính” and tell users to press Upload manually. Respect reduced motion. Retain explicit close and Escape controls.
+Keep PHI out of screenshots and design examples. FILE_READY confirms attachment to the selected input. CDHA starts image upload when the target context is verified. The PDF scan form loads the selected PDF for review. Respect reduced motion. Retain explicit close and Escape controls.

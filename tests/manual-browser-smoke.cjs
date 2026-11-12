@@ -84,7 +84,13 @@ const root=path.resolve(__dirname,'..');
  console.log('QLBA PDF preparation and manual Save PASS',scan);
  await page.setViewportSize({width:375,height:667});
  await page.goto(base+'/mobile-web/index.html');await page.waitForTimeout(350);if(errors.length)throw Error('Mobile errors: '+errors.join(';'));
+ if(!await page.locator('.qr-guide').isVisible() || await page.locator('#tabDocument').isVisible())throw Error('Missing QR entry screen');
+ await page.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.abort());
+ await page.evaluate(()=>{ location.hash='session=synthetic_mobile&gen=1&key='+'ab'.repeat(32); });
  await page.click('#tabDocument');await page.waitForTimeout(200);
+ if(await page.locator('#docCaptureLabel').innerText()!=='Chụp trang đầu'||await page.locator('#docThumbnailStrip').isVisible())throw Error('Incorrect empty document controls');
+ await page.locator('#docGalleryInput').setInputFiles({name:'page.png',mimeType:'image/png',buffer:Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=64;c.height=48;return c.toDataURL().split(',')[1]}),'base64')});
+ await page.waitForFunction(()=>document.querySelector('#docCaptureLabel').textContent==='Chụp thêm trang');
  const mobileCheck=await page.evaluate(()=>{
    const bar=document.getElementById('globalSpecialtyBar');
    const hs=[...document.querySelectorAll('.spec-tab-btn')].map(b=>Math.round(b.getBoundingClientRect().height));
