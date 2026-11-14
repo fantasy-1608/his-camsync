@@ -20,7 +20,7 @@
       </span>
       <span class="brand-title">HIS CamSync</span>
     </div>
-    <div id="statusBadge" class="status-badge disconnected connecting" role="button" tabindex="0" title="Chạm để kết nối lại">
+    <div id="statusBadge" class="status-badge disconnected connecting" role="button" tabindex="0" title="Chạm để kết nối lại" aria-label="Trạng thái kết nối với máy tính">
       <span class="status-dot"></span>
       <span id="statusText">Chưa kết nối</span>
       <svg class="status-retry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -41,12 +41,12 @@
         <svg class="patient-shield-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span id="patientName" class="patient-name">Chờ tên file từ máy tính...</span>
+        <span id="patientName" class="patient-name">Chờ thông tin từ máy tính...</span>
       </div>
-      <span id="patientIdBadge" class="patient-id-badge">Tên file</span>
+      <span id="patientIdBadge" class="patient-id-badge">Tên tệp</span>
     </div>
     <div class="patient-meta-row">
-      <span id="patientDemographics">Mở hồ sơ trên HIS để đồng bộ</span>
+      <span id="patientDemographics">Mở hồ sơ trên máy tính để đồng bộ</span>
     </div>
   </div>
 
@@ -200,7 +200,7 @@
         <!-- 2. Thước Xoay Tiểu Ly & Căn Chỉnh Góc (Straighten Dial Module) -->
         <div class="straighten-dial-module">
           <div class="straighten-top-row">
-            <button type="button" id="btnRotateLeft" class="btn-subtle-tool" title="Xoay trái 90°">
+            <button type="button" id="btnRotateLeft" class="btn-subtle-tool" title="Xoay trái 90°" aria-label="Xoay trái 90 độ">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                 <path d="M3 3v5h5"/>
@@ -208,18 +208,18 @@
             </button>
 
             <!-- Degree Badge (Chạm vào để hoàn tác về 0°) -->
-            <div id="angleBadge" class="angle-degree-badge" title="Chạm để đưa về góc thẳng 0°">
+            <div id="angleBadge" class="angle-degree-badge" role="button" tabindex="0" title="Chạm để đưa về góc thẳng 0°" aria-label="Đưa góc nghiêng về 0 độ">
               0°
             </div>
 
-            <button type="button" id="btnRotateRight" class="btn-subtle-tool" title="Xoay phải 90°">
+            <button type="button" id="btnRotateRight" class="btn-subtle-tool" title="Xoay phải 90°" aria-label="Xoay phải 90 độ">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
                 <path d="M21 3v5h-5"/>
               </svg>
             </button>
 
-            <button type="button" id="btnToggleGrid" class="btn-subtle-tool" title="Bật/Tắt lưới dóng hàng">
+            <button type="button" id="btnToggleGrid" class="btn-subtle-tool specialty-tool-ecg" title="Bật/Tắt lưới dóng hàng" aria-label="Bật hoặc tắt lưới dóng hàng">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
               </svg>
@@ -309,15 +309,14 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
           <p class="guide-title" style="font-size: 16px; margin-bottom: 6px;">Chụp tài liệu</p>
-          <p class="guide-desc">Chụp hoặc chọn ảnh từng trang để gộp thành một file PDF.</p>
+          <p class="guide-desc">Chụp hoặc chọn ảnh từng trang để gộp thành một tệp PDF.</p>
         </div>
       </div>
 
       <!-- Page Edit Toolbar (khi có ít nhất 1 trang) -->
       <div class="doc-edit-toolbar" id="docEditToolbar" style="display: none;">
-        <button type="button" class="doc-edit-btn" id="btnDocMoveLeft" title="Chuyển sang trước">
+        <button type="button" class="doc-edit-btn doc-move-icon-btn" id="btnDocMoveLeft" title="Chuyển trang sang trái" aria-label="Chuyển trang sang trái">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-          <span>Trước</span>
         </button>
         <button type="button" class="doc-edit-btn" id="btnDocRotate" title="Xoay 90°">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
@@ -331,8 +330,7 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/></svg>
           <span>Cắt</span>
         </button>
-        <button type="button" class="doc-edit-btn" id="btnDocMoveRight" title="Chuyển sang sau">
-          <span>Sau</span>
+        <button type="button" class="doc-edit-btn doc-move-icon-btn" id="btnDocMoveRight" title="Chuyển trang sang phải" aria-label="Chuyển trang sang phải">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
@@ -368,6 +366,9 @@
           <span class="doc-size-estimate" id="docSizeEstimate"></span>
         </div>
       </div>
+      <button type="button" id="btnDocSizeWarn" class="doc-size-warn-btn" hidden style="display: none;">
+        Dung lượng dự kiến vượt 5 MB — Chạm để chuyển sang Sắc nét
+      </button>
 
       <!-- Action Buttons (2 hàng rõ ràng, dễ bấm) -->
       <div class="doc-actions-container">
@@ -447,6 +448,32 @@
     </div>
   </div>
 
+  <!-- Bottom Sheet Xác nhận trạng thái ô đính kèm HIS (Fail-Closed 1 chạm) -->
+  <div id="hisConfirmModal" class="doc-preview-modal" role="dialog" aria-modal="true" aria-labelledby="hisConfirmTitle" style="display: none;">
+    <div class="doc-preview-modal-card">
+      <div class="doc-preview-modal-header">
+        <div class="doc-preview-modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="hisConfirmTitle">Kiểm tra ô đính kèm trên máy tính</span>
+        </div>
+        <button type="button" class="doc-preview-modal-close" id="btnHisConfirmClose" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="doc-preview-modal-body" style="padding: 14px 16px;">
+        <p id="hisConfirmMessage" style="margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-primary);">
+          Chưa nhận được phản hồi xác nhận từ máy tính. Hãy nhìn nhanh ô đính kèm trên HIS xem đã có tệp mới hay chưa trước khi gửi lại.
+        </p>
+      </div>
+      <div class="doc-preview-modal-footer">
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button type="button" class="btn-doc-modal-cancel" id="btnHisConfirmResend">Chưa thấy, gửi lại</button>
+          <button type="button" class="btn-doc-modal-send" id="btnHisConfirmSeen">Đã thấy tệp trên HIS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Lucian #081 Upload Progress Modal / Ring + Step Check -->
   <div id="uploadProgressModal" class="upload-progress-modal" style="display: none;">
     <div id="uploadProgressCard" class="upload-progress-card">
@@ -465,8 +492,9 @@
       <div class="u081-steps" aria-hidden="true">
         <span id="uploadStep1" class="on">Chuẩn bị</span>
         <span id="uploadStep2">Truyền mã hóa</span>
-        <span id="uploadStep3">Đã gắn file</span>
+        <span id="uploadStep3">Đã gắn tệp</span>
       </div>
+      <button type="button" id="btnCancelUploadWait" class="upload-cancel-btn" hidden style="display: none;">Hủy chờ xác nhận</button>
     </div>
   </div>
 
@@ -477,7 +505,7 @@
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
     </span>
-    <span id="toastText">Đã chuyển file tới máy tính</span>
+    <span id="toastText">Đã chuyển tệp tới máy tính</span>
     <button type="button" id="btnDismissToast" class="toast-close-btn" aria-label="Đóng thông báo">&times;</button>
     <span class="u070-bar" aria-hidden="true"></span>
   </div>
@@ -485,7 +513,7 @@
   <!-- Loading Overlay (Chuyển đổi HEIC sang JPEG) -->
   <div id="loadingOverlay" class="loading-overlay" style="display: none;">
     <div class="upload-spinner" style="width: 44px; height: 44px; margin-bottom: 12px;"></div>
-    <span id="loadingText" style="color: #ffffff; font-size: 13px; font-weight: 600;">Đang chuẩn hóa ảnh iPhone...</span>
+    <span id="loadingText" style="color: #ffffff; font-size: 13px; font-weight: 600;">Đang xử lý ảnh từ điện thoại...</span>
   </div>
 
   <!-- Scripts: Nạp trước PeerJS (~90KB) để kết nối P2P tức thì. heic2any (1.3MB) và jsPDF (357KB) được lazy-load khi cần -->
@@ -543,6 +571,14 @@
     // State
     let currentSpecialty = 'ecg'; // 'ecg' | 'ultrasound' | 'document'
     let currentFilter = 'normal';
+    let hasActiveEditorImage = false;
+    let pendingHisVerifyImage = false;
+    let pendingHisVerifyPdf = false;
+    let pendingHisVerifyContext = null;
+    let pendingHisVerifyMessage = '';
+    let _uploadStallTimer = null;
+    let _uploadStallAckArmed = false;
+    let _activeUploadId = 0;
 
     // =========================================================================
     // Document Scan State & Elements (Hoisted to prevent TDZ ReferenceError)
@@ -666,9 +702,18 @@
     const toast = document.getElementById('toast');
     const toastText = document.getElementById('toastText');
 
+    const patientCard = document.getElementById('patientCard');
     const patientNameEl = document.getElementById('patientName');
     const patientIdBadgeEl = document.getElementById('patientIdBadge');
     const patientDemographicsEl = document.getElementById('patientDemographics');
+
+    const btnDocSizeWarn = document.getElementById('btnDocSizeWarn');
+    const btnCancelUploadWait = document.getElementById('btnCancelUploadWait');
+    const hisConfirmModal = document.getElementById('hisConfirmModal');
+    const hisConfirmMessage = document.getElementById('hisConfirmMessage');
+    const btnHisConfirmClose = document.getElementById('btnHisConfirmClose');
+    const btnHisConfirmResend = document.getElementById('btnHisConfirmResend');
+    const btnHisConfirmSeen = document.getElementById('btnHisConfirmSeen');
 
     const uploadProgressModal = document.getElementById('uploadProgressModal');
     const uploadProgressCard = document.getElementById('uploadProgressCard');
@@ -765,6 +810,149 @@
       if (uploadStep1) uploadStep1.classList.toggle('on', true);
       if (uploadStep2) uploadStep2.classList.toggle('on', Boolean(isSuccess) || clamped >= 30);
       if (uploadStep3) uploadStep3.classList.toggle('on', Boolean(isSuccess));
+    }
+
+    const KNOWN_FRIENDLY_PREFIXES = [
+      'Tệp PDF',
+      'Chưa tải xong',
+      'Kích thước tệp',
+      'Dung lượng tệp',
+      'Phiên',
+      'Mã QR',
+      'Kênh truyền',
+      'Bệnh nhân'
+    ];
+
+    function getFriendlyUploadError(err, fallback) {
+      const msg = String(err?.message || '').trim();
+      if (msg && KNOWN_FRIENDLY_PREFIXES.some(prefix => msg.startsWith(prefix))) {
+        return msg;
+      }
+      return fallback;
+    }
+
+    function setElementVisible(el, visible) {
+      if (!el) return;
+      el.hidden = !visible;
+      el.style.display = visible ? '' : 'none';
+    }
+
+    function revealCancelUploadWait() {
+      setElementVisible(btnCancelUploadWait, true);
+    }
+
+    function startUploadWatchdog() {
+      const uploadId = ++_activeUploadId;
+      _uploadStallAckArmed = false;
+      setElementVisible(btnCancelUploadWait, false);
+      if (_uploadStallTimer) {
+        clearTimeout(_uploadStallTimer);
+      }
+      _uploadStallTimer = setTimeout(() => {
+        if (uploadId === _activeUploadId) revealCancelUploadWait();
+      }, 8000);
+      return uploadId;
+    }
+
+    function touchUploadWatchdog(uploadId, pct) {
+      if (uploadId !== _activeUploadId) return;
+      if (pct >= 95) {
+        if (!_uploadStallAckArmed) {
+          _uploadStallAckArmed = true;
+          if (_uploadStallTimer) clearTimeout(_uploadStallTimer);
+          _uploadStallTimer = setTimeout(() => {
+            if (uploadId === _activeUploadId) revealCancelUploadWait();
+          }, 5000);
+        }
+        return;
+      }
+      _uploadStallAckArmed = false;
+      if (_uploadStallTimer) clearTimeout(_uploadStallTimer);
+      _uploadStallTimer = setTimeout(() => {
+        if (uploadId === _activeUploadId) revealCancelUploadWait();
+      }, 8000);
+    }
+
+    function stopUploadWatchdog(uploadId = null) {
+      if (uploadId !== null && uploadId !== _activeUploadId) return;
+      if (_uploadStallTimer) {
+        clearTimeout(_uploadStallTimer);
+        _uploadStallTimer = null;
+      }
+      _uploadStallAckArmed = false;
+      setElementVisible(btnCancelUploadWait, false);
+    }
+
+    function invalidateActiveUploads() {
+      ++_activeUploadId;
+      stopUploadWatchdog();
+    }
+
+    function openHisConfirmModal(context, message) {
+      pendingHisVerifyContext = context;
+      if (message) pendingHisVerifyMessage = message;
+      if (hisConfirmMessage) {
+        hisConfirmMessage.textContent = pendingHisVerifyMessage ||
+          'Chưa nhận được phản hồi xác nhận từ máy tính. Hãy nhìn nhanh ô đính kèm trên HIS xem đã có tệp mới hay chưa trước khi gửi lại.';
+      }
+      if (hisConfirmModal) hisConfirmModal.style.display = 'flex';
+    }
+
+    function closeHisConfirmModal() {
+      if (hisConfirmModal) hisConfirmModal.style.display = 'none';
+    }
+
+    function hasActiveTransport() {
+      return Boolean(p2p.isConnected || (p2p.isCloudReady && p2p.patientInfo));
+    }
+
+    function applyActionBtnState(btn, textEl, { disabled, amber, label }) {
+      if (!btn) return;
+      btn.disabled = Boolean(disabled);
+      btn.classList.toggle('is-amber-warning', Boolean(amber));
+      if (textEl && label !== undefined) textEl.textContent = label;
+    }
+
+    function syncSendButtonsState() {
+      const closed = Boolean(p2p.isSessionIntentionallyClosed);
+      const awaitingQr = !p2p.sessionId || document.body.classList.contains('awaiting-qr');
+      const connected = hasActiveTransport();
+      const hasPatient = Boolean(p2p.patientInfo);
+      const isConnectingNow = Boolean(statusBadge?.classList.contains('connecting'));
+      const hasDocPages = docPages.length > 0;
+
+      const computeBtnConfig = ({ verifyPending, emptyDisabled }) => {
+        if (closed) {
+          return { disabled: true, amber: false, label: 'Phiên đã đóng' };
+        }
+        if (awaitingQr) {
+          return { disabled: true, amber: false, label: 'Gửi tới máy tính' };
+        }
+        if (!connected) {
+          if (isConnectingNow && p2p.p2pRetryAttempts === 0 && p2p.reconnectAttempts === 0) {
+            return { disabled: true, amber: false, label: 'Đang kết nối...' };
+          }
+          return { disabled: Boolean(emptyDisabled), amber: !emptyDisabled, label: 'Kết nối lại máy tính' };
+        }
+        if (!hasPatient) {
+          return { disabled: true, amber: false, label: 'Đang đồng bộ tên tệp...' };
+        }
+        if (verifyPending) {
+          return { disabled: Boolean(emptyDisabled), amber: !emptyDisabled, label: 'Kiểm tra máy tính' };
+        }
+        return { disabled: Boolean(emptyDisabled), amber: false, label: 'Gửi tới máy tính' };
+      };
+
+      const imgCfg = computeBtnConfig({ verifyPending: pendingHisVerifyImage, emptyDisabled: false });
+      applyActionBtnState(btnSendToHis, btnSendText, imgCfg);
+
+      const pdfCfg = computeBtnConfig({ verifyPending: pendingHisVerifyPdf, emptyDisabled: !hasDocPages });
+      applyActionBtnState(btnDocSendPdf, btnDocSendText, pdfCfg);
+
+      if (btnDocModalSend) {
+        const modalTextEl = btnDocModalSend.querySelector('span');
+        applyActionBtnState(btnDocModalSend, modalTextEl, pdfCfg);
+      }
     }
 
     // Lucian #070: Toast có thanh đếm ngược + vuốt ngang để đóng
@@ -1027,9 +1215,15 @@
         window.addEventListener('pointerup', onPointerUp);
         window.addEventListener('pointercancel', onPointerUp);
 
-        // Chạm vào huy hiệu để đưa về 0° ngay lập tức
+        // Chạm hoặc bấm phím để đưa về 0° ngay lập tức
         this.badge.addEventListener('click', () => {
           this.setAngle(0, false);
+        });
+        this.badge.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this.setAngle(0, false);
+          }
         });
 
         this.draw();
@@ -1057,7 +1251,7 @@
           this.badge.textContent = '0°';
           this.badge.classList.remove('has-angle');
         } else {
-          this.badge.textContent = (rounded > 0 ? `+${rounded}°` : `${rounded}°`);
+          this.badge.textContent = (rounded > 0 ? `+${rounded}° · ↺ 0°` : `${rounded}° · ↺ 0°`);
           this.badge.classList.add('has-angle');
         }
 
@@ -1112,6 +1306,18 @@
       editor.setFineAngle(deg, isInteracting);
     });
 
+    editor.onEditChange = (kind) => {
+      if (kind === 'rotate') {
+        const presetGroup = currentSpecialty === 'ecg' ? groupEcgPresets : groupUsPresets;
+        presetGroup?.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+      }
+      if (hasActiveEditorImage && pendingHisVerifyImage) {
+        pendingHisVerifyImage = false;
+        hideWarningBanner(true);
+        syncSendButtonsState();
+      }
+    };
+
     // Trạng thái hoàn tác xóa trang tài liệu (Hoisted tránh TDZ khi khởi tạo chuyên khoa)
     let _pendingDocUndo = null;
     const DOC_UNDO_DURATION_MS = 4000;
@@ -1124,40 +1330,35 @@
       generation: initialGeneration !== null ? initialGeneration : undefined,
       onStatusChange: (connected, text) => {
         applyStatusBadgeState(connected, text);
-        if (connected) {
-          btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi tới máy tính';
-          if (btnDocSendPdf) {
-            btnDocSendPdf.disabled = docPages.length === 0;
-            btnDocSendText.textContent = 'Gửi tới máy tính';
-          }
-        } else {
-          btnSendToHis.disabled = true;
-          const isClosedMsg = text && (text.includes('Phiên') || text.includes('hết hạn') || text.includes('thay đổi'));
-          btnSendText.textContent = isClosedMsg ? 'Phiên đã đóng' : 'Chờ kết nối...';
-          if (btnDocSendPdf) {
-            btnDocSendPdf.disabled = true;
-            btnDocSendText.textContent = isClosedMsg ? 'Phiên đã đóng' : 'Chờ kết nối...';
-          }
-        }
+        syncSendButtonsState();
       },
       onSessionClosed: (payload) => {
         try {
           sessionStorage.removeItem(SESSION_STORAGE_KEY);
         } catch (_) {}
+        stopUploadWatchdog();
+        invalidateActiveUploads();
+        uploadProgressCard?.classList.remove('is-ok');
+        if (uploadProgressModal) uploadProgressModal.style.display = 'none';
+        closeHisConfirmModal();
+        pendingHisVerifyImage = false;
+        pendingHisVerifyPdf = false;
+        syncSendButtonsState();
         const reason = payload?.reason;
         const msg = (reason === 'session_expired')
-          ? '⏰ Phiên chụp đã hết hạn (5 phút). Vui lòng quét lại mã QR trên máy tính.'
+          ? 'Phiên chụp đã hết hạn (5 phút). Vui lòng quét lại mã QR trên máy tính.'
           : (reason === 'clinical_context_changed'
-            ? (payload?.message || '⚠️ Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy để đảm bảo an toàn hồ sơ.')
-            : '⚠️ Phiên làm việc trên máy tính đã kết thúc.');
+            ? (payload?.message || 'Bệnh nhân trên HIS đã thay đổi. Phiên chụp đã bị hủy để đảm bảo an toàn hồ sơ.')
+            : 'Phiên làm việc trên máy tính đã kết thúc.');
         showErrorBanner(msg);
         triggerHaptic('warning');
       },
       onPatientInfo: (patient) => {
         patientNameEl.textContent = (patient?.name || 'Tai_lieu').toUpperCase();
-        patientIdBadgeEl.textContent = 'Tên file';
-        patientDemographicsEl.textContent = 'File sẽ được nạp vào ô đính kèm đang mở trên HIS.';
+        patientIdBadgeEl.textContent = 'Tên tệp';
+        patientDemographicsEl.textContent = '';
+        patientCard?.classList.add('is-compact');
+        syncSendButtonsState();
         triggerHaptic('success');
       }
 
@@ -1166,10 +1367,12 @@
     if (initialSessionId && initialCryptoKey) {
       document.body.classList.remove('awaiting-qr');
       applyStatusBadgeState(false, 'Đang kết nối...');
+      syncSendButtonsState();
       p2p.connect();
     } else {
       applyStatusBadgeState(false, 'Chưa kết nối');
       statusBadge.inert = true;
+      syncSendButtonsState();
     }
 
     const SPECIALTY_ORDER = { ecg: 0, ultrasound: 1, document: 2 };
@@ -1220,7 +1423,7 @@
         // Document mode — Hiển thị Screen 3 (docScreen)
         iconDocMode.style.display = 'block';
         captureTitle.textContent = 'Chụp tài liệu';
-        captureSubtitle.textContent = 'Chụp từng trang (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành file PDF gửi vào Phiếu Scan trên HIS.';
+        captureSubtitle.textContent = 'Chụp từng trang (CCCD, giấy chuyển viện, đơn thuốc...) rồi gộp thành tệp PDF gửi vào Phiếu Scan trên HIS.';
 
         // Show docScreen, hide capture/editor screens
         captureScreen.style.display = 'none';
@@ -1243,10 +1446,17 @@
         return;
       }
 
-      // Image modes (ECG / Ultrasound) — Hide docScreen, show captureScreen
+      // Image modes (ECG / Ultrasound) — Hide docScreen, restore active editor or show captureScreen
       docScreen.style.display = 'none';
-      if (!document.body.classList.contains('in-editor')) {
+      const returningToSameEditor = hasActiveEditorImage && editor.originalImage && editor.specialty === spec;
+      if (hasActiveEditorImage && editor.originalImage) {
+        captureScreen.style.display = 'none';
+        editorScreen.style.display = 'flex';
+        document.body.classList.add('in-editor');
+      } else {
+        editorScreen.style.display = 'none';
         captureScreen.style.display = 'flex';
+        document.body.classList.remove('in-editor');
         if (!silent) {
           animateScreenDirection(captureScreen, dir);
           if (guideIcon && !prefersReducedMotion()) {
@@ -1255,7 +1465,10 @@
           }
         }
       }
-      editor.setSpecialty(spec);
+
+      if (!returningToSameEditor) {
+        editor.setSpecialty(spec);
+      }
 
       if (spec === 'ecg') {
         iconEcgMode.style.display = 'block';
@@ -1279,19 +1492,26 @@
         usTools.forEach(el => el.style.display = 'inline-flex');
       }
 
-      currentFilter = 'normal';
-      document.querySelectorAll('.enhancer-btn').forEach(b => b.classList.remove('active'));
+      if (!returningToSameEditor) {
+        currentFilter = 'normal';
+        document.querySelectorAll('.enhancer-btn').forEach(b => b.classList.remove('active'));
+      }
 
-      // Khi chuyển đổi giữa ECG và Siêu Âm ngay trong Studio, đồng bộ preset và render lại
+      // Khi chuyển đổi giữa ECG và Siêu Âm hoặc quay lại ảnh đang sửa trong Studio, đồng bộ khung & thước xoay
       if (document.body.classList.contains('in-editor')) {
-        const activePresetGroup = spec === 'ecg' ? groupEcgPresets : groupUsPresets;
-        const defaultPreset = spec === 'ecg' ? 'ecg-strip' : 'us-convex';
-        activePresetGroup.querySelectorAll('.preset-pill').forEach(pill => {
-          pill.classList.toggle('active', pill.dataset.preset === defaultPreset);
-        });
+        if (!returningToSameEditor) {
+          const activePresetGroup = spec === 'ecg' ? groupEcgPresets : groupUsPresets;
+          const defaultPreset = spec === 'ecg' ? 'ecg-strip' : 'us-convex';
+          activePresetGroup.querySelectorAll('.preset-pill').forEach(pill => {
+            pill.classList.toggle('active', pill.dataset.preset === defaultPreset);
+          });
+        }
         if (editor.originalImage) {
-          editor.render();
-          editor.updateCropBoxUI();
+          setTimeout(() => {
+            straightenDial.resize();
+            editor.render();
+            editor.updateCropBoxUI();
+          }, 40);
         }
       }
     }
@@ -1362,11 +1582,38 @@
           window.history.replaceState(null, '', window.location.pathname);
         } catch (_) {}
 
+        commitPendingDocUndo();
+        docPages.forEach(p => {
+          if (p.previewUrl) {
+            try { URL.revokeObjectURL(p.previewUrl); } catch (_) {}
+          }
+        });
+        docPages = [];
+        docSelectedIndex = -1;
+        hasActiveEditorImage = false;
+        pendingHisVerifyImage = false;
+        pendingHisVerifyPdf = false;
+        stopUploadWatchdog();
+        invalidateActiveUploads();
+        uploadProgressCard?.classList.remove('is-ok');
+        if (uploadProgressModal) uploadProgressModal.style.display = 'none';
+        closeHisConfirmModal();
+        hideErrorBanner(true);
+        hideWarningBanner(true);
+        editorScreen.style.display = 'none';
+        document.body.classList.remove('in-editor');
+        if (globalSpecialtyBar) globalSpecialtyBar.style.display = '';
+        cameraInput.value = '';
+        galleryInput.value = '';
+        if (docCameraInput) docCameraInput.value = '';
+        if (docGalleryInput) docGalleryInput.value = '';
+
         document.body.classList.remove('awaiting-qr');
         statusBadge.inert = false;
-        patientNameEl.textContent = 'Chờ tên file từ máy tính...';
-        patientIdBadgeEl.textContent = 'Tên file';
-        patientDemographicsEl.textContent = 'Đang nhận tên file từ máy tính...';
+        patientCard?.classList.remove('is-compact');
+        patientNameEl.textContent = 'Chờ thông tin từ máy tính...';
+        patientIdBadgeEl.textContent = 'Tên tệp';
+        patientDemographicsEl.textContent = 'Đang đồng bộ từ máy tính...';
         applyStatusBadgeState(false, 'Đang kết nối...');
 
         if (newSpecialty === 'document') {
@@ -1376,11 +1623,15 @@
           switchSpecialty('ultrasound', { silent: true });
         } else if (newSpecialty === 'ecg') {
           switchSpecialty('ecg', { silent: true });
+        } else {
+          renderDocThumbnails();
+          switchSpecialty(currentSpecialty, { silent: true });
         }
 
         if (p2p && typeof p2p.updateSession === 'function') {
           await p2p.updateSession(newSessionId, newCryptoKey, newGeneration, newRelayCapability);
         }
+        syncSendButtonsState();
       }
     });
 
@@ -1399,7 +1650,7 @@
 
       if (!isHeic) return file;
 
-      showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
+      showLoading('Đang chuẩn hóa ảnh iPhone...');
       
       try {
         let bitmap = null;
@@ -1446,9 +1697,9 @@
 
       try {
         if (typeof window.heic2any !== 'function') {
-          showLoading('Đang nạp mô-đun chuẩn hóa ảnh iPhone...');
+          showLoading('Đang chuẩn hóa ảnh iPhone...');
           await loadHeic2Any();
-          showLoading('Đang chuẩn hóa ảnh iPhone sang JPEG...');
+          showLoading('Đang chuẩn hóa ảnh iPhone...');
         }
         if (typeof window.heic2any === 'function') {
           const res = await window.heic2any({
@@ -1474,9 +1725,14 @@
       try {
         const processedFile = await convertHeicToJpegIfNecessary(file);
         await editor.loadImage(processedFile);
+        hasActiveEditorImage = true;
+        pendingHisVerifyImage = false;
+        hideWarningBanner(true);
+        hideErrorBanner(true);
         captureScreen.style.display = 'none';
         editorScreen.style.display = 'flex';
         document.body.classList.add('in-editor');
+        syncSendButtonsState();
 
         // Đặt preset ban đầu
         const presetGroup = currentSpecialty === 'ecg' ? groupEcgPresets : groupUsPresets;
@@ -1495,12 +1751,20 @@
         }, 80);
       } catch (err) {
         hideLoading();
-        showErrorBanner('Không thể tải ảnh: ' + (err.message || err));
+        showErrorBanner(getFriendlyUploadError(err, 'Không thể đọc ảnh đã chọn. Hãy chụp lại hoặc chọn ảnh khác.'));
       }
     }
 
-    cameraInput.addEventListener('change', (e) => handleFileSelected(e.target.files?.[0]));
-    galleryInput.addEventListener('change', (e) => handleFileSelected(e.target.files?.[0]));
+    cameraInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) handleFileSelected(file);
+    });
+    galleryInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) handleFileSelected(file);
+    });
 
     // Preset Selection
     document.querySelectorAll('.preset-pill').forEach(pill => {
@@ -1596,6 +1860,8 @@
     btnRetake.addEventListener('click', () => {
       cameraInput.value = '';
       galleryInput.value = '';
+      hasActiveEditorImage = false;
+      pendingHisVerifyImage = false;
       editorScreen.style.display = 'none';
       captureScreen.style.display = 'flex';
       document.body.classList.remove('in-editor');
@@ -1605,15 +1871,25 @@
       }
       hideErrorBanner(true);
       hideWarningBanner(true);
-      btnSendToHis.disabled = false;
-      btnSendText.textContent = 'Gửi tới máy tính';
+      syncSendButtonsState();
     });
 
     function triggerManualReconnect() {
-      if (!p2p.isConnected) {
+      if (p2p.isSessionIntentionallyClosed) {
+        triggerHaptic('warning');
+        showErrorBanner('Phiên chụp đã kết thúc. Vui lòng quét lại mã QR mới trên máy tính.');
+        return;
+      }
+      if (!hasActiveTransport()) {
         triggerHaptic('tap');
         applyStatusBadgeState(false, 'Đang thử lại...');
-        p2p.connect();
+        const started = typeof p2p.reconnectTransport === 'function'
+          ? p2p.reconnectTransport({ resetPatientRetry: true })
+          : false;
+        if (!started) {
+          applyStatusBadgeState(false, 'Chưa kết nối');
+        }
+        syncSendButtonsState();
       }
     }
 
@@ -1629,24 +1905,35 @@
     btnSendToHis.addEventListener('click', async () => {
       if (p2p.isSessionIntentionallyClosed) {
         showErrorBanner('Phiên chụp đã đóng hoặc ô đính kèm trên máy tính đã đóng. Vui lòng quét lại mã QR trên HIS.');
+        syncSendButtonsState();
         return;
       }
-      if (!p2p.isConnected) {
-        btnSendText.textContent = 'Đang kết nối lại...';
-        applyStatusBadgeState(false, 'Đang kết nối lại...');
-        p2p.connect();
+      if (pendingHisVerifyImage) {
+        openHisConfirmModal('image');
+        return;
+      }
+      if (!hasActiveTransport()) {
+        triggerManualReconnect();
+        return;
+      }
+      if (!p2p.patientInfo) {
+        showWarningBanner('Đang đồng bộ tên tệp từ máy tính, vui lòng chờ trong giây lát.');
+        syncSendButtonsState();
         return;
       }
 
+      let uploadId = null;
       try {
         btnSendToHis.disabled = true;
+        uploadId = startUploadWatchdog();
         uploadProgressModal.style.display = 'flex';
-        updateUploadModal(10, 'Đang xuất ảnh...', 'Chuẩn bị ảnh JPEG...', false);
+        updateUploadModal(10, 'Đang xuất ảnh...', 'Đang chuẩn bị ảnh trước khi gửi...', false);
 
         const blob = await editor.exportBlob(0.90, {
           watermark: false,
           timestamp: Date.now()
         });
+        if (uploadId !== _activeUploadId) return;
         const approxKB = Math.round(blob.size / 1024);
 
         updateUploadModal(22, 'Đang chuyển ảnh tới máy tính...', `Dung lượng: ${approxKB} KB`, false);
@@ -1663,11 +1950,13 @@
           type: 'image/jpeg',
           specialty: currentSpecialty
         }, (pct, statusMsg) => {
+          if (uploadId !== _activeUploadId) return;
+          touchUploadWatchdog(uploadId, pct);
           if (pct >= 90) {
             updateUploadModal(
               Math.min(96, pct),
-              'Đang gắn file trên máy tính...',
-              statusMsg || 'Chờ máy tính xác nhận file đã sẵn sàng...',
+              'Đang gắn tệp trên máy tính...',
+              statusMsg || 'Đang chờ máy tính xác nhận...',
               false
             );
           } else {
@@ -1680,47 +1969,53 @@
           }
         });
 
+        if (uploadId !== _activeUploadId) return;
+        stopUploadWatchdog(uploadId);
+
         // Xử lý các trạng thái xác thực HIS (Fail-Closed 100%):
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showWarningBanner(res.reason || res.error || 'Chưa xác nhận chuyển file; kiểm tra ô đính kèm trên máy tính trước khi gửi lại');
-          btnSendToHis.disabled = true;
-          btnSendText.textContent = 'Kiểm tra máy tính';
+          pendingHisVerifyImage = true;
+          const reasonMsg = res.reason || res.error || 'Chưa nhận được phản hồi xác nhận từ máy tính; hãy kiểm tra ô đính kèm trên HIS trước khi gửi lại.';
+          showWarningBanner(reasonMsg);
+          syncSendButtonsState();
+          openHisConfirmModal('image', reasonMsg);
           return;
         }
 
         if (!res || !res.success) {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showErrorBanner(res?.reason || res?.error || 'Không thể gắn file vào ô đính kèm trên máy tính.');
-          btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi tới máy tính';
+          showErrorBanner(res?.reason || res?.error || 'Không thể gắn tệp vào ô đính kèm trên máy tính.');
+          syncSendButtonsState();
           return;
         }
 
         if (res.status !== 'FILE_READY') {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showErrorBanner(res?.reason || res?.error || 'Không thể gắn file vào ô đính kèm trên máy tính.');
-          btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi tới máy tính';
+          showErrorBanner(res?.reason || res?.error || 'Không thể gắn tệp vào ô đính kèm trên máy tính.');
+          syncSendButtonsState();
           return;
         }
 
         // Rung haptic & vẽ dấu tích xanh CHỈ KHI FILE_READY được xác nhận thực tế
+        pendingHisVerifyImage = false;
         triggerHaptic('success');
-        updateUploadModal(100, 'Đã chuyển file tới máy tính', 'Ảnh đã được nạp vào ô đính kèm trên máy tính.', true);
+        updateUploadModal(100, 'Đã chuyển tệp tới máy tính', 'Ảnh đã được nạp vào ô đính kèm trên máy tính.', true);
 
         const holdMs = prefersReducedMotion() ? 120 : 620;
         setTimeout(() => {
+          if (uploadId !== _activeUploadId) return;
           uploadProgressModal.style.display = 'none';
           uploadProgressCard?.classList.remove('is-ok');
-          showToast('Đã chuyển file tới máy tính');
+          showToast('Đã chuyển tệp tới máy tính');
 
           // Trở lại màn hình chụp để sẵn sàng chụp ảnh tiếp theo
           cameraInput.value = '';
           galleryInput.value = '';
+          hasActiveEditorImage = false;
           editorScreen.style.display = 'none';
           captureScreen.style.display = 'flex';
           document.body.classList.remove('in-editor');
@@ -1728,16 +2023,16 @@
             globalSpecialtyBar.style.display = '';
             requestAnimationFrame(() => syncSpecialtyKnob(0));
           }
-          btnSendToHis.disabled = false;
-          btnSendText.textContent = 'Gửi tới máy tính';
+          syncSendButtonsState();
         }, holdMs);
 
       } catch (err) {
+        if (uploadId !== _activeUploadId) return;
+        stopUploadWatchdog(uploadId);
         uploadProgressCard?.classList.remove('is-ok');
         uploadProgressModal.style.display = 'none';
-        showErrorBanner(err.message || 'Lỗi gửi ảnh lên máy HIS');
-        btnSendToHis.disabled = false;
-        btnSendText.textContent = 'Gửi tới máy tính';
+        showErrorBanner(getFriendlyUploadError(err, 'Không thể gửi ảnh tới máy tính. Hãy kiểm tra mạng và thử lại.'));
+        syncSendButtonsState();
       }
     });
 
@@ -1827,7 +2122,7 @@
 
     // ---- Render thumbnails & workspace ----
     function renderDocThumbnails() {
-      const existing = docThumbnailStrip.querySelectorAll('.doc-thumb-item');
+      const existing = docThumbnailStrip.querySelectorAll('.doc-thumb-item, .doc-thumb-add');
       existing.forEach(el => el.remove());
 
       docPages.forEach((page, idx) => {
@@ -1858,14 +2153,26 @@
         docThumbnailStrip.appendChild(item);
       });
 
+      const hasPages = docPages.length > 0;
+      if (hasPages) {
+        const addTile = document.createElement('button');
+        addTile.type = 'button';
+        addTile.className = 'doc-thumb-add';
+        addTile.setAttribute('aria-label', 'Chụp thêm trang');
+        addTile.innerHTML = '<span aria-hidden="true">+</span><span>Thêm</span>';
+        addTile.addEventListener('click', () => {
+          triggerHaptic('tap');
+          docCameraInput.click();
+        });
+        docThumbnailStrip.appendChild(addTile);
+      }
+
       docPageNum.textContent = docPages.length;
       updateDocSizeEstimate();
 
-      const hasPages = docPages.length > 0;
       docScreen.classList.toggle('has-pages', hasPages);
       docCaptureLabel.textContent = hasPages ? 'Chụp thêm trang' : 'Chụp trang đầu';
       if (btnDocPreview) btnDocPreview.disabled = !hasPages;
-      if (btnDocSendPdf) btnDocSendPdf.disabled = !hasPages || !p2p.isConnected;
 
       // Edit toolbar
       docEditToolbar.style.display = hasPages ? 'flex' : 'none';
@@ -1886,10 +2193,13 @@
         docPreviewImg.src = page.previewUrl || page.thumbnail;
         docPreviewImg.style.display = 'block';
         docPreviewImg.style.transform = page.rotation ? `rotate(${page.rotation}deg)` : '';
+        docPreviewImg.dataset.previewPreset = docPreset;
       }
+
+      syncSendButtonsState();
     }
 
-    // Touch & Desktop drag reordering on thumbnails
+    // Desktop drag reordering on thumbnails (di động dùng nút mũi tên trái/phải để không cản cuộn ngang)
     let dragSourceIdx = -1;
     function attachThumbnailDragListeners(item, idx) {
       item.setAttribute('draggable', 'true');
@@ -1919,57 +2229,11 @@
           const moved = docPages.splice(dragSourceIdx, 1)[0];
           docPages.splice(idx, 0, moved);
           docSelectedIndex = idx;
+          pendingHisVerifyPdf = false;
+          hideWarningBanner(true);
           renderDocThumbnails();
         }
         dragSourceIdx = -1;
-      });
-
-      // Mobile Touch Drag
-      let touchMoved = false;
-      let startX = 0;
-      let currentOverEl = null;
-
-      item.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.doc-thumb-remove')) return;
-        startX = e.touches[0].clientX;
-        dragSourceIdx = idx;
-        touchMoved = false;
-      }, { passive: true });
-
-      item.addEventListener('touchmove', (e) => {
-        if (dragSourceIdx < 0) return;
-        const touch = e.touches[0];
-        if (Math.abs(touch.clientX - startX) > 10) {
-          touchMoved = true;
-          item.classList.add('dragging');
-        }
-        if (touchMoved) {
-          const target = document.elementFromPoint(touch.clientX, touch.clientY);
-          const thumbTarget = target?.closest('.doc-thumb-item');
-          if (thumbTarget !== currentOverEl) {
-            if (currentOverEl) currentOverEl.classList.remove('drag-over');
-            currentOverEl = thumbTarget;
-            if (currentOverEl && currentOverEl !== item) {
-              currentOverEl.classList.add('drag-over');
-            }
-          }
-        }
-      }, { passive: true });
-
-      item.addEventListener('touchend', () => {
-        item.classList.remove('dragging');
-        if (currentOverEl) {
-          currentOverEl.classList.remove('drag-over');
-          const targetIdx = parseInt(currentOverEl.dataset.idx, 10);
-          if (!isNaN(targetIdx) && dragSourceIdx >= 0 && dragSourceIdx !== targetIdx) {
-            const moved = docPages.splice(dragSourceIdx, 1)[0];
-            docPages.splice(targetIdx, 0, moved);
-            docSelectedIndex = targetIdx;
-            renderDocThumbnails();
-          }
-        }
-        dragSourceIdx = -1;
-        currentOverEl = null;
       });
     }
 
@@ -2009,6 +2273,8 @@
       if (idx < 0 || idx >= docPages.length) return;
       exitCropMode();
       commitPendingDocUndo();
+      pendingHisVerifyPdf = false;
+      hideWarningBanner(true);
       triggerHaptic('warning');
 
       const prevSelected = docSelectedIndex;
@@ -2052,6 +2318,8 @@
       const insertIdx = Math.max(0, Math.min(index, docPages.length));
       docPages.splice(insertIdx, 0, page);
       docSelectedIndex = insertIdx;
+      pendingHisVerifyPdf = false;
+      hideWarningBanner(true);
       triggerHaptic('snap');
       renderDocThumbnails();
     }
@@ -2063,20 +2331,46 @@
       if (docPages.length === 0) {
         docSizeEstimate.textContent = '';
         docSizeEstimate.className = 'doc-size-estimate';
+        setElementVisible(btnDocSizeWarn, false);
         return;
       }
       const sizeMB = (estimate.estimatedKB / 1024).toFixed(1);
       docSizeEstimate.textContent = `≈ ${estimate.estimatedKB < 1024 ? estimate.estimatedKB + ' KB' : sizeMB + ' MB'}`;
       docSizeEstimate.className = 'doc-size-estimate' +
         (!estimate.withinLimit ? ' danger' : estimate.estimatedKB > 3500 ? ' warning' : '');
+      if (btnDocSizeWarn) {
+        if (!estimate.withinLimit) {
+          if (docPreset === 'color') {
+            btnDocSizeWarn.textContent = 'Dự kiến vượt 5 MB — Chạm để chuyển sang Sắc nét';
+            btnDocSizeWarn.dataset.targetPreset = 'enhance';
+          } else if (docPreset === 'enhance') {
+            btnDocSizeWarn.textContent = 'Dự kiến vượt 5 MB — Chạm để chuyển sang Tài liệu (nhẹ nhất)';
+            btnDocSizeWarn.dataset.targetPreset = 'document';
+          } else {
+            btnDocSizeWarn.textContent = 'Dự kiến vượt 5 MB — Hãy giảm bớt trang trước khi gửi';
+            btnDocSizeWarn.dataset.targetPreset = '';
+          }
+          setElementVisible(btnDocSizeWarn, true);
+        } else {
+          setElementVisible(btnDocSizeWarn, false);
+        }
+      }
     }
 
+    btnDocSizeWarn?.addEventListener('click', () => {
+      const targetPreset = btnDocSizeWarn.dataset.targetPreset;
+      if (targetPreset) {
+        triggerHaptic('tap');
+        selectDocPreset(targetPreset, false);
+      }
+    });
+
     // ---- Add pages ----
-    async function addDocPage(file) {
+    async function addDocPage(file, loadingPrefix = '') {
       if (!file) return;
       try {
         const processedFile = await convertHeicToJpegIfNecessary(file);
-        showLoading('Đang tạo thumbnail...');
+        showLoading(loadingPrefix ? `${loadingPrefix}Đang tạo ảnh xem trước...` : 'Đang tạo ảnh xem trước...');
         const thumbnail = await createThumbnail(processedFile);
         const previewUrl = URL.createObjectURL(processedFile);
         hideLoading();
@@ -2089,13 +2383,15 @@
           rotation: 0
         });
         docSelectedIndex = docPages.length - 1;
+        pendingHisVerifyPdf = false;
+        hideWarningBanner(true);
         renderDocThumbnails();
         requestAnimationFrame(() => {
           docThumbnailStrip.scrollLeft = docThumbnailStrip.scrollWidth;
         });
       } catch (err) {
         hideLoading();
-        showErrorBanner('Không thể thêm trang: ' + (err.message || err));
+        showErrorBanner(getFriendlyUploadError(err, 'Không thể đọc ảnh này. Hãy chụp lại hoặc chọn ảnh khác.'));
       }
     }
 
@@ -2104,17 +2400,19 @@
     btnDocGallery?.addEventListener('click', () => { triggerHaptic('tap'); docGalleryInput.click(); });
 
     docCameraInput?.addEventListener('change', (e) => {
-      if (e.target.files?.[0]) addDocPage(e.target.files[0]);
+      const file = e.target.files?.[0];
       docCameraInput.value = '';
+      if (file) addDocPage(file);
     });
 
     // Gallery: multi-select files
     docGalleryInput?.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
-      for (const file of files) {
-        await addDocPage(file);
-      }
       docGalleryInput.value = '';
+      for (let i = 0; i < files.length; i++) {
+        const prefix = files.length > 1 ? `Ảnh ${i + 1}/${files.length}: ` : '';
+        await addDocPage(files[i], prefix);
+      }
     });
 
     // ---- Rotate 90° ----
@@ -2123,6 +2421,8 @@
       triggerHaptic('tap');
       const page = docPages[docSelectedIndex];
       page.rotation = (page.rotation + 90) % 360;
+      pendingHisVerifyPdf = false;
+      hideWarningBanner(true);
       renderDocThumbnails();
     });
 
@@ -2133,6 +2433,8 @@
       const idx = docSelectedIndex;
       [docPages[idx - 1], docPages[idx]] = [docPages[idx], docPages[idx - 1]];
       docSelectedIndex = idx - 1;
+      pendingHisVerifyPdf = false;
+      hideWarningBanner(true);
       renderDocThumbnails();
     });
 
@@ -2142,6 +2444,8 @@
       const idx = docSelectedIndex;
       [docPages[idx], docPages[idx + 1]] = [docPages[idx + 1], docPages[idx]];
       docSelectedIndex = idx + 1;
+      pendingHisVerifyPdf = false;
+      hideWarningBanner(true);
       renderDocThumbnails();
     });
 
@@ -2335,11 +2639,17 @@
           ctx.arc(lx, ly, loupeRadius, 0, Math.PI * 2);
           ctx.clip();
 
-          // 2.4x Magnified image centered on curPt
+          // 2.4x Magnified image centered on curPt (tính cả góc xoay hiển thị)
           const zoom = 2.4;
+          const curRot = ((docPages[docSelectedIndex]?.rotation || 0) % 360 + 360) % 360;
+          const isSwapped = (curRot === 90 || curRot === 270);
+          const unrotW = isSwapped ? ch : cw;
+          const unrotH = isSwapped ? cw : ch;
           ctx.translate(lx, ly);
           ctx.scale(zoom, zoom);
-          ctx.drawImage(docPreviewImg, -curPt.x, -curPt.y, cw, ch);
+          ctx.translate(-curPt.x + cw / 2, -curPt.y + ch / 2);
+          ctx.rotate((curRot * Math.PI) / 180);
+          ctx.drawImage(docPreviewImg, -unrotW / 2, -unrotH / 2, unrotW, unrotH);
           ctx.restore();
 
           // Center crosshair / reticle (+)
@@ -2619,7 +2929,7 @@
         const page = docPages[docSelectedIndex];
 
         if (activeEditMode === 'perspective') {
-          showLoading('Đang nắn phẳng tài liệu (GPU)...');
+          showLoading('Đang làm phẳng trang tài liệu...');
 
           // Load FULL-RESOLUTION image from page.file
           const fullImg = await loadImageFromFile(page.file);
@@ -2670,6 +2980,8 @@
 
           hideLoading();
           exitEditOverlay();
+          pendingHisVerifyPdf = false;
+          hideWarningBanner(true);
           renderDocThumbnails();
           triggerHaptic('snap');
 
@@ -2679,7 +2991,7 @@
             return;
           }
 
-          showLoading('Đang cắt ảnh độ nét cao...');
+          showLoading('Đang cắt trang tài liệu...');
 
           // Load FULL-RESOLUTION image from page.file
           const fullImg = await loadImageFromFile(page.file);
@@ -2735,13 +3047,15 @@
 
           hideLoading();
           exitEditOverlay();
+          pendingHisVerifyPdf = false;
+          hideWarningBanner(true);
           renderDocThumbnails();
           triggerHaptic('snap');
         }
       } catch (err) {
         hideLoading();
         exitEditOverlay();
-        showErrorBanner('Lỗi xử lý ảnh: ' + (err.message || err));
+        showErrorBanner(getFriendlyUploadError(err, 'Không thể chỉnh trang này. Hãy thử cắt lại hoặc chụp lại.'));
       }
     });
 
@@ -2774,6 +3088,7 @@
         docPreviewModalBody.appendChild(card);
       });
 
+      syncSendButtonsState();
       docPreviewModal.style.display = 'flex';
     }
 
@@ -2805,6 +3120,7 @@
         if (isCurrent) activeBtn = b;
       });
       syncSegmentedKnob(docPresetSelector, activeBtn, dir);
+      if (docPreviewImg) docPreviewImg.dataset.previewPreset = docPreset;
       updateDocSizeEstimate();
       if (focusTarget && activeBtn) activeBtn.focus();
     }
@@ -2825,27 +3141,110 @@
       selectDocPreset(DOC_PRESET_ORDER[nextIdx], true);
     });
 
+    btnCancelUploadWait?.addEventListener('click', () => {
+      invalidateActiveUploads();
+      triggerHaptic('warning');
+      const cancelMsg = 'Đã hủy chờ phản hồi; hãy kiểm tra ô đính kèm trên máy tính trước khi gửi lại.';
+      p2p.cancelPendingDelivery(cancelMsg);
+      uploadProgressCard?.classList.remove('is-ok');
+      if (uploadProgressModal) uploadProgressModal.style.display = 'none';
+      const ctx = currentSpecialty === 'document' ? 'pdf' : 'image';
+      if (ctx === 'pdf') pendingHisVerifyPdf = true;
+      else pendingHisVerifyImage = true;
+      showWarningBanner(cancelMsg);
+      syncSendButtonsState();
+      openHisConfirmModal(ctx, cancelMsg);
+    });
+
+    btnHisConfirmClose?.addEventListener('click', closeHisConfirmModal);
+    hisConfirmModal?.addEventListener('click', (e) => {
+      if (e.target === hisConfirmModal) closeHisConfirmModal();
+    });
+
+    btnHisConfirmSeen?.addEventListener('click', () => {
+      const ctx = pendingHisVerifyContext;
+      closeHisConfirmModal();
+      hideWarningBanner(true);
+      triggerHaptic('success');
+      showToast('Đã xác nhận hoàn tất trên máy tính');
+
+      if (ctx === 'pdf') {
+        pendingHisVerifyPdf = false;
+        commitPendingDocUndo();
+        docPages.forEach(p => {
+          if (p.previewUrl) {
+            try { URL.revokeObjectURL(p.previewUrl); } catch (_) {}
+          }
+        });
+        docPages = [];
+        docSelectedIndex = -1;
+        renderDocThumbnails();
+        return;
+      }
+
+      pendingHisVerifyImage = false;
+      cameraInput.value = '';
+      galleryInput.value = '';
+      hasActiveEditorImage = false;
+      editorScreen.style.display = 'none';
+      captureScreen.style.display = 'flex';
+      document.body.classList.remove('in-editor');
+      if (globalSpecialtyBar) {
+        globalSpecialtyBar.style.display = '';
+        requestAnimationFrame(() => syncSpecialtyKnob(0));
+      }
+      syncSendButtonsState();
+    });
+
+    btnHisConfirmResend?.addEventListener('click', () => {
+      const ctx = pendingHisVerifyContext;
+      closeHisConfirmModal();
+      hideWarningBanner(true);
+      if (ctx === 'pdf') {
+        pendingHisVerifyPdf = false;
+        syncSendButtonsState();
+        btnDocSendPdf?.click();
+        return;
+      }
+      pendingHisVerifyImage = false;
+      syncSendButtonsState();
+      btnSendToHis?.click();
+    });
+
     // ---- Xuất PDF & Gửi tới máy tính (Lucian #081 Ring + Fail-Closed Checkmark + #070 Toast) ----
     btnDocSendPdf?.addEventListener('click', async () => {
       if (docPages.length === 0) return;
       if (p2p.isSessionIntentionallyClosed) {
         showErrorBanner('Phiên làm việc đã kết thúc hoặc ô đính kèm trên máy tính đã đóng. Vui lòng quét lại QR trên HIS.');
+        syncSendButtonsState();
         return;
       }
-      if (!p2p.isConnected) {
-        showErrorBanner('Chưa kết nối với HIS. Vui lòng quét lại QR.');
+      if (pendingHisVerifyPdf) {
+        openHisConfirmModal('pdf');
+        return;
+      }
+      if (!hasActiveTransport()) {
+        triggerManualReconnect();
+        return;
+      }
+      if (!p2p.patientInfo) {
+        showWarningBanner('Đang đồng bộ tên tệp từ máy tính, vui lòng chờ trong giây lát.');
+        syncSendButtonsState();
         return;
       }
 
       commitPendingDocUndo();
 
+      let uploadId = null;
       try {
         btnDocSendPdf.disabled = true;
+        uploadId = startUploadWatchdog();
         uploadProgressModal.style.display = 'flex';
         const modeLabel = docPreset === 'enhance' ? 'Sắc nét' : (docPreset === 'document' ? 'Tài liệu' : 'Ảnh màu');
-        updateUploadModal(5, 'Đang tạo tài liệu PDF...', 'Đang chuẩn bị mô-đun PDF...', false);
+        updateUploadModal(5, 'Đang tạo tài liệu PDF...', 'Đang chuẩn bị tạo tài liệu PDF...', false);
 
         await loadJsPdf();
+        if (uploadId !== _activeUploadId) return;
 
         updateUploadModal(10, 'Đang tạo tài liệu PDF...', `Gộp ${docPages.length} trang thành PDF (${modeLabel})...`, false);
 
@@ -2855,11 +3254,15 @@
             preset: docPreset,
             filename: `Tai_lieu_${Date.now()}.pdf`,
             onProgress: (pageIdx, total) => {
+              if (uploadId !== _activeUploadId) return;
               const pct = Math.round(10 + (pageIdx / total) * 40);
+              touchUploadWatchdog(uploadId, pct);
               updateUploadModal(pct, 'Đang tạo tài liệu PDF...', `Đang xử lý trang ${pageIdx + 1}/${total}...`, false);
             }
           }
         );
+
+        if (uploadId !== _activeUploadId) return;
 
         updateUploadModal(
           55,
@@ -2876,12 +3279,14 @@
           specialty: 'document',
           pageCount: pdfResult.pageCount,
         }, (pct, statusMsg) => {
+          if (uploadId !== _activeUploadId) return;
           const adjustedPct = Math.round(55 + (pct / 100) * 40);
+          touchUploadWatchdog(uploadId, adjustedPct);
           if (pct >= 90) {
             updateUploadModal(
               Math.min(96, adjustedPct),
               'Đang chờ máy tính nhận PDF...',
-              statusMsg || 'Chờ xác nhận đính kèm file...',
+              statusMsg || 'Chờ xác nhận gắn tệp...',
               false
             );
           } else {
@@ -2894,20 +3299,26 @@
           }
         });
 
+        if (uploadId !== _activeUploadId) return;
+        stopUploadWatchdog(uploadId);
+
         if (res && res.status === 'HIS_UNKNOWN') {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showWarningBanner('Chưa xác nhận chuyển PDF. Kiểm tra ô đính kèm trên máy tính trước khi gửi lại.');
-          btnDocSendPdf.disabled = false;
+          pendingHisVerifyPdf = true;
+          const reasonMsg = res.reason || res.error || 'Chưa nhận được phản hồi xác nhận từ máy tính; hãy kiểm tra ô đính kèm trên HIS trước khi gửi lại.';
+          showWarningBanner(reasonMsg);
+          syncSendButtonsState();
           triggerHaptic('warning');
+          openHisConfirmModal('pdf', reasonMsg);
           return;
         }
 
         if (!res || !res.success) {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
-          btnDocSendPdf.disabled = false;
+          showErrorBanner(res?.reason || res?.error || 'Máy tính không nhận được tệp PDF.');
+          syncSendButtonsState();
           triggerHaptic('warning');
           return;
         }
@@ -2915,12 +3326,13 @@
         if (res.status !== 'FILE_READY') {
           uploadProgressCard?.classList.remove('is-ok');
           uploadProgressModal.style.display = 'none';
-          showErrorBanner(res?.reason || res?.error || 'HIS từ chối nhận file PDF.');
-          btnDocSendPdf.disabled = false;
+          showErrorBanner(res?.reason || res?.error || 'Máy tính không nhận được tệp PDF.');
+          syncSendButtonsState();
           triggerHaptic('warning');
           return;
         }
 
+        pendingHisVerifyPdf = false;
         triggerHaptic('success');
         updateUploadModal(
           100,
@@ -2931,6 +3343,7 @@
 
         const holdMs = prefersReducedMotion() ? 120 : 620;
         setTimeout(() => {
+          if (uploadId !== _activeUploadId) return;
           uploadProgressModal.style.display = 'none';
           uploadProgressCard?.classList.remove('is-ok');
           showToast('Đã nạp PDF vào ô đính kèm trên máy tính.');
@@ -2943,14 +3356,15 @@
           docPages = [];
           docSelectedIndex = -1;
           renderDocThumbnails();
-          btnDocSendPdf.disabled = false;
         }, holdMs);
 
       } catch (err) {
+        if (uploadId !== _activeUploadId) return;
+        stopUploadWatchdog(uploadId);
         uploadProgressCard?.classList.remove('is-ok');
         uploadProgressModal.style.display = 'none';
-        showErrorBanner(err.message || 'Lỗi tạo hoặc gửi PDF');
-        btnDocSendPdf.disabled = false;
+        showErrorBanner(getFriendlyUploadError(err, 'Không thể tạo hoặc gửi tệp PDF. Hãy kiểm tra lại các trang hoặc giảm số trang.'));
+        syncSendButtonsState();
       }
     });
 

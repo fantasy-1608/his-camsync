@@ -29,6 +29,7 @@ export class ImageEditor {
     this.activeHandle = null;
     this.startPoint = { x: 0, y: 0 };
     this.startCrop = { ...this.normCrop };
+    this.onEditChange = null;
 
     this.initDragEvents();
 
@@ -77,11 +78,29 @@ export class ImageEditor {
     });
   }
 
+  notifyEditChange(kind) {
+    if (typeof this.onEditChange === 'function') {
+      this.onEditChange(kind);
+    }
+  }
+
   rotate90(degrees) {
     this.rotation90 = (this.rotation90 + degrees + 360) % 360;
     this.rotation = (this.rotation90 + this.fineAngle);
-    this.setCropPreset(this.currentPreset);
+    const steps = ((Math.round(degrees / 90) % 4) + 4) % 4;
+    for (let i = 0; i < steps; i++) {
+      const { left, top, right, bottom } = this.normCrop;
+      this.normCrop = {
+        left: 1 - bottom,
+        top: left,
+        right: 1 - top,
+        bottom: right
+      };
+    }
+    this.currentPreset = 'free';
+    this.updateCropBoxUI();
     this.render();
+    this.notifyEditChange('rotate');
     return this.rotation90;
   }
 
@@ -94,6 +113,9 @@ export class ImageEditor {
     this.rotation = (this.rotation90 + this.fineAngle);
     this.isRotatingFine = isInteracting;
     this.render();
+    if (!isInteracting) {
+      this.notifyEditChange('fine-angle');
+    }
     return this.fineAngle;
   }
 
@@ -102,6 +124,7 @@ export class ImageEditor {
     this.fineAngle = 0;
     this.rotation = 0;
     this.render();
+    this.notifyEditChange('reset-rotation');
   }
 
   getTotalAngle() {
@@ -111,6 +134,7 @@ export class ImageEditor {
   setFilter(filterName) {
     this.filter = filterName;
     this.render();
+    this.notifyEditChange('filter');
   }
 
   toggleEcgGridGuide() {
@@ -152,6 +176,7 @@ export class ImageEditor {
         break;
     }
     this.updateCropBoxUI();
+    this.notifyEditChange('preset');
   }
 
   render() {
@@ -467,6 +492,7 @@ export class ImageEditor {
         if (this.cropOverlay.releasePointerCapture && e.pointerId) {
           try { this.cropOverlay.releasePointerCapture(e.pointerId); } catch (err) {}
         }
+        this.notifyEditChange('crop');
       }
     };
 
@@ -529,7 +555,7 @@ export class ImageEditor {
         outCanvas.width = 0;
         outCanvas.height = 0;
         if (blob) resolve(blob);
-        else reject(new Error('Lỗi xuất Blob ảnh'));
+        else reject(new Error('Không thể xuất ảnh để gửi'));
       }, 'image/jpeg', quality);
     });
   }

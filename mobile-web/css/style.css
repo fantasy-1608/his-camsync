@@ -18,30 +18,31 @@
   --bg-card: #ffffff;
   --bg-card-subtle: #f8fafc;
 
-  --border-subtle: #e2e8f0;
+  --border-subtle: #d6dee8;
   --border-strong: #cbd5e1;
-  --border-accent: #0284c7;
+  --border-accent: #087f8c;
 
-  --text-primary: #0f172a;
+  --text-primary: #102343;
   --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-muted: #475569;
   --text-inverse: #ffffff;
 
-  --accent-blue: #0284c7;
-  --accent-blue-hover: #0369a1;
-  --accent-blue-subtle: rgba(2, 132, 199, 0.1);
+  --accent-blue: #087f8c;
+  --accent-blue-hover: #0f766e;
+  --accent-blue-subtle: rgba(8, 127, 140, 0.12);
+  --accent-fg: #0f766e;
 
-  --accent-green: #059669;
-  --accent-green-subtle: rgba(5, 150, 105, 0.11);
-  --accent-green-border: rgba(5, 150, 105, 0.28);
+  --accent-green: #087443;
+  --accent-green-subtle: rgba(8, 116, 67, 0.10);
+  --accent-green-border: rgba(8, 116, 67, 0.30);
 
   --accent-amber: #b45309;
   --accent-amber-subtle: #fffbeb;
-  --accent-amber-border: rgba(217, 119, 6, 0.35);
+  --accent-amber-border: rgba(180, 83, 9, 0.35);
 
-  --accent-red: #dc2626;
+  --accent-red: #b91c1c;
   --accent-red-subtle: #fef2f2;
-  --accent-red-border: rgba(220, 38, 38, 0.32);
+  --accent-red-border: rgba(185, 28, 28, 0.32);
 
   --canvas-bg: #cbd5e1;
   --ruler-bg: #f1f5f9;
@@ -50,13 +51,13 @@
   --ruler-pointer: #d97706;
 
   --crop-overlay: rgba(15, 23, 42, 0.54);
-  --crop-border: #0284c7;
-  --crop-handle: #0284c7;
+  --crop-border: #087f8c;
+  --crop-handle: #087f8c;
 
   --overlay-scrim: rgba(15, 23, 42, 0.72);
   --snackbar-bg: #0f172a;
   --snackbar-fg: #f8fafc;
-  --snackbar-accent: #38bdf8;
+  --snackbar-accent: #2dd4bf;
 
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 4px 10px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
@@ -111,16 +112,17 @@
 
     --border-subtle: #243248;
     --border-strong: #354764;
-    --border-accent: #38bdf8;
+    --border-accent: #2dd4bf;
 
     --text-primary: #f8fafc;
     --text-secondary: #cbd5e1;
     --text-muted: #94a3b8;
     --text-inverse: #0b111b;
 
-    --accent-blue: #0284c7;
-    --accent-blue-hover: #0ea5e9;
-    --accent-blue-subtle: rgba(56, 189, 248, 0.15);
+    --accent-blue: #087f8c;
+    --accent-blue-hover: #0f766e;
+    --accent-blue-subtle: rgba(45, 212, 191, 0.14);
+    --accent-fg: #2dd4bf;
 
     --accent-green: #10b981;
     --accent-green-subtle: rgba(16, 185, 129, 0.15);
@@ -134,20 +136,20 @@
     --accent-red-subtle: rgba(239, 68, 68, 0.16);
     --accent-red-border: rgba(248, 113, 113, 0.36);
 
-    --canvas-bg: #070b12;
+    --canvas-bg: #0f172a;
     --ruler-bg: #101826;
     --ruler-tick: #475569;
     --ruler-tick-major: #94a3b8;
     --ruler-pointer: #f59e0b;
 
     --crop-overlay: rgba(0, 0, 0, 0.66);
-    --crop-border: #38bdf8;
-    --crop-handle: #38bdf8;
+    --crop-border: #2dd4bf;
+    --crop-handle: #2dd4bf;
 
     --overlay-scrim: rgba(4, 8, 15, 0.82);
-    --snackbar-bg: #f8fafc;
-    --snackbar-fg: #0f172a;
-    --snackbar-accent: #0284c7;
+    --snackbar-bg: var(--bg-elevated, #1e293b);
+    --snackbar-fg: #f8fafc;
+    --snackbar-accent: #2dd4bf;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.45);
@@ -194,6 +196,10 @@ html {
   height: -webkit-fill-available;
   height: 100dvh;
   overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 body {
@@ -245,7 +251,7 @@ body {
   height: 28px;
   border-radius: 7px;
   background: var(--accent-blue-subtle);
-  color: var(--accent-blue);
+  color: var(--accent-fg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -367,11 +373,11 @@ body {
    Patient Context Card (Chốt chặn lâm sàng - Luôn ghim rõ ở đầu màn hình)
    ========================================================================== */
 .patient-context-card {
-  margin: 6px 12px 0 12px;
-  padding: 9px 12px;
+  margin: 4px 12px 0 12px;
+  padding: 6px 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--accent-blue);
+  border-left: 3px solid var(--accent-fg);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
@@ -394,7 +400,7 @@ body {
 }
 
 .patient-shield-icon {
-  color: var(--accent-blue);
+  color: var(--accent-fg);
   flex-shrink: 0;
 }
 
@@ -412,17 +418,17 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 700;
-  color: var(--accent-blue);
+  color: var(--accent-fg);
   background: var(--accent-blue-subtle);
   padding: 2px 7px;
   border-radius: var(--radius-xs);
-  border: 1px solid rgba(2, 132, 199, 0.22);
+  border: 1px solid rgba(8, 127, 140, 0.26);
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
 
 .patient-meta-row {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -432,6 +438,11 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.patient-meta-row:empty,
+.patient-context-card.is-compact .patient-meta-row {
+  display: none;
 }
 
 /* ==========================================================================
@@ -509,8 +520,8 @@ body {
 }
 
 .btn-dismiss-banner {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 50%;
   background: transparent;
@@ -610,7 +621,7 @@ body.doc-editing .specialty-segmented-bar {
   right: var(--r, 66.66%);
   border-radius: calc(var(--radius-md) - 2px);
   background-color: var(--accent-blue);
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.28);
+  box-shadow: 0 2px 6px rgba(8, 127, 140, 0.28);
   z-index: 0;
   pointer-events: none;
 }
@@ -690,8 +701,8 @@ body.doc-editing .specialty-segmented-bar {
   height: 64px;
   border-radius: 50%;
   background: var(--accent-blue-subtle);
-  border: 1px solid rgba(2, 132, 199, 0.16);
-  color: var(--accent-blue);
+  border: 1px solid rgba(8, 127, 140, 0.2);
+  color: var(--accent-fg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -798,7 +809,10 @@ body.doc-editing .specialty-segmented-bar {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .canvas-viewport {
@@ -828,7 +842,7 @@ body.doc-editing .specialty-segmented-bar {
   max-height: 100%;
   box-shadow: var(--shadow-md);
   border-radius: var(--radius-xs);
-  background-color: #ffffff;
+  background-color: var(--canvas-bg);
 }
 
 /* Crop Overlay & Handles */
@@ -858,7 +872,8 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .crop-grid div {
-  border: 0.5px dashed rgba(255, 255, 255, 0.35);
+  border: 0.5px dashed rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 0 0 0.5px rgba(15, 23, 42, 0.25);
 }
 
 .crop-handle {
@@ -867,23 +882,58 @@ body.doc-editing .specialty-segmented-bar {
   height: 24px;
   border: 3px solid #ffffff;
   pointer-events: auto;
+  z-index: 2;
+}
+
+.crop-handle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+.crop-handle::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid rgba(15, 23, 42, 0.85);
 }
 
 .handle-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.handle-tl::after { top: -4px; left: -4px; right: 0; bottom: 0; border-right: none; border-bottom: none; }
 .handle-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+.handle-tr::after { top: -4px; right: -4px; left: 0; bottom: 0; border-left: none; border-bottom: none; }
 .handle-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+.handle-bl::after { bottom: -4px; left: -4px; right: 0; top: 0; border-right: none; border-top: none; }
 .handle-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+.handle-br::after { bottom: -4px; right: -4px; left: 0; top: 0; border-left: none; border-top: none; }
 
 .crop-edge-handle {
   position: absolute;
   background-color: #ffffff;
+  box-shadow: 0 0 0 1.5px rgba(15, 23, 42, 0.82);
   pointer-events: auto;
+  z-index: 1;
+}
+
+.crop-edge-handle::before {
+  content: '';
+  position: absolute;
 }
 
 .handle-t { top: -3px; left: 50%; transform: translateX(-50%); width: 26px; height: 4px; border-radius: 2px; }
 .handle-b { bottom: -3px; left: 50%; transform: translateX(-50%); width: 26px; height: 4px; border-radius: 2px; }
 .handle-l { left: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 26px; border-radius: 2px; }
 .handle-r { right: -3px; top: 50%; transform: translateY(-50%); width: 4px; height: 26px; border-radius: 2px; }
+
+.handle-t::before,
+.handle-b::before {
+  inset: -18px -8px;
+}
+
+.handle-l::before,
+.handle-r::before {
+  inset: -8px -18px;
+}
 
 /* ==========================================================================
    Editor Controls (Thumb-Zone Panel ở nửa dưới)
@@ -939,8 +989,8 @@ body.doc-editing .specialty-segmented-bar {
 
 .preset-pill.active {
   background-color: var(--accent-blue-subtle);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
 }
 
 /* 2. Thước Xoay Tiểu Ly (Straighten Angle Dial) */
@@ -987,8 +1037,13 @@ body.doc-editing .specialty-segmented-bar {
 
 .btn-subtle-tool.active {
   background-color: var(--accent-blue-subtle);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
+}
+
+body.is-ultrasound .specialty-tool-ecg,
+body[data-specialty="ultrasound"] .specialty-tool-ecg {
+  display: none;
 }
 
 .angle-degree-badge {
@@ -1080,7 +1135,8 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .enhancer-btn {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1108,8 +1164,8 @@ body.doc-editing .specialty-segmented-bar {
 
 .enhancer-btn.active {
   background-color: var(--accent-blue-subtle);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
 }
 
 /* 4. Action Buttons Bar */
@@ -1165,10 +1221,27 @@ body.doc-editing .specialty-segmented-bar {
   background-color: var(--accent-blue-hover);
 }
 
-.btn-action-primary:disabled {
-  opacity: 0.48;
+.btn-action-primary:disabled,
+.btn-primary-send:disabled {
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  opacity: 1;
+  box-shadow: none;
   cursor: not-allowed;
   transform: none;
+}
+
+.btn-action-primary.is-amber-warning,
+.btn-primary-send.is-amber-warning {
+  background-color: #b45309;
+  color: #ffffff;
+  border: 1px solid #92400e;
+}
+
+.btn-action-primary.is-amber-warning:active:not(:disabled),
+.btn-primary-send.is-amber-warning:active:not(:disabled) {
+  background-color: #92400e;
 }
 
 /* ==========================================================================
@@ -1184,6 +1257,15 @@ body.doc-editing .specialty-segmented-bar {
   justify-content: center;
   z-index: 50;
   padding: 20px;
+}
+
+.loading-overlay {
+  flex-direction: column;
+  gap: 12px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .upload-progress-card {
@@ -1250,7 +1332,7 @@ body.doc-editing .specialty-segmented-bar {
   font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--accent-blue);
+  color: var(--accent-fg);
   transition: opacity 0.18s var(--ux-ease), transform 0.25s var(--ux-spring);
 }
 
@@ -1341,12 +1423,31 @@ body.doc-editing .specialty-segmented-bar {
   background: var(--accent-green);
 }
 
+.upload-cancel-btn {
+  margin-top: 14px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-amber-border);
+  background: var(--accent-amber-subtle);
+  color: var(--accent-amber);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.22s var(--ux-spring), background-color 0.18s var(--ux-ease);
+}
+
+.upload-cancel-btn:active {
+  transform: scale(0.97);
+}
+
 /* Spinner cho HEIC / Thumbnail loading overlay */
 .upload-spinner {
   width: 100%;
   height: 100%;
   border: 3.5px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #38bdf8;
+  border-top-color: #2dd4bf;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1414,8 +1515,9 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .toast-close-btn {
-  width: 26px;
-  height: 26px;
+  position: relative;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 50%;
   background: transparent;
@@ -1426,6 +1528,12 @@ body.doc-editing .specialty-segmented-bar {
   font-size: 16px;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.toast-close-btn::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .toast-close-btn:active {
@@ -1499,7 +1607,7 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .doc-thumb-item.active .doc-thumb-media {
-  border-color: var(--accent-blue);
+  border-color: var(--accent-fg);
   box-shadow: 0 0 0 2px var(--accent-blue-subtle);
 }
 
@@ -1582,8 +1690,8 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .doc-thumb-add:active {
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
   transform: scale(0.95);
 }
 
@@ -1617,8 +1725,20 @@ body.doc-editing .specialty-segmented-bar {
   border-radius: 6px;
   box-shadow: var(--shadow-md);
   display: none;
-  transition: transform 0.22s var(--ux-ease);
+  transition: transform 0.22s var(--ux-ease), filter 0.16s var(--ux-ease);
   object-fit: contain;
+}
+
+.doc-preview-img[data-preview-preset="enhance"] {
+  filter: contrast(1.18) brightness(1.04) saturate(1.12);
+}
+
+.doc-preview-img[data-preview-preset="document"] {
+  filter: grayscale(1) contrast(1.42) brightness(1.08);
+}
+
+.doc-preview-img[data-preview-preset="color"] {
+  filter: none;
 }
 
 /* Page Edit Toolbar */
@@ -1653,6 +1773,13 @@ body.doc-editing .specialty-segmented-bar {
     color 0.18s var(--ux-ease),
     border-color 0.18s var(--ux-ease),
     transform 0.25s var(--ux-spring);
+}
+
+.doc-edit-btn.doc-move-icon-btn {
+  flex: 0 0 38px;
+  min-width: 38px;
+  padding: 0;
+  justify-content: center;
 }
 
 .doc-edit-btn:active:not(:disabled) {
@@ -1694,7 +1821,7 @@ body.doc-editing .specialty-segmented-bar {
 
 .doc-preset-selector .u047-knob {
   background-color: var(--bg-surface);
-  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--accent-blue);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--accent-fg);
 }
 
 .doc-preset-btn {
@@ -1723,12 +1850,12 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .doc-preset-btn.active {
-  color: var(--accent-blue);
+  color: var(--accent-fg);
 }
 
 .doc-preset-selector:not(.knob-ready) .doc-preset-btn.active {
   background: var(--bg-surface);
-  box-shadow: inset 0 0 0 1px var(--accent-blue);
+  box-shadow: inset 0 0 0 1px var(--accent-fg);
 }
 
 .doc-preset-btn:active {
@@ -1757,7 +1884,7 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .doc-page-counter .count-num {
-  color: var(--accent-blue);
+  color: var(--accent-fg);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1782,6 +1909,42 @@ body.doc-editing .specialty-segmented-bar {
 
 .doc-size-estimate.danger {
   color: var(--accent-red);
+}
+
+.doc-size-warn-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: 2px 12px 0;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--accent-amber-border);
+  background: var(--accent-amber-subtle);
+  color: var(--accent-amber);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.22s var(--ux-spring), background-color 0.18s var(--ux-ease);
+}
+
+.doc-size-warn-btn::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+
+.doc-size-warn-btn:active {
+  transform: scale(0.95);
 }
 
 /* Document mode action buttons (2 hàng quen thuộc, luôn nằm trọn trong màn hình) */
@@ -1826,7 +1989,10 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .btn-doc-preview:disabled {
-  opacity: 0.45;
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -1850,13 +2016,27 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .btn-doc-send-pdf:disabled {
-  opacity: 0.45;
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  opacity: 1;
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 .btn-doc-send-pdf:active:not(:disabled) {
   transform: scale(0.97);
   background: var(--accent-blue-hover);
+}
+
+.btn-doc-send-pdf.is-amber-warning {
+  background-color: #b45309;
+  color: #ffffff;
+  border: 1px solid #92400e;
+}
+
+.btn-doc-send-pdf.is-amber-warning:active:not(:disabled) {
+  background-color: #92400e;
 }
 
 /* ==========================================================================
@@ -1866,7 +2046,7 @@ body.doc-editing .specialty-segmented-bar {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(108px + env(safe-area-inset-bottom, 8px));
+  bottom: calc(116px + env(safe-area-inset-bottom, 8px));
   max-width: 396px;
   margin: 0 auto;
   display: flex;
@@ -1877,12 +2057,17 @@ body.doc-editing .specialty-segmented-bar {
   border-radius: var(--radius-md);
   background: var(--snackbar-bg);
   color: var(--snackbar-fg);
+  border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-lg);
   z-index: 45;
   opacity: 0;
   pointer-events: none;
   transform: translateY(24px) scale(0.96);
-  transition: transform 0.42s var(--ux-spring), opacity 0.22s var(--ux-ease);
+  transition: transform 0.42s var(--ux-spring), opacity 0.22s var(--ux-ease), bottom 0.22s var(--ux-ease);
+}
+
+body:has(#docScreen.has-pages) .u071-snack {
+  bottom: calc(196px + env(safe-area-inset-bottom, 8px));
 }
 
 .u071-snack.is-visible {
@@ -1909,7 +2094,7 @@ body.doc-editing .specialty-segmented-bar {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: rgba(56, 189, 248, 0.14);
+  background: rgba(45, 212, 191, 0.14);
   color: var(--snackbar-accent);
   font-size: 13px;
   font-weight: 700;
@@ -2037,8 +2222,8 @@ body.doc-editing .specialty-segmented-bar {
 }
 
 .doc-thumb-item.drag-over .doc-thumb-media {
-  border-color: var(--accent-blue) !important;
-  box-shadow: 0 0 0 2px var(--accent-blue);
+  border-color: var(--accent-fg) !important;
+  box-shadow: 0 0 0 2px var(--accent-fg);
 }
 
 .doc-thumb-rotation {
@@ -2233,18 +2418,156 @@ body.doc-editing .specialty-segmented-bar {
   transform: scale(0.97);
 }
 
+.btn-doc-modal-send:disabled {
+  background-color: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  cursor: not-allowed;
+}
+
+.btn-doc-modal-send.is-amber-warning {
+  background-color: #b45309;
+  color: #ffffff;
+  border: 1px solid #92400e;
+}
+
 .qr-guide {
   display: none;
   margin: auto;
+  width: calc(100% - 24px);
   max-width: 22rem;
-  padding: 24px;
+  padding: 22px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
-.qr-guide h1 { font-size: 1.25rem; margin-bottom: 8px; }
-.qr-guide p { line-height: 1.5; color: var(--text-secondary); }
+.qr-guide h1 { font-size: 1.15rem; margin-bottom: 8px; color: var(--text-primary); }
+.qr-guide p { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
 .awaiting-qr .qr-guide { display: block; }
 .awaiting-qr .main-view,
 .awaiting-qr .patient-context-card,
 .awaiting-qr .status-retry-icon,
 #docScreen:not(.has-pages) .doc-thumbnail-strip,
-#docScreen:not(.has-pages) .doc-meta-preset-bar,
-#docScreen:not(.has-pages) .doc-actions-row:last-child { display: none; }
+#docScreen:not(.has-pages) .doc-meta-preset-bar { display: none; }
+
+@media (max-height: 640px) {
+  .app-header {
+    padding: 6px 12px;
+  }
+
+  .patient-context-card {
+    margin: 3px 12px 0 12px;
+    padding: 5px 10px;
+  }
+
+  .specialty-segmented-bar {
+    margin: 4px 12px 1px 12px;
+  }
+
+  .spec-tab-btn {
+    min-height: 32px;
+    padding: 4px 6px;
+    font-size: 12.5px;
+  }
+
+  .canvas-viewport {
+    min-height: 115px;
+    padding: 6px;
+  }
+
+  .editor-controls-panel {
+    padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 6px)) 10px;
+    gap: 5px;
+  }
+
+  .straighten-dial-module {
+    padding: 4px 6px;
+    gap: 2px;
+  }
+
+  .ruler-track-container {
+    height: 26px;
+  }
+
+  .enhancer-btn {
+    min-height: 34px;
+    padding: 5px 8px;
+  }
+
+  .btn-action-secondary,
+  .btn-action-primary {
+    height: 42px;
+  }
+
+  .doc-thumbnail-strip {
+    padding: 8px 12px 6px;
+    min-height: 70px;
+  }
+
+  .doc-thumb-item,
+  .doc-thumb-add {
+    width: 50px;
+    height: 62px;
+  }
+
+  .doc-capture-guide {
+    min-height: 92px;
+    padding: 4px 10px;
+  }
+
+  .doc-preview-img-wrap {
+    min-height: 90px;
+    max-height: clamp(92px, 24vh, 210px);
+  }
+
+  .doc-actions-container {
+    gap: 5px;
+    padding: 4px 12px calc(8px + env(safe-area-inset-bottom, 6px)) 12px;
+  }
+
+  .btn-doc-capture,
+  .btn-doc-gallery,
+  .btn-doc-preview,
+  .btn-doc-send-pdf {
+    min-height: 38px;
+    padding: 7px 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .spec-tab-btn {
+    font-size: 12px;
+    gap: 4px;
+    padding: 5px 4px;
+  }
+
+  .doc-edit-toolbar {
+    gap: 4px;
+    padding: 2px 8px 4px;
+  }
+
+  .doc-edit-btn {
+    font-size: 11.5px;
+    padding: 4px 4px;
+  }
+
+  .doc-edit-btn.doc-move-icon-btn {
+    flex: 0 0 34px;
+    min-width: 34px;
+  }
+
+  .doc-meta-preset-bar {
+    padding: 3px 8px;
+    gap: 4px;
+  }
+
+  .doc-preset-btn {
+    font-size: 10.5px;
+  }
+
+  .doc-actions-container {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}

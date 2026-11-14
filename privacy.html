@@ -6,13 +6,40 @@
   <title>Chính Sách Bảo Mật - HIS CamSync</title>
   <style>
     :root {
-      --bg: #090d16;
-      --card: #111827;
-      --border: #1f2937;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --accent: #2563eb;
-      --green: #10b981;
+      color-scheme: light;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #d6dee8;
+      --text: #102343;
+      --text-body: #334155;
+      --text-muted: #52647a;
+      --accent: #087f8c;
+      --accent-heading: #0f766e;
+      --accent-bg: rgba(8, 127, 140, 0.08);
+      --accent-border: rgba(8, 127, 140, 0.28);
+      --green: #087443;
+      --green-bg: rgba(8, 116, 67, 0.10);
+      --green-border: rgba(8, 116, 67, 0.28);
+      --card-shadow: 0 4px 16px rgba(16, 35, 67, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #0b111b;
+        --card: #131c2b;
+        --border: #243248;
+        --text: #f8fafc;
+        --text-body: #cbd5e1;
+        --text-muted: #94a3b8;
+        --accent: #087f8c;
+        --accent-heading: #2dd4bf;
+        --accent-bg: rgba(45, 212, 191, 0.10);
+        --accent-border: rgba(45, 212, 191, 0.28);
+        --green: #10b981;
+        --green-bg: rgba(16, 185, 129, 0.14);
+        --green-border: rgba(16, 185, 129, 0.30);
+        --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -20,7 +47,7 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
-      padding: 40px 20px;
+      padding: 36px 20px;
     }
     .container {
       max-width: 780px;
@@ -28,14 +55,15 @@
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 36px 32px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      padding: 32px 28px;
+      box-shadow: var(--card-shadow);
     }
     h1 {
       font-size: 24px;
       margin-bottom: 8px;
-      color: #ffffff;
+      color: var(--text);
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 10px;
     }
@@ -43,9 +71,9 @@
       display: inline-block;
       font-size: 12px;
       padding: 3px 10px;
-      background: rgba(16, 185, 129, 0.15);
+      background: var(--green-bg);
       color: var(--green);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid var(--green-border);
       border-radius: 999px;
       font-weight: 600;
     }
@@ -60,13 +88,13 @@
       font-size: 17px;
       margin-top: 24px;
       margin-bottom: 10px;
-      color: #60a5fa;
+      color: var(--accent-heading);
       border-left: 3px solid var(--accent);
       padding-left: 10px;
     }
     p, ul {
       font-size: 14.5px;
-      color: #d1d5db;
+      color: var(--text-body);
       margin-bottom: 14px;
     }
     ul {
@@ -75,9 +103,14 @@
     li {
       margin-bottom: 8px;
     }
+    a {
+      color: var(--accent-heading);
+      text-underline-offset: 2px;
+      word-break: break-word;
+    }
     .highlight-box {
-      background: rgba(37, 99, 235, 0.08);
-      border: 1px solid rgba(37, 99, 235, 0.25);
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
       border-radius: 8px;
       padding: 14px 18px;
       margin: 18px 0;
@@ -89,6 +122,11 @@
       font-size: 13px;
       color: var(--text-muted);
       text-align: center;
+    }
+    @media (max-width: 480px) {
+      body { padding: 16px 12px; }
+      .container { padding: 20px 18px; border-radius: 12px; }
+      h1 { font-size: 20px; }
     }
   </style>
 </head>
@@ -121,7 +159,7 @@
     <h2>5. Quyền trình duyệt và kiểm soát</h2>
     <ul>
       <li><strong>storage:</strong> Lưu nhật ký vận hành giới hạn trên máy trạm.</li>
-      <li><strong>vncare.vn (HTTP/HTTPS):</strong> Tích hợp vào các giao diện VNPT HIS được người dùng phép truy cập. Hãy dùng HIS qua HTTPS khi triển khai dữ liệu y tế.</li>
+      <li><strong>vncare.vn (HTTP/HTTPS):</strong> Tích hợp vào các giao diện VNPT HIS được người dùng cho phép truy cập. Hãy dùng HIS qua HTTPS khi triển khai dữ liệu y tế.</li>
       <li><strong>fantasy-1608.github.io:</strong> Service worker tải cấu hình kết nối từ URL cố định, không tải mã thực thi từ xa.</li>
       <li><strong>rmbbqtuzkyxovmskhfgj.supabase.co:</strong> Cấp quyền relay ngắn hạn cho phiên CamSync.</li>
       <li>Người dùng có thể đóng phiên QR, đóng tab điện thoại, xóa dữ liệu trang/tiện ích hoặc gỡ tiện ích. Việc xóa dữ liệu đã lưu trên HIS cần thực hiện theo quyền và quy trình của cơ sở y tế.</li>
@@ -132,8 +170,8 @@
     <ul>
       <li><strong>Tác giả / Nhà phát triển:</strong> Huỳnh Trung Anh</li>
       <li><strong>Dự án:</strong> HIS CamSync Project</li>
-      <li><strong>Website:</strong> <a href="https://fantasy-1608.github.io/his-camsync/" style="color: #60a5fa;">https://fantasy-1608.github.io/his-camsync/</a></li>
-      <li><strong>Kho mã nguồn:</strong> <a href="https://github.com/fantasy-1608/his-camsync" style="color: #60a5fa;">https://github.com/fantasy-1608/his-camsync</a></li>
+      <li><strong>Website:</strong> <a href="https://fantasy-1608.github.io/his-camsync/">https://fantasy-1608.github.io/his-camsync/</a></li>
+      <li><strong>Kho mã nguồn:</strong> <a href="https://github.com/fantasy-1608/his-camsync">https://github.com/fantasy-1608/his-camsync</a></li>
     </ul>
 
     <div class="footer">

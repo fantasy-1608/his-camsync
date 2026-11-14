@@ -249,7 +249,7 @@ function initWorkerIfSupported() {
             self.postMessage({ id, success: true, dataUrl: reader.result, width: outW, height: outH });
           };
           reader.onerror = () => {
-            self.postMessage({ id, success: false, error: 'FileReader failed' });
+            self.postMessage({ id, success: false, error: 'Không thể đọc dữ liệu ảnh' });
           };
           reader.readAsDataURL(outBlob);
         } catch (err) {
@@ -377,7 +377,7 @@ export async function buildPdf(pages, options = {}) {
   // Kiểm tra jsPDF đã load
   const jsPDFClass = window.jspdf?.jsPDF;
   if (!jsPDFClass) {
-    throw new Error('Thư viện jsPDF chưa được tải. Vui lòng kiểm tra kết nối mạng.');
+    throw new Error('Chưa tải xong bộ tạo tệp PDF. Vui lòng kiểm tra mạng và thử lại.');
   }
 
   // Khởi tạo PDF A4 portrait
@@ -439,7 +439,7 @@ export async function buildPdf(pages, options = {}) {
   if (pdfBlob.size > HIS_MAX_FILE_SIZE) {
     const sizeMB = (pdfBlob.size / 1024 / 1024).toFixed(1);
     throw new Error(
-      `File PDF (${sizeMB}MB) vượt quá giới hạn ${HIS_MAX_FILE_SIZE / 1024 / 1024}MB của HIS. ` +
+      `Tệp PDF (${sizeMB}MB) vượt quá giới hạn ${HIS_MAX_FILE_SIZE / 1024 / 1024}MB của HIS. ` +
       `Giảm số trang hoặc chuyển sang chế độ "Tài liệu" để nén mạnh hơn.`
     );
   }
